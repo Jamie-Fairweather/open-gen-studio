@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "skills": {
+    "caveman": {
+      "source": "juliusbrussee/caveman",
+      "sourceType": "github",
+      "skillPath": "skills/caveman/SKILL.md",
+      "computedHash": "723fb2a8bec1156c0f0b5bf020cc739ed09702b7726ec6377480038871339f6e"
+    },
+    "coss": {
+      "source": "cosscom/coss",
+      "sourceType": "github",
+      "skillPath": "apps/ui/skills/coss/SKILL.md",
+      "computedHash": "0166293d767b1e3129c321268ab52f34823c1e0976de0d738042288f968bff56"
+    },
+    "coss-particles": {
+      "source": "cosscom/coss",
+      "sourceType": "github",
+      "skillPath": "apps/ui/skills/coss-particles/SKILL.md",
+      "computedHash": "189b06158600d157cf08da5915dda370732dde4e949aff4baabb7f37349d4fdd"
+    },
+    "design-taste-frontend": {
+      "source": "leonxlnx/taste-skill",
+      "sourceType": "github",
+      "skillPath": "skills/taste-skill/SKILL.md",
+      "computedHash": "899b84384f74f540ea5284d9b2e9234e050998b42eacc805410b518d4226c0b3"
+    },
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "93f53fd1c0352d3d7ec17b8f73d7351bf76f4821e55d123c9d2abc2c53ba48e4"
+    },
+    "ponytail": {
+      "source": "dietrichgebert/ponytail",
+      "sourceType": "github",
+      "skillPath": "skills/ponytail/SKILL.md",
+      "computedHash": "9e8d05cbbaf6dc38f0cffc924c09b3cbe76d94ba4ba0d09bde803da2f8c6b5a0"
+    },
+    "ui-ux-pro-max": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/ui-ux-pro-max/SKILL.md",
+      "computedHash": "ce0af583006d2fd4731663adc50c0a5df1121f0d49a5bb9c308eca4ee295c60a"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-best-practices/SKILL.md",
+      "computedHash": "ca7b0c0c6e5f2750043f7f0cd72d16ac4e2abc48f9b5500d047a4b77a2506212"
+    },
+    "zenstack-access-control": {
+      "source": "zenstackhq/skills",
+      "sourceType": "github",
+      "skillPath": "skills/zenstack-access-control/SKILL.md",
+      "computedHash": "f2a9ed7cd1d476257b2cd8d045120cc768b83fbc57d5ce0f2e3742bfa381b8c4"
+    },
+    "zenstack-crud-server": {
+      "source": "zenstackhq/skills",
+      "sourceType": "github",
+      "skillPath": "skills/zenstack-crud-server/SKILL.md",
+      "computedHash": "d0e6ef153a134c7725d988bbc621295e49a917fb7d81beea391604493429a963"
+    },
+    "zenstack-db-migration": {
+      "source": "zenstackhq/skills",
+      "sourceType": "github",
+      "skillPath": "skills/zenstack-db-migration/SKILL.md",
+      "computedHash": "a766cfd9377509d97fbb21ba339d8cca85a4823f0a2896a040c60efb89be5599"
+    },
+    "zenstack-project-setup": {
+      "source": "zenstackhq/skills",
+      "sourceType": "github",
+      "skillPath": "skills/zenstack-project-setup/SKILL.md",
+      "computedHash": "eaafacc114e3a625deac5f4d9b7e95aa573366a6168a26f86547d5aaa84649a6"
+    },
+    "zenstack-querying": {
+      "source": "zenstackhq/skills",
+      "sourceType": "github",
+      "skillPath": "skills/zenstack-querying/SKILL.md",
+      "computedHash": "f47d167aedaf9639b0859ce025ff4b4f75971751cb581313a0d2ff22db9aa41a"
+    },
+    "zenstack-schema-modeling": {
+      "source": "zenstackhq/skills",
+      "sourceType": "github",
+      "skillPath": "skills/zenstack-schema-modeling/SKILL.md",
+      "computedHash": "c53846f82dc5545d1f78838cd3b02c8c92917651ff9825f8c4e330b8923eca6b"
+    }
+  }
+}

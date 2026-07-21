@@ -502,8 +502,15 @@ fn resolve_random_seeds(values: &mut HashMap<String, Value>) {
         return;
     };
     let is_zero = match seed {
-        Value::Number(n) => n.as_i64() == Some(0) || n.as_u64() == Some(0),
-        Value::String(s) => s.trim() == "0",
+        Value::Number(n) => {
+            n.as_i64() == Some(0)
+                || n.as_u64() == Some(0)
+                || n.as_f64().is_some_and(|f| f == 0.0)
+        }
+        Value::String(s) => {
+            let t = s.trim();
+            t == "0" || t.parse::<f64>().is_ok_and(|f| f == 0.0)
+        }
         _ => false,
     };
     if !is_zero {

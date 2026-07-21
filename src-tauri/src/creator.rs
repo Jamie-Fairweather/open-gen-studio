@@ -359,7 +359,7 @@ pub fn suggest_models(workflow: &Value, embedded: &[EmbeddedModel]) -> Vec<Sugge
     if obj.contains_key("nodes") && !obj.values().any(|v| v.get("class_type").is_some()) {
         let from_ui = extract_embedded_from_ui(workflow);
         let merged = merge_embedded(embedded, &from_ui);
-        return models_from_embedded_only(&merged);
+        return suggest_models_from_ui(workflow, &merged);
     }
 
     let mut seen = HashSet::new();
@@ -375,9 +375,12 @@ pub fn suggest_models(workflow: &Value, embedded: &[EmbeddedModel]) -> Vec<Sugge
 
         let mapping: Option<(&str, &str)> = match class {
             "CheckpointLoaderSimple" => Some(("ckpt_name", "checkpoints")),
-            "UNETLoader" | "UnetLoader" => Some(("unet_name", "diffusion_models")),
+            "UNETLoader" | "UnetLoader" | "UnetLoaderGGUF" | "UNETLoaderGGUF" => {
+                Some(("unet_name", "diffusion_models"))
+            }
             "VAELoader" => Some(("vae_name", "vae")),
-            "CLIPLoader" | "DualCLIPLoader" | "TripleCLIPLoader" => None,
+            "CLIPLoader" | "DualCLIPLoader" | "TripleCLIPLoader" | "CLIPLoaderGGUF"
+            | "DualCLIPLoaderGGUF" | "TripleCLIPLoaderGGUF" => None,
             "LoraLoader" | "LoraLoaderModelOnly" => Some(("lora_name", "loras")),
             "ControlNetLoader" => Some(("control_net_name", "controlnet")),
             "UpscaleModelLoader" => Some(("model_name", "upscale_models")),
@@ -392,7 +395,12 @@ pub fn suggest_models(workflow: &Value, embedded: &[EmbeddedModel]) -> Vec<Sugge
 
         if matches!(
             class,
-            "CLIPLoader" | "DualCLIPLoader" | "TripleCLIPLoader"
+            "CLIPLoader"
+                | "DualCLIPLoader"
+                | "TripleCLIPLoader"
+                | "CLIPLoaderGGUF"
+                | "DualCLIPLoaderGGUF"
+                | "TripleCLIPLoaderGGUF"
         ) {
             for key in ["clip_name", "clip_name1", "clip_name2", "clip_name3"] {
                 if let Some(filename) = inputs.get(key).and_then(|v| v.as_str()) {
@@ -402,9 +410,13 @@ pub fn suggest_models(workflow: &Value, embedded: &[EmbeddedModel]) -> Vec<Sugge
         }
     }
 
-    // Include any embedded models the loader scan missed (custom nodes, etc.).
+    // Embedded URLs only when that exact file is referenced by a loader input.
+    // CivitAI graphs often leave stale properties.models (wrong filename + URL).
     for m in embedded {
         if m.name.is_empty() || m.url.is_empty() {
+            continue;
+        }
+        if !workflow_references_model_file(workflow, &m.name) {
             continue;
         }
         let path = if m.directory.is_empty() {
@@ -416,6 +428,120 @@ pub fn suggest_models(workflow: &Value, embedded: &[EmbeddedModel]) -> Vec<Sugge
     }
 
     out
+}
+
+fn workflow_references_model_file(workflow: &Value, filename: &str) -> bool {
+    let base = filename.rsplit(['/', '\\']).next().unwrap_or(filename);
+    let Some(obj) = workflow.as_object() else {
+        return false;
+    };
+    for (_id, node) in obj {
+        let Some(inputs) = node.get("inputs").and_then(|v| v.as_object()) else {
+            continue;
+        };
+        for (_k, v) in inputs {
+            if let Some(s) = v.as_str() {
+                if s == filename || s == base || s.ends_with(base) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+fn string_matches_model_file(value: &str, filename: &str, base: &str) -> bool {
+    value == filename || value == base || value.ends_with(base)
+}
+
+/// Scan Comfy UI-format graphs (CivitAI downloads) for loader filenames + matching URLs.
+fn suggest_models_from_ui(workflow: &Value, embedded: &[EmbeddedModel]) -> Vec<SuggestedModel> {
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    let Some(nodes) = workflow.get("nodes").and_then(|v| v.as_array()) else {
+        return models_from_embedded_only(embedded);
+    };
+
+    for node in nodes {
+        let class = node.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        let widgets = node
+            .get("widgets_values")
+            .and_then(|v| v.as_array())
+            .map(|a| a.as_slice())
+            .unwrap_or(&[]);
+
+        let mapping: Option<(&str, usize)> = match class {
+            "CheckpointLoaderSimple" => Some(("checkpoints", 0)),
+            "UNETLoader" | "UnetLoader" | "UnetLoaderGGUF" | "UNETLoaderGGUF" => {
+                Some(("diffusion_models", 0))
+            }
+            "VAELoader" => Some(("vae", 0)),
+            "CLIPLoader" | "CLIPLoaderGGUF" => Some(("text_encoders", 0)),
+            "UpscaleModelLoader" => Some(("upscale_models", 0)),
+            "LoraLoader" | "LoraLoaderModelOnly" => Some(("loras", 0)),
+            "ControlNetLoader" => Some(("controlnet", 0)),
+            _ => None,
+        };
+
+        if let Some((folder, idx)) = mapping {
+            if let Some(filename) = widgets.get(idx).and_then(|v| v.as_str()) {
+                push_model(&mut seen, &mut out, filename, folder, embedded);
+            }
+        }
+
+        if matches!(
+            class,
+            "DualCLIPLoader" | "TripleCLIPLoader" | "DualCLIPLoaderGGUF" | "TripleCLIPLoaderGGUF"
+        ) {
+            for idx in 0..3 {
+                if let Some(filename) = widgets.get(idx).and_then(|v| v.as_str()) {
+                    if filename.ends_with(".safetensors")
+                        || filename.ends_with(".gguf")
+                        || filename.ends_with(".bin")
+                        || filename.ends_with(".pth")
+                    {
+                        push_model(&mut seen, &mut out, filename, "text_encoders", embedded);
+                    }
+                }
+            }
+        }
+    }
+
+    for m in embedded {
+        if m.name.is_empty() || m.url.is_empty() {
+            continue;
+        }
+        if !ui_workflow_references_model_file(workflow, &m.name) {
+            continue;
+        }
+        let path = if m.directory.is_empty() {
+            guess_folder_from_name(&m.name)
+        } else {
+            normalize_model_dir(&m.directory)
+        };
+        push_model(&mut seen, &mut out, &m.name, &path, embedded);
+    }
+
+    out
+}
+
+fn ui_workflow_references_model_file(workflow: &Value, filename: &str) -> bool {
+    let base = filename.rsplit(['/', '\\']).next().unwrap_or(filename);
+    let Some(nodes) = workflow.get("nodes").and_then(|v| v.as_array()) else {
+        return false;
+    };
+    for node in nodes {
+        if let Some(widgets) = node.get("widgets_values").and_then(|v| v.as_array()) {
+            for v in widgets {
+                if let Some(s) = v.as_str() {
+                    if string_matches_model_file(s, filename, base) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
 }
 
 fn push_model(
@@ -642,7 +768,7 @@ const UI_SLOTS: &[UiSlot] = &[
     UiSlot {
         id: "seed",
         control_type: "number",
-        label: "Seed",
+        label: "Seed (0 = random)",
         group: "advanced",
         fixed: false,
         always_emit: true, // common — emit unbound so user can map noise_seed
@@ -734,40 +860,102 @@ pub fn suggest_controls(workflow: &Value) -> Vec<SuggestedControl> {
     suggest_controls_from_bindable(&bindable)
 }
 
+/// True when this scalar string is a plausible positive/negative prompt source.
+/// Includes CLIP encodes and ComfyUI-Easy-Use `easy positive` / `easy negative`
+/// (common on CivitAI graphs where CLIP `text` is a link, not a widget).
+fn is_prompt_bindable(b: &BindableInput) -> bool {
+    if b.kind != "string" {
+        return false;
+    }
+    let class = b.class_type.as_str();
+    let input = b.input.as_str();
+
+    if input == "text"
+        && (class == "CLIPTextEncode"
+            || class == "CLIPTextEncodeSDXL"
+            || class == "CLIPTextEncodeFlux"
+            || class.contains("TextEncode"))
+    {
+        return true;
+    }
+
+    if matches!(
+        class,
+        "easy positive" | "easy negative" | "easy prompt" | "easy wildcards"
+    ) && matches!(input, "positive" | "negative" | "text" | "prompt" | "string")
+    {
+        return true;
+    }
+
+    if matches!(input, "positive" | "negative") {
+        return true;
+    }
+
+    // PrimitiveString / String Literal titled as a prompt.
+    if matches!(input, "value" | "string" | "text")
+        && (title_hints_positive(b) || title_hints_negative(b))
+    {
+        return true;
+    }
+
+    false
+}
+
+fn prompt_source_rank(b: &BindableInput) -> u8 {
+    // Prefer dedicated prompt nodes over CLIP encodes (CLIP text is often linked).
+    if b.class_type.starts_with("easy ") {
+        0
+    } else if title_hints_positive(b) || title_hints_negative(b) {
+        1
+    } else if matches!(b.input.as_str(), "positive" | "negative") {
+        2
+    } else if b.class_type.contains("TextEncode") {
+        3
+    } else {
+        4
+    }
+}
+
 pub fn suggest_controls_from_bindable(bindable: &[BindableInput]) -> Vec<SuggestedControl> {
     let mut claimed: HashSet<String> = HashSet::new();
     let mut out = Vec::new();
 
-    // Prompt / negative from CLIP text encodes — prefer title hints, then order.
+    // Prompt / negative — easy-use nodes, titled primitives, then CLIP encodes.
     let mut text_inputs: Vec<&BindableInput> = bindable
         .iter()
-        .filter(|b| {
-            b.input == "text"
-                && b.kind == "string"
-                && (b.class_type == "CLIPTextEncode"
-                    || b.class_type == "CLIPTextEncodeSDXL"
-                    || b.class_type == "CLIPTextEncodeFlux"
-                    || b.class_type.contains("TextEncode"))
-        })
+        .filter(|b| is_prompt_bindable(b))
         .collect();
-    text_inputs.sort_by(|a, b| a.node_id.cmp(&b.node_id));
+    text_inputs.sort_by(|a, b| {
+        prompt_source_rank(a)
+            .cmp(&prompt_source_rank(b))
+            .then_with(|| a.node_id.cmp(&b.node_id))
+    });
 
     let prompt_text = text_inputs
         .iter()
         .copied()
-        .find(|b| title_hints_positive(b))
+        .find(|b| title_hints_positive(b) || b.class_type == "easy positive" || b.input == "positive")
         .or_else(|| {
             text_inputs
                 .iter()
                 .copied()
-                .find(|b| !title_hints_negative(b))
+                .find(|b| {
+                    !title_hints_negative(b)
+                        && b.class_type != "easy negative"
+                        && b.input != "negative"
+                })
         })
         .or_else(|| text_inputs.first().copied());
     let prompt_key = prompt_text.map(binding_key);
     let negative_text = text_inputs
         .iter()
         .copied()
-        .find(|b| title_hints_negative(b) && Some(binding_key(b)) != prompt_key)
+        .find(|b| {
+            Some(binding_key(b)) != prompt_key
+                && (title_hints_negative(b)
+                    || b.class_type == "easy negative"
+                    || b.input == "negative")
+        })
         .or_else(|| {
             text_inputs
                 .iter()
@@ -785,6 +973,11 @@ pub fn suggest_controls_from_bindable(bindable: &[BindableInput]) -> Vec<Suggest
         if let Some(b) = matched {
             let key = binding_key(b);
             claimed.insert(key);
+            let default = if slot.id == "seed" {
+                Some(serde_json::json!(0))
+            } else {
+                Some(b.current.clone())
+            };
             out.push(SuggestedControl {
                 id: slot.id.into(),
                 control_type: slot.control_type.into(),
@@ -792,7 +985,7 @@ pub fn suggest_controls_from_bindable(bindable: &[BindableInput]) -> Vec<Suggest
                 input: b.input.clone(),
                 label: slot.label.into(),
                 group: slot.group.into(),
-                default: Some(b.current.clone()),
+                default,
                 include: slot.include_when_matched || slot.fixed,
                 fixed: slot.fixed,
             });
@@ -804,7 +997,11 @@ pub fn suggest_controls_from_bindable(bindable: &[BindableInput]) -> Vec<Suggest
                 input: String::new(),
                 label: slot.label.into(),
                 group: slot.group.into(),
-                default: None,
+                default: if slot.id == "seed" {
+                    Some(serde_json::json!(0))
+                } else {
+                    None
+                },
                 include: slot.fixed,
                 fixed: slot.fixed,
             });
@@ -907,4 +1104,82 @@ pub fn controls_from_suggestions(suggestions: Vec<SuggestedControl>) -> Vec<Blue
             default: c.default,
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn suggests_easy_use_prompt_nodes() {
+        let workflow = json!({
+            "55": {
+                "class_type": "CLIPTextEncode",
+                "inputs": { "text": ["803", 0], "clip": ["10", 0] },
+                "_meta": { "title": "CLIP Text Encode (Positive Prompt)" }
+            },
+            "804": {
+                "class_type": "easy positive",
+                "inputs": { "positive": "a cinematic portrait" },
+                "_meta": { "title": "Positive Prompt" }
+            },
+            "805": {
+                "class_type": "easy negative",
+                "inputs": { "negative": "blurry ugly bad" },
+                "_meta": { "title": "Negative Prompt" }
+            }
+        });
+        let controls = suggest_controls(&workflow);
+        let prompt = controls.iter().find(|c| c.id == "prompt").unwrap();
+        let negative = controls.iter().find(|c| c.id == "negative").unwrap();
+        assert_eq!(prompt.node_id, "804");
+        assert_eq!(prompt.input, "positive");
+        assert_eq!(negative.node_id, "805");
+        assert_eq!(negative.input, "negative");
+    }
+
+    #[test]
+    fn skips_stale_embedded_model_urls() {
+        let workflow = json!({
+            "761": {
+                "class_type": "UNETLoader",
+                "inputs": {
+                    "unet_name": "IntoRealismZIT4.safetensors",
+                    "weight_dtype": "default"
+                }
+            },
+            "557": {
+                "class_type": "VAELoader",
+                "inputs": { "vae_name": "ae.safetensors" }
+            },
+            "42": {
+                "class_type": "CLIPLoaderGGUF",
+                "inputs": {
+                    "clip_name": "zImage_textEncoder.safetensors",
+                    "type": "lumina2"
+                }
+            }
+        });
+        let embedded = vec![
+            EmbeddedModel {
+                name: "flux-2-klein-9b-fp8.safetensors".into(),
+                url: "https://huggingface.co/example/flux".into(),
+                directory: "diffusion_models".into(),
+            },
+            EmbeddedModel {
+                name: "wan_2.1_vae.safetensors".into(),
+                url: "https://huggingface.co/example/wan".into(),
+                directory: "vae".into(),
+            },
+        ];
+        let models = suggest_models(&workflow, &embedded);
+        let names: Vec<&str> = models.iter().map(|m| m.filename.as_str()).collect();
+        assert!(names.contains(&"IntoRealismZIT4.safetensors"));
+        assert!(names.contains(&"ae.safetensors"));
+        assert!(names.contains(&"zImage_textEncoder.safetensors"));
+        assert!(!names.contains(&"flux-2-klein-9b-fp8.safetensors"));
+        assert!(!names.contains(&"wan_2.1_vae.safetensors"));
+        assert!(models.iter().all(|m| m.url.is_empty()));
+    }
 }

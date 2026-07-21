@@ -1,4 +1,6 @@
-use crate::blueprints::{self, Blueprint, BlueprintControl, BlueprintDetail, ModelEntry};
+use crate::blueprints::{
+    self, Blueprint, BlueprintControl, BlueprintDetail, ModelEntry, ModelFileEntry,
+};
 use crate::comfy::{self, ProcessState};
 use crate::creator::{
     self, BindableInput, CapturedWorkflow, EmbeddedModel, SuggestedControl, SuggestedModel,
@@ -758,6 +760,7 @@ pub fn install_official_blueprint(
         }
         *busy = Some(id.clone());
     }
+    download::clear_cancel();
 
     let app_bg = app.clone();
     let blueprint_id = id.clone();
@@ -765,12 +768,17 @@ pub fn install_official_blueprint(
         let result = blueprints::install_models(&app_bg, &blueprint_id);
         let state = app_bg.state::<AppState>();
         if let Err(err) = result {
+            let stage = if err == "cancelled" { "cancelled" } else { "error" };
             let _ = app_bg.emit(
                 "blueprints://progress",
                 blueprints::BlueprintProgress {
                     blueprint_id: blueprint_id.clone(),
-                    stage: "error".into(),
-                    message: err,
+                    stage: stage.into(),
+                    message: if err == "cancelled" {
+                        "Download cancelled".into()
+                    } else {
+                        err
+                    },
                     model_index: 0,
                     model_total: 0,
                     downloaded: None,
@@ -781,6 +789,7 @@ pub fn install_official_blueprint(
         if let Ok(mut busy) = state.blueprint_install_busy.lock() {
             *busy = None;
         }
+        download::clear_cancel();
         // Cache is warm from install probes — push an immediate refresh (no network).
         if let Ok(list) = blueprints::list_blueprints(&app_bg, false) {
             let _ = app_bg.emit("blueprints://sizes", &list);
@@ -789,6 +798,22 @@ pub fn install_official_blueprint(
     });
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn cancel_blueprint_install() -> Result<(), String> {
+    download::request_cancel();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn list_model_files(app: AppHandle) -> Result<Vec<ModelFileEntry>, String> {
+    blueprints::list_model_files(&app)
+}
+
+#[tauri::command]
+pub fn open_models_dir(app: AppHandle) -> Result<String, String> {
+    blueprints::open_models_dir(&app)
 }
 
 #[tauri::command]

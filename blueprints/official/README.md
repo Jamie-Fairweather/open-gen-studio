@@ -89,10 +89,28 @@ When the user installs a Blueprint, the app downloads each entry into the **shar
 
 **Sizes are not stored in the manifest.** The app probes each URL (HTTP HEAD / Range) for `Content-Length`, reads the local file size on disk, and skips download when they match. Optional `sha256` still verifies after download.
 
+### `customNodes[]` (optional)
+
+Git-cloned into the managed ComfyUI portable at install time (`ComfyUI/custom_nodes/<name>`). Requires `git` on PATH. Skipped when the folder already exists.
+
+```json
+"customNodes": [
+  {
+    "name": "ComfyUI-GGUF",
+    "url": "https://github.com/city96/ComfyUI-GGUF.git"
+  }
+]
+```
+
+### Seed
+
+Use control id `seed` with `"default": 0`. User Mode treats **0 as random** (a new seed is chosen each generate and stored on the gallery item).
+
 ## Tips
 
 - Keep ids stable (`z-image-turbo`, not `Z Image Turbo v2`)
 - Put prompt / aspect-ratio-style fields in `default`; sampler math (steps, cfg, seed, raw width/height) in `advanced`
+- Prefer seed default `0` and label `Seed (0 = random)`
 - Match `path` to the Comfy loader folder (UNET → `diffusion_models`, CLIP/text → `text_encoders` or `clip`, VAE → `vae`)
 - Use Hugging Face `…/resolve/main/…` URLs, not the `/blob/` page links
 - Community / remote catalogs can come later; Official stays in this folder

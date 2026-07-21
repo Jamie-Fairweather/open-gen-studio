@@ -297,6 +297,7 @@ pub fn install_portable(
         if portable_ready(&root) {
             emit_progress(app, "configure", "Existing ComfyUI install found — finishing setup…");
             write_extra_model_paths(&root, &models)?;
+            ensure_comfy_manager(app, &root)?;
             return Ok(RuntimeInstall {
                 id,
                 engine: ENGINE.into(),
@@ -335,6 +336,7 @@ pub fn install_portable(
     }
     emit_progress(app, "configure", "Writing shared model paths…");
     write_extra_model_paths(&root, &models)?;
+    ensure_comfy_manager(app, &root)?;
 
     Ok(RuntimeInstall {
         id,
@@ -349,12 +351,83 @@ pub fn install_portable(
     })
 }
 
+/// Install ComfyUI-Manager deps (official portable flow) once per install.
+/// Built into ComfyUI core; needs `manager_requirements.txt` + `--enable-manager` at launch.
+fn ensure_comfy_manager(app: &AppHandle, root: &Path) -> Result<(), String> {
+    let marker = root.join(".oga_comfy_manager");
+    if marker.is_file() {
+        return Ok(());
+    }
+
+    let python = root.join("python_embeded").join("python.exe");
+    if !python.is_file() {
+        return Err("ComfyUI portable python.exe missing — cannot install Manager".into());
+    }
+
+    let reqs = root.join("ComfyUI").join("manager_requirements.txt");
+    emit_progress(app, "configure", "Installing ComfyUI-Manager…");
+
+    let output = if reqs.is_file() {
+        Command::new(&python)
+            .args([
+                "-s",
+                "-m",
+                "pip",
+                "install",
+                "-r",
+                reqs.to_str().ok_or("invalid manager_requirements path")?,
+            ])
+            .current_dir(root)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|e| format!("failed to run pip for ComfyUI-Manager: {e}"))?
+    } else {
+        // Older portables / docs still mention the pip package.
+        Command::new(&python)
+            .args(["-s", "-m", "pip", "install", "-U", "--pre", "comfyui-manager"])
+            .current_dir(root)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|e| format!("failed to run pip for ComfyUI-Manager: {e}"))?
+    };
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(format!(
+            "ComfyUI-Manager install failed: {}{}",
+            stderr.trim(),
+            if stderr.trim().is_empty() {
+                stdout.trim()
+            } else {
+                ""
+            }
+        ));
+    }
+
+    fs::write(&marker, b"ok").map_err(|e| e.to_string())?;
+    emit_progress(app, "configure", "ComfyUI-Manager ready");
+    Ok(())
+}
+
 pub fn start(
     app: &AppHandle,
     processes: &Mutex<ProcessState>,
     runtime: &RuntimeInstall,
     port: u16,
 ) -> Result<(), String> {
+    let root = PathBuf::from(&runtime.install_path);
+    let python = root.join("python_embeded").join("python.exe");
+    let main_py = root.join("ComfyUI").join("main.py");
+    if !python.is_file() || !main_py.is_file() {
+        return Err("ComfyUI portable install is incomplete".into());
+    }
+
+    // Existing installs from before Manager support — install on first start.
+    ensure_comfy_manager(app, &root)?;
+
     let mut guard = processes.lock().map_err(|e| e.to_string())?;
     if let Some(child) = guard.child.as_mut() {
         match child.try_wait() {
@@ -364,13 +437,6 @@ pub fn start(
             }
             Err(e) => return Err(e.to_string()),
         }
-    }
-
-    let root = PathBuf::from(&runtime.install_path);
-    let python = root.join("python_embeded").join("python.exe");
-    let main_py = root.join("ComfyUI").join("main.py");
-    if !python.is_file() || !main_py.is_file() {
-        return Err("ComfyUI portable install is incomplete".into());
     }
 
     emit_progress(
@@ -394,6 +460,8 @@ pub fn start(
             "1024",
             "--disable-auto-launch",
             "--windows-standalone-build",
+            // Official portable Manager (deps via ensure_comfy_manager).
+            "--enable-manager",
         ])
         .current_dir(&root)
         .stdin(Stdio::null())

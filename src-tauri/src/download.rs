@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
-use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
@@ -16,6 +17,21 @@ pub const SETTING_HF_TOKEN: &str = "huggingface_token";
 static STORED_HF_TOKEN: Mutex<Option<String>> = Mutex::new(None);
 /// Cache of URL → gated (unauthenticated probe). Avoids re-HEADing during packaging/list.
 static GATED_URL_CACHE: OnceLock<Mutex<HashMap<String, bool>>> = OnceLock::new();
+/// Cooperative cancel for in-flight `download_file` / blueprint installs.
+static DOWNLOAD_CANCEL: AtomicBool = AtomicBool::new(false);
+
+/// Request cancel of the current download(s). Cleared when a new install starts.
+pub fn request_cancel() {
+    DOWNLOAD_CANCEL.store(true, Ordering::SeqCst);
+}
+
+pub fn clear_cancel() {
+    DOWNLOAD_CANCEL.store(false, Ordering::SeqCst);
+}
+
+pub fn is_cancelled() -> bool {
+    DOWNLOAD_CANCEL.load(Ordering::SeqCst)
+}
 
 fn gated_url_cache() -> &'static Mutex<HashMap<String, bool>> {
     GATED_URL_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
@@ -273,6 +289,20 @@ fn download_once(
         .unwrap_or_else(Instant::now);
 
     loop {
+        if is_cancelled() {
+            let _ = app.emit(
+                "downloads://progress",
+                DownloadProgress {
+                    url: url.into(),
+                    dest: dest_str,
+                    downloaded,
+                    total,
+                    done: true,
+                    error: Some("cancelled".into()),
+                },
+            );
+            return Err("cancelled".into());
+        }
         let n = response.read(&mut buf).map_err(|e| e.to_string())?;
         if n == 0 {
             break;

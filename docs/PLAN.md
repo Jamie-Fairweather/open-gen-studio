@@ -135,6 +135,8 @@ Embed the **real ComfyUI frontend** (not a reimplementation). Build → test →
 
 Later, Creator can grow beyond Comfy (video graphs, LLM flows, audio pipelines, 3D meshes) while still emitting the same Blueprint format.
 
+> **Proposed revision:** image Blueprints as **recipes** (models + sampler + capabilities) with a **runtime graph compiler**, and Creator as a form — not Comfy embed. See [`PLAN-RECIPE-BLUEPRINTS.md`](./PLAN-RECIPE-BLUEPRINTS.md).
+
 ---
 
 ## Blueprints
@@ -407,6 +409,7 @@ Migrations live in the Rust host (e.g. sqlx / refinery / simple versioned SQL).
 - **Save only to the user folder** `%APPDATA%/…/blueprints/user/<id>/` (same `manifest.json` + `workflow.api.json` shape as Official)
 - **Never write Official** — promoting a user pack into `blueprints/official/` is a manual copy
 - Picker lists **My blueprints** alongside Official; generate resolves user first by id
+- **Superseding proposal:** recipe Blueprints + dynamic compile — [`PLAN-RECIPE-BLUEPRINTS.md`](./PLAN-RECIPE-BLUEPRINTS.md)
 
 ### Phase 5 — Audio
 

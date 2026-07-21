@@ -392,6 +392,23 @@ export async function installOfficialBlueprint(id: string): Promise<void> {
   return invoke("install_official_blueprint", { id })
 }
 
+export async function cancelBlueprintInstall(): Promise<void> {
+  return invoke("cancel_blueprint_install")
+}
+
+export type ModelFileEntry = {
+  relativePath: string
+  bytes: number
+}
+
+export async function listModelFiles(): Promise<ModelFileEntry[]> {
+  return invoke("list_model_files")
+}
+
+export async function openModelsDir(): Promise<string> {
+  return invoke("open_models_dir")
+}
+
 export async function getOfficialBlueprint(
   id: string
 ): Promise<BlueprintDetail> {

@@ -6,6 +6,7 @@ import {
   ImageIcon,
   KeyRoundIcon,
   SearchIcon,
+  XIcon,
 } from "lucide-react"
 import { useMemo, useState } from "react"
 import { Badge } from "@/components/ui/badge"
@@ -70,6 +71,7 @@ type BlueprintPickerDialogProps = {
   sizesProbing: boolean
   onSelect: (id: string) => void
   onInstall: (id: string) => void
+  onCancelInstall?: () => void
 }
 
 export function BlueprintPickerDialog({
@@ -82,6 +84,7 @@ export function BlueprintPickerDialog({
   sizesProbing,
   onSelect,
   onInstall,
+  onCancelInstall,
 }: BlueprintPickerDialogProps) {
   const [query, setQuery] = useState("")
 
@@ -169,6 +172,7 @@ export function BlueprintPickerDialog({
                           onOpenChange(false)
                         }}
                         onInstall={() => onInstall(bp.id)}
+                        onCancelInstall={onCancelInstall}
                       />
                     ))}
                   </div>
@@ -194,6 +198,7 @@ export function BlueprintPickerDialog({
                           onOpenChange(false)
                         }}
                         onInstall={() => onInstall(bp.id)}
+                        onCancelInstall={onCancelInstall}
                       />
                     ))}
                   </div>
@@ -216,6 +221,7 @@ export function BlueprintPickerDialog({
                         sizesProbing={sizesProbing}
                         onSelect={() => onSelect(bp.id)}
                         onInstall={() => onInstall(bp.id)}
+                        onCancelInstall={onCancelInstall}
                       />
                     ))}
                   </div>
@@ -237,6 +243,7 @@ function BlueprintCard({
   sizesProbing,
   onSelect,
   onInstall,
+  onCancelInstall,
 }: {
   bp: Blueprint
   selected: boolean
@@ -245,6 +252,7 @@ function BlueprintCard({
   sizesProbing: boolean
   onSelect: () => void
   onInstall: () => void
+  onCancelInstall?: () => void
 }) {
   const installed = isInstalled(bp)
   // During install, prefer live overall bytes so this line matches the progress box.
@@ -415,27 +423,29 @@ function BlueprintCard({
               "Select"
             )}
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={installing}
-            onClick={onInstall}
-            title={installed ? "Re-check models" : "Download models"}
-          >
-            {installing ? (
-              "…"
-            ) : (
-              <>
-                <DownloadIcon />
-                {installed
-                  ? "Check"
-                  : bp.modelsReady > 0
-                    ? "Resume"
-                    : "Install"}
-              </>
-            )}
-          </Button>
+          {installing ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={onCancelInstall}
+              title="Cancel download"
+            >
+              <XIcon />
+              Cancel
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={onInstall}
+              title={installed ? "Re-check models" : "Download models"}
+            >
+              <DownloadIcon />
+              {installed ? "Check" : bp.modelsReady > 0 ? "Resume" : "Install"}
+            </Button>
+          )}
         </div>
       </div>
     </article>

@@ -116,6 +116,8 @@ pub(crate) struct ManifestFile {
     #[serde(default)]
     models: Vec<ModelEntry>,
     #[serde(default)]
+    custom_nodes: Vec<CustomNodeDep>,
+    #[serde(default)]
     pub(crate) controls: Vec<BlueprintControl>,
 }
 
@@ -132,6 +134,22 @@ pub struct ModelEntry {
     /// Hugging Face gated repo — anonymous download returns 401.
     #[serde(default)]
     pub gated: bool,
+}
+
+/// ComfyUI custom node repo to clone into `ComfyUI/custom_nodes/<name>`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CustomNodeDep {
+    pub name: String,
+    /// Git clone URL (https://github.com/…/….git).
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelFileEntry {
+    pub relative_path: String,
+    pub bytes: u64,
 }
 
 /// Resolve the Official blueprints directory (bundled resources, with repo fallback in dev).
@@ -342,9 +360,24 @@ pub fn enqueue_size_probe(app: &AppHandle) {
 /// Emits `blueprints://progress` (with overall byte totals) and reuses
 /// `downloads://progress` per file for live transfer updates.
 pub fn install_models(app: &AppHandle, blueprint_id: &str) -> Result<(), String> {
+    download::clear_cancel();
     let (_dir, manifest) = load_manifest(app, blueprint_id)?;
     let models_root = comfy::models_dir(app)?;
     fs::create_dir_all(&models_root).map_err(|e| e.to_string())?;
+
+    if !manifest.custom_nodes.is_empty() {
+        emit_progress(
+            app,
+            blueprint_id,
+            "deps",
+            "Installing custom nodes…",
+            0,
+            manifest.models.len(),
+            None,
+            None,
+        );
+        install_custom_nodes(app, &manifest.custom_nodes)?;
+    }
 
     let total = manifest.models.len();
     if total == 0 {
@@ -383,6 +416,9 @@ pub fn install_models(app: &AppHandle, blueprint_id: &str) -> Result<(), String>
     let mut bytes_done = 0u64;
 
     for (i, model) in manifest.models.iter().enumerate() {
+        if download::is_cancelled() {
+            return Err("cancelled".into());
+        }
         validate_model_paths_allow_empty_url(model)?;
         let dest = models_root.join(&model.path).join(&model.filename);
 
@@ -614,6 +650,7 @@ pub fn save_user_blueprint(
         "description": description,
         "runtime": if runtime.trim().is_empty() { "comfyui" } else { runtime.trim() },
         "models": models,
+        "customNodes": [],
         "controls": controls,
     });
     fs::write(
@@ -644,28 +681,118 @@ pub fn delete_user_blueprint(app: &AppHandle, id: &str) -> Result<(), String> {
 
 pub fn open_user_blueprints_dir(app: &AppHandle) -> Result<String, String> {
     let dir = user_dir(app)?;
+    open_dir_in_os(&dir)?;
+    Ok(path_for_asset_protocol(dir))
+}
+
+pub fn open_models_dir(app: &AppHandle) -> Result<String, String> {
+    let dir = comfy::models_dir(app)?;
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    open_dir_in_os(&dir)?;
+    Ok(path_for_asset_protocol(dir))
+}
+
+/// List files under the shared models library (relative path + size).
+pub fn list_model_files(app: &AppHandle) -> Result<Vec<ModelFileEntry>, String> {
+    let root = comfy::models_dir(app)?;
+    if !root.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut out = Vec::new();
+    collect_model_files(&root, &root, &mut out)?;
+    out.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+    Ok(out)
+}
+
+fn collect_model_files(
+    root: &Path,
+    dir: &Path,
+    out: &mut Vec<ModelFileEntry>,
+) -> Result<(), String> {
+    let entries = fs::read_dir(dir).map_err(|e| e.to_string())?;
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if path.is_dir() {
+            collect_model_files(root, &path, out)?;
+        } else if path.is_file() {
+            let rel = path
+                .strip_prefix(root)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .replace('\\', "/");
+            let bytes = entry.metadata().map(|m| m.len()).unwrap_or(0);
+            out.push(ModelFileEntry {
+                relative_path: rel,
+                bytes,
+            });
+        }
+    }
+    Ok(())
+}
+
+fn open_dir_in_os(dir: &Path) -> Result<(), String> {
     #[cfg(windows)]
     {
         std::process::Command::new("explorer")
-            .arg(&dir)
+            .arg(dir)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "macos")]
     {
         std::process::Command::new("open")
-            .arg(&dir)
+            .arg(dir)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "linux")]
     {
         std::process::Command::new("xdg-open")
-            .arg(&dir)
+            .arg(dir)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
-    Ok(path_for_asset_protocol(dir))
+    Ok(())
+}
+
+fn install_custom_nodes(app: &AppHandle, nodes: &[CustomNodeDep]) -> Result<(), String> {
+    if nodes.is_empty() {
+        return Ok(());
+    }
+    let portable = comfy::find_portable_root(&comfy::runtimes_dir(app)?.join("portable"))
+        .map_err(|_| {
+            "ComfyUI portable not found — install the runtime before custom nodes".to_string()
+        })?;
+    let custom_dir = portable.join("ComfyUI").join("custom_nodes");
+    fs::create_dir_all(&custom_dir).map_err(|e| e.to_string())?;
+
+    for node in nodes {
+        if download::is_cancelled() {
+            return Err("cancelled".into());
+        }
+        let name = node.name.trim();
+        let url = node.url.trim();
+        if name.is_empty() || url.is_empty() {
+            return Err("custom node entries need both name and url".into());
+        }
+        if name.contains('/') || name.contains('\\') || name.contains("..") {
+            return Err(format!("invalid custom node name: {name}"));
+        }
+        let dest = custom_dir.join(name);
+        if dest.is_dir() {
+            continue;
+        }
+        let status = std::process::Command::new("git")
+            .args(["clone", "--depth", "1", url])
+            .arg(&dest)
+            .status()
+            .map_err(|e| format!("git clone failed for {name} (is git installed?): {e}"))?;
+        if !status.success() {
+            return Err(format!("git clone failed for {name} ({url})"));
+        }
+    }
+    Ok(())
 }
 
 fn model_is_ready(model: &ModelEntry, models_root: &Path) -> bool {

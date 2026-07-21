@@ -1,13 +1,12 @@
-import { Geist_Mono, Inter } from "next/font/google"
+import { Geist_Mono, Outfit } from "next/font/google"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { AnchoredToastProvider, ToastProvider } from "@/components/ui/toast"
 import { cn } from "@/lib/utils"
 
-const interHeading = Inter({ subsets: ["latin"], variable: "--font-heading" })
-
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
-
+const outfit = Outfit({ subsets: ["latin"], variable: "--font-sans" })
+const outfitHeading = Outfit({ subsets: ["latin"], variable: "--font-heading" })
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" })
 
 export default function RootLayout({
@@ -20,15 +19,18 @@ export default function RootLayout({
       lang="en"
       suppressHydrationWarning
       className={cn(
-        "antialiased",
-        "font-mono",
-        inter.variable,
-        interHeading.variable,
+        "dark antialiased",
+        outfit.variable,
+        outfitHeading.variable,
         geistMono.variable
       )}
     >
-      <body>
-        <ThemeProvider>{children}</ThemeProvider>
+      <body className="font-sans">
+        <ThemeProvider>
+          <ToastProvider position="bottom-right">
+            <AnchoredToastProvider>{children}</AnchoredToastProvider>
+          </ToastProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

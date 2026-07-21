@@ -1,0 +1,28 @@
+{
+  "id": "_example",
+  "name": "Example (replace me)",
+  "category": "image",
+  "description": "Template Official Blueprint — copy this folder, rename it, and drop a real workflow.api.json.",
+  "runtime": "comfyui",
+  "minimumVramGb": 8,
+  "models": [],
+  "controls": [
+    {
+      "id": "prompt",
+      "type": "textarea",
+      "nodeId": "6",
+      "input": "text",
+      "label": "Prompt",
+      "group": "default"
+    },
+    {
+      "id": "seed",
+      "type": "number",
+      "nodeId": "3",
+      "input": "seed",
+      "label": "Seed (0 = random)",
+      "default": 0,
+      "group": "advanced"
+    }
+  ]
+}

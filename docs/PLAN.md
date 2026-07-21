@@ -25,16 +25,16 @@ Inspiration (and what we want to improve on): [open-generative-ai](https://githu
 
 ## Mental Model (UI language)
 
-| Layer         | Meaning                                    | Examples                                    |
-| ------------- | ------------------------------------------ | ------------------------------------------- |
-| **Engine**    | Underlying AI stack                        | ComfyUI, llama.cpp, Whisper                 |
-| **Runtime**   | Installed, managed instance of an engine   | ComfyUI 0.3.x in a managed venv             |
-| **Blueprint** | Installable capability package             | “FLUX Dev”, “Wan 2.2”, “Kokoro”, “Trellis2” |
-| **Preset**    | User-facing install of a Blueprint version | Installed FLUX Dev 1.2.0                    |
-| **Resources** | Shared assets                              | Models, LoRAs, custom nodes                 |
-| **Projects**  | User workspaces / sessions                 | A portrait series                           |
-| **Gallery**   | All outputs with metadata                  | Lightroom-style library                     |
-| **Registry**  | Catalog UI over GitHub Blueprint sources   | Official repo → later Community → Local     |
+| Layer         | Meaning                                    | Examples                                         |
+| ------------- | ------------------------------------------ | ------------------------------------------------ |
+| **Engine**    | Underlying AI stack                        | ComfyUI, llama.cpp, Whisper                      |
+| **Runtime**   | Installed, managed instance of an engine   | Official ComfyUI Windows Portable under app data |
+| **Blueprint** | Installable capability package             | “FLUX Dev”, “Wan 2.2”, “Kokoro”, “Trellis2”      |
+| **Preset**    | User-facing install of a Blueprint version | Installed FLUX Dev 1.2.0                         |
+| **Resources** | Shared assets                              | Models, LoRAs, custom nodes                      |
+| **Projects**  | User workspaces / sessions                 | A portrait series                                |
+| **Gallery**   | All outputs with metadata                  | Lightroom-style library                          |
+| **Registry**  | Catalog UI over GitHub Blueprint sources   | Official repo → later Community → Local          |
 
 Users install **capabilities** (“cinematic images”). Power users can still see engines, nodes, and graphs when they want.
 
@@ -158,30 +158,61 @@ Blueprint
 
 ### UI schema (example)
 
-```yaml
-controls:
-  - id: prompt
-    type: textarea
-  - id: negative_prompt
-    type: textarea
-  - id: aspect_ratio
-    type: select
-    values: [1:1, 16:9, 9:16]
-  - id: steps
-    type: slider
-    min: 10
-    max: 50
-    default: 28
-    advanced: true
-  - id: cfg
-    type: slider
-    min: 1
-    max: 10
-    default: 3.5
-    advanced: true
+```json
+{
+  "controls": [
+    {
+      "id": "prompt",
+      "type": "textarea",
+      "group": "default",
+      "nodeId": "…",
+      "input": "text"
+    },
+    {
+      "id": "aspect_ratio",
+      "type": "select",
+      "group": "default",
+      "values": ["1:1", "16:9", "9:16"]
+    },
+    {
+      "id": "steps",
+      "type": "number",
+      "group": "advanced",
+      "default": 28,
+      "nodeId": "…",
+      "input": "steps"
+    },
+    {
+      "id": "cfg",
+      "type": "number",
+      "group": "advanced",
+      "default": 3.5,
+      "nodeId": "…",
+      "input": "cfg"
+    }
+  ]
+}
 ```
 
+`group` is `default` | `advanced`. User Mode always shows `default`; an **Advanced controls** toggle reveals `advanced`. Omit `group` → treat as `default`.
+
 Creators annotate which workflow parameters are user-facing; the app **generates the form**.
+
+### Models (preset download)
+
+```json
+{
+  "models": [
+    {
+      "filename": "z_image_turbo_bf16.safetensors",
+      "path": "diffusion_models",
+      "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/diffusion_models/z_image_turbo_bf16.safetensors"
+    }
+  ]
+}
+```
+
+Install lands files in the shared library: `app_data/models/<path>/<filename>` (wired into Comfy via `extra_model_paths.yaml`). Completeness = local file size vs remote `Content-Length` (HEAD/Range probe) — not hardcoded sizes in the manifest. Optional `sha256` for verify.
 
 ### Publish pipeline
 
@@ -194,40 +225,40 @@ Build workflow → Validate → Resolve deps → Generate manifest
 
 ---
 
-## Registry (GitHub-backed catalog)
+## Registry / Official Blueprints
 
-UI still feels like a Registry. Backend is **not** a marketplace DB — it is one or more **GitHub repositories** of Blueprint packages (YAML/JSON manifests + workflow files + thumbnails).
+UI still feels like a Registry. **Official Blueprints ship inside the app** — not a hosted marketplace DB.
+
+```
+blueprints/official/<id>/
+  manifest.json        # name, category, models, UI controls → node bindings
+  workflow.api.json    # ComfyUI "Export Workflow (API)" JSON
+  thumbnail.png        # optional
+```
+
+Drop API-format Comfy exports into that folder; they are bundled with the desktop build (Tauri resources). See [`blueprints/official/README.md`](../blueprints/official/README.md).
 
 ```
 Registry (UI)
-├── Images     (FLUX, SDXL, SD3, …)
-├── Audio      (Kokoro, Whisper, MusicGen, …)
-├── Video      (Wan, CogVideoX, Hunyuan, …)
-└── 3D         (Trellis2, …)          ← later phase
-
-Catalog source (implementation)
-└── github.com/<org>/open-gen-ai-blueprints   (example)
-    ├── blueprints/flux-dev/1.0.0/manifest.yaml
-    ├── blueprints/flux-dev/1.0.0/workflow.json
-    └── …
+├── Official   ← read from blueprints/official/ (built-in)
+├── Community  ← later: GitHub repo(s) of the same folder shape
+└── Local      ← user-added blueprints on disk
 ```
 
-Each entry shows description, examples, VRAM/disk, install time estimate, runtime, GPU support, version — all derived from the manifest files.
+**Workflow format:** use ComfyUI **File → Export Workflow (API)** (numeric node IDs). Normal Save/UI JSON is for Creator Mode editing only — `/prompt` needs API format.
 
-**Publishing Official Blueprints** = commit / PR to that repo (Creator Mode can automate packaging; git remains the distribution channel). Community later can be a second repo or fork policy — still files, still no hosted DB.
+**Community later** can reuse the same `manifest.json` + `workflow.api.json` layout on GitHub. Official stays in-repo so day-one generation does not depend on network catalogs.
 
-### Install flow
+### Install / generate flow (Official)
 
 ```
-Browse Registry (fetch index from GitHub)
-  → Install → Download manifest → Resolve deps → Download runtime
-  → Install runtime → Download models → Install nodes
-  → Verify hashes → Write InstalledPreset to local SQLite → Ready
+App lists blueprints/official/*
+  → User picks Blueprint → ensure Comfy runtime + models
+  → Patch workflow.api.json from UI controls (nodeId + input)
+  → POST Comfy /prompt → poll → Gallery
 ```
 
-Incremental resolution (like npm): skip already-installed ComfyUI / Impact Pack / shared models.
-
-Sources over time: **Official (GitHub) · Community (GitHub) · Local (disk)** — same installer, different catalog URLs.
+Incremental resolution (like npm): skip already-installed ComfyUI / shared models.
 
 ---
 
@@ -244,6 +275,59 @@ Capabilities the UI adapts to (declared by plugins):
 `generateImage` · `generateAudio` · `generateVideo` · `generate3D` · `transcribe` · `tts` · `chat` · …
 
 First concrete runtime: **ComfyUI**. Others plug in without rewriting the host.
+
+---
+
+## ComfyUI packaging decision
+
+How we ship/install ComfyUI under the host (researched against current Comfy-Org options).
+
+### Options considered
+
+| Option                                                                                    | What it is                                                                                                                                                                                                                                                                                 | Verdict for Open Gen AI                                          |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| **Official Windows Portable**                                                             | Self-contained folder: `python_embeded` + `ComfyUI` + run/update scripts. Published on [ComfyUI releases](https://github.com/comfyanonymous/ComfyUI/releases) / [portable docs](https://docs.comfy.org/installation/comfyui_portable_windows). GPU-specific builds (NVIDIA / AMD / Intel). | **Primary choice on Windows**                                    |
+| **Comfy Desktop** ([Comfy-Org/Comfy-Desktop](https://github.com/Comfy-Org/Comfy-Desktop)) | Official multi-install _launcher_ app; provisions “standalone” envs. Explicitly not for headless/server use.                                                                                                                                                                               | **Do not depend on it** — we _are_ the launcher                  |
+| **comfy-cli / git + venv**                                                                | Scriptable clone + pip/uv into a venv                                                                                                                                                                                                                                                      | Fallback for Linux/macOS; more CUDA/pip failure modes on Windows |
+| **Community mega-portables** (e.g. preloaded custom-node packs)                           | Third-party fat archives                                                                                                                                                                                                                                                                   | Avoid as default — size, trust, version drift                    |
+
+### Decision
+
+**Windows (Phase 2+):** install the **official ComfyUI Windows Portable** that matches detected GPU:
+
+- NVIDIA (modern): `ComfyUI_windows_portable_nvidia.7z`
+- NVIDIA (older / CUDA 12.6): `ComfyUI_windows_portable_nvidia_cu126.7z`
+- AMD / Intel: matching official portable when we expand GPU support
+
+Flow:
+
+```
+Detect GPU → pick release asset URL → download (.7z, resume+checksum)
+  → extract under app data (runtimes/comfyui/<version>/)
+  → write extra_model_paths.yaml → shared models dir
+  → start: python_embeded\python.exe -s ComfyUI\main.py
+       --listen 127.0.0.1 --port <managed>
+       (no auto-browser; we own the UI / Creator embed)
+  → health-check HTTP → register runtime_installs row
+```
+
+Why portable (not “build our own venv”):
+
+- No system Python / Git / CUDA toolkit required
+- Official, relocatable, same artifact end users already trust
+- Matches our orchestrator model: download → extract → supervise process → talk HTTP API
+- Updates: use portable’s `update/` scripts or re-download a pinned release asset from Blueprints’ runtime pin
+
+**Linux / macOS (later):** prefer **git clone + isolated venv (uv/pip)** or, if stable enough, reuse Comfy-Org [Standalone Environments](https://github.com/Comfy-Org/ComfyUI-Standalone-Environments) (what Comfy Desktop provisions). Same Runtime trait; different `install()` implementation per OS.
+
+**Not bundling Comfy inside our installer by default** — too large; install on demand when the user (or a Blueprint) needs the Comfy runtime.
+
+### Host implications
+
+- Downloader must support **`.7z` extract** (portable is 7z, not zip). Pure Rust via **sevenz-rust2** (always works); optional system 7-Zip CLI when present for a faster path.
+- Process manager launches `python_embeded\python.exe`, not `run_nvidia_gpu.bat` (bats are for humans; we pass flags ourselves).
+- Shared **model library** outside the portable tree via `extra_model_paths.yaml` so Blueprint installs don’t duplicate multi‑GB weights per Comfy copy.
+- Creator Mode: point a WebView / iframe at `http://127.0.0.1:<port>` of _our_ managed Comfy process (embed the real UI; don’t ship a second Comfy Desktop).
 
 ---
 
@@ -302,24 +386,27 @@ Migrations live in the Rust host (e.g. sqlx / refinery / simple versioned SQL).
 
 ### Phase 2 — Runtime framework
 
-- Runtime trait + Python venv management
-- Install / start / stop / health / versioning
-- First runtime: **ComfyUI**
-- Persist runtime_installs / progress in SQLite
+- Runtime trait (`install` / `start` / `stop` / `health` / `run`)
+- **ComfyUI Windows Portable** installer (GPU-matched release asset + 7z extract)
+- **Auto-install on app startup** (background thread; UI stays responsive)
+- Process supervisor for `python_embeded\python.exe` + HTTP health on managed port
+- `extra_model_paths.yaml` → shared models directory
+- Persist `runtime_installs` in SQLite
 
 ### Phase 3 — Image generation (first complete product)
 
-- Fetch Official Blueprints from GitHub catalog repo
-- Auto-install ComfyUI + nodes + models (FLUX / SDXL)
-- User Mode generate UI from UI schema
+- Load Official Blueprints from `blueprints/official/` (bundled)
+- Ensure Comfy runtime installed + models from manifest
+- User Mode form from manifest `controls` → patch `workflow.api.json` → Comfy `/prompt`
 - Gallery + history + live job status via events
 
 ### Phase 4 — Creator Mode & Blueprint publishing
 
-- Embed ComfyUI in Creator
-- Dependency scanner → manifest → package
-- Publish path: commit/PR to Official GitHub Blueprints repo (not a cloud DB)
-- Immutable versioning (dirs / tags per version)
+- Embed managed ComfyUI in a Creator webview (`app.graphToPrompt` capture)
+- Light packaging: suggest models + User Mode controls from the API workflow
+- **Save only to the user folder** `%APPDATA%/…/blueprints/user/<id>/` (same `manifest.json` + `workflow.api.json` shape as Official)
+- **Never write Official** — promoting a user pack into `blueprints/official/` is a manual copy
+- Picker lists **My blueprints** alongside Official; generate resolves user first by id
 
 ### Phase 5 — Audio
 

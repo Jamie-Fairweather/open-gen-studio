@@ -1,0 +1,35 @@
+[[permission]]
+identifier = "allow-host"
+description = "Local store, GPU, download, ComfyUI runtime, and Creator commands"
+commands.allow = [
+  "list_settings",
+  "set_setting",
+  "list_jobs",
+  "create_job",
+  "update_job_status",
+  "list_gallery",
+  "add_gallery_item",
+  "delete_gallery_item",
+  "detect_gpu",
+  "download_url",
+  "list_runtimes",
+  "install_comfyui",
+  "start_comfyui",
+  "stop_comfyui",
+  "comfyui_status",
+  "list_official_blueprints",
+  "list_blueprints",
+  "install_official_blueprint",
+  "get_official_blueprint",
+  "get_blueprint",
+  "save_user_blueprint",
+  "delete_user_blueprint",
+  "open_user_blueprints_dir",
+  "open_external_url",
+  "creator_ensure_comfy",
+  "creator_open_comfy",
+  "creator_capture_workflow",
+  "creator_suggest_packaging",
+  "generate_image",
+  "cancel_job"
+]

@@ -1,11 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "enables the default permissions",
-  "windows": [
-    "main"
-  ],
+  "description": "Default desktop capabilities",
+  "windows": ["main", "creator-comfy"],
   "permissions": [
-    "core:default"
+    "core:default",
+    "core:event:default",
+    "core:webview:allow-create-webview-window",
+    "core:window:allow-set-focus",
+    "core:window:allow-close",
+    "allow-host"
   ]
 }

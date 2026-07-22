@@ -100,7 +100,7 @@ const ARCHES: ArchDef[] = [
     scheduler: "simple",
     capabilities: {
       negative: false,
-      loras: false,
+      loras: true,
       controlnet: false,
       upscale: false,
     },
@@ -145,7 +145,7 @@ const ARCHES: ArchDef[] = [
     scheduler: "simple",
     capabilities: {
       negative: false,
-      loras: false,
+      loras: true,
       controlnet: false,
       upscale: false,
     },
@@ -199,7 +199,7 @@ const ARCHES: ArchDef[] = [
     usesGuidance: true,
     capabilities: {
       negative: false,
-      loras: false,
+      loras: true,
       controlnet: false,
       upscale: false,
     },
@@ -245,7 +245,7 @@ const ARCHES: ArchDef[] = [
     usesGuidance: true,
     capabilities: {
       negative: false,
-      loras: false,
+      loras: true,
       controlnet: false,
       upscale: false,
     },
@@ -275,7 +275,7 @@ const ARCHES: ArchDef[] = [
     scheduler: "normal",
     capabilities: {
       negative: true,
-      loras: false,
+      loras: true,
       controlnet: false,
       upscale: false,
     },
@@ -303,7 +303,7 @@ const ARCHES: ArchDef[] = [
     scheduler: "normal",
     capabilities: {
       negative: true,
-      loras: false,
+      loras: true,
       controlnet: false,
       upscale: false,
     },

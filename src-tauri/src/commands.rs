@@ -9,6 +9,7 @@ use crate::db::{Db, GalleryItem, Job, RuntimeInstall};
 use crate::download;
 use crate::generate;
 use crate::gpu::{self, GpuInfo};
+use crate::loras::{self, LoraPack, SaveUserLoraArgs};
 use crate::providers::{self, ResolvedModelUrl};
 use serde::Deserialize;
 use serde_json::Value;
@@ -25,6 +26,10 @@ pub struct AppState {
     pub comfy_install_busy: Mutex<bool>,
     /// Blueprint id currently installing models, if any.
     pub blueprint_install_busy: Mutex<Option<String>>,
+    /// Active LoRA install key `"id:arch"`, if any.
+    pub lora_install_busy: Mutex<Option<String>>,
+    /// Waiting LoRA installs `(id, arch)` — drained one-at-a-time.
+    pub lora_install_queue: Mutex<Vec<(String, String)>>,
     /// Job ids the user asked to cancel.
     pub cancelled_jobs: Mutex<HashSet<String>>,
 }
@@ -821,6 +826,8 @@ pub fn install_official_blueprint(
             let _ = app_bg.emit("blueprints://sizes", &list);
         }
         let _ = app_bg.emit("blueprints://updated", &blueprint_id);
+        // LoRAs may have been queued while the blueprint was downloading.
+        pump_lora_install_queue(&app_bg, &state);
     });
 
     Ok(())
@@ -830,6 +837,177 @@ pub fn install_official_blueprint(
 pub fn cancel_blueprint_install() -> Result<(), String> {
     download::request_cancel();
     Ok(())
+}
+
+#[tauri::command]
+pub fn list_loras(app: AppHandle) -> Result<Vec<LoraPack>, String> {
+    loras::list_loras(&app)
+}
+
+#[tauri::command]
+pub fn get_lora(app: AppHandle, id: String) -> Result<LoraPack, String> {
+    loras::get_lora(&app, &id)
+}
+
+/// Download one arch variant for a LoRA pack (background).
+/// Multiple requests are queued and run one-at-a-time (shared downloader).
+#[tauri::command]
+pub fn install_lora_variant(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    arch: String,
+) -> Result<(), String> {
+    enqueue_lora_install(&app, &state, id, arch)
+}
+
+fn lora_job_key(id: &str, arch: &str) -> String {
+    format!("{id}:{arch}")
+}
+
+fn enqueue_lora_install(
+    app: &AppHandle,
+    state: &AppState,
+    id: String,
+    arch: String,
+) -> Result<(), String> {
+    let key = lora_job_key(&id, &arch);
+    {
+        let busy = state
+            .lora_install_busy
+            .lock()
+            .map_err(|e| e.to_string())?;
+        let mut queue = state
+            .lora_install_queue
+            .lock()
+            .map_err(|e| e.to_string())?;
+        if busy.as_ref() == Some(&key)
+            || queue.iter().any(|(i, a)| i == &id && a == &arch)
+        {
+            return Ok(());
+        }
+        if busy.is_some() {
+            queue.push((id.clone(), arch.clone()));
+            let _ = app.emit(
+                "loras://progress",
+                serde_json::json!({
+                    "loraId": id,
+                    "arch": arch,
+                    "stage": "queued",
+                    "message": format!("Queued {id} ({arch})"),
+                }),
+            );
+            return Ok(());
+        }
+    }
+    start_lora_install_thread(app, state, id, arch)
+}
+
+fn start_lora_install_thread(
+    app: &AppHandle,
+    state: &AppState,
+    id: String,
+    arch: String,
+) -> Result<(), String> {
+    // Don't race the blueprint downloader (shared cancel + progress).
+    {
+        let bp_busy = state
+            .blueprint_install_busy
+            .lock()
+            .map_err(|e| e.to_string())?;
+        if bp_busy.is_some() {
+            let mut queue = state
+                .lora_install_queue
+                .lock()
+                .map_err(|e| e.to_string())?;
+            if !queue.iter().any(|(i, a)| i == &id && a == &arch) {
+                queue.push((id.clone(), arch.clone()));
+            }
+            let _ = app.emit(
+                "loras://progress",
+                serde_json::json!({
+                    "loraId": id,
+                    "arch": arch,
+                    "stage": "queued",
+                    "message": format!("Queued {id} ({arch}) — waiting for blueprint install"),
+                }),
+            );
+            return Ok(());
+        }
+    }
+
+    {
+        let mut busy = state
+            .lora_install_busy
+            .lock()
+            .map_err(|e| e.to_string())?;
+        *busy = Some(lora_job_key(&id, &arch));
+    }
+    download::clear_cancel();
+
+    let app_bg = app.clone();
+    let lora_id = id;
+    let arch_bg = arch;
+    std::thread::spawn(move || {
+        let result = loras::install_variant(&app_bg, &lora_id, &arch_bg);
+        let state = app_bg.state::<AppState>();
+        if let Err(err) = &result {
+            let stage = if err.as_str() == "cancelled" {
+                "cancelled"
+            } else {
+                "error"
+            };
+            let _ = app_bg.emit(
+                "loras://progress",
+                serde_json::json!({
+                    "loraId": lora_id,
+                    "arch": arch_bg,
+                    "stage": stage,
+                    "message": err,
+                }),
+            );
+        }
+        if let Ok(mut busy) = state.lora_install_busy.lock() {
+            *busy = None;
+        }
+        download::clear_cancel();
+        let _ = app_bg.emit("loras://updated", &lora_id);
+        pump_lora_install_queue(&app_bg, &state);
+    });
+
+    Ok(())
+}
+
+fn pump_lora_install_queue(app: &AppHandle, state: &AppState) {
+    let next = {
+        let Ok(mut queue) = state.lora_install_queue.lock() else {
+            return;
+        };
+        if queue.is_empty() {
+            return;
+        }
+        // Wait until blueprint install finishes before starting LoRAs.
+        if let Ok(bp) = state.blueprint_install_busy.lock() {
+            if bp.is_some() {
+                return;
+            }
+        }
+        Some(queue.remove(0))
+    };
+    let Some((id, arch)) = next else {
+        return;
+    };
+    let _ = start_lora_install_thread(app, state, id, arch);
+}
+
+#[tauri::command]
+pub fn save_user_lora(app: AppHandle, args: SaveUserLoraArgs) -> Result<LoraPack, String> {
+    loras::save_user_lora(&app, args)
+}
+
+#[tauri::command]
+pub fn delete_user_lora(app: AppHandle, id: String) -> Result<(), String> {
+    loras::delete_user_lora(&app, &id)
 }
 
 #[tauri::command]

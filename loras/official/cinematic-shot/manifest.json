@@ -1,0 +1,35 @@
+{
+  "id": "cinematic-shot",
+  "name": "Cinematic Shot",
+  "description": "Cinematic color grading / still-image look. Trigger tip: zy_cinematic (Krea 2).",
+  "triggerWords": ["zy_cinematic"],
+  "defaultStrength": 1,
+  "strengthMin": 0,
+  "strengthMax": 2,
+  "variants": [
+    {
+      "arch": "krea2",
+      "filename": "zy_Cinematic_Shot_K2.safetensors",
+      "path": "loras",
+      "url": "https://civitai.com/api/download/models/3085969"
+    },
+    {
+      "arch": "z-image",
+      "filename": "zy_CinematicShot_zit.safetensors",
+      "path": "loras",
+      "url": "https://civitai.com/api/download/models/2454927"
+    },
+    {
+      "arch": "sdxl",
+      "filename": "CinematicStyle_v1.safetensors",
+      "path": "loras",
+      "url": "https://civitai.com/api/download/models/481917"
+    },
+    {
+      "arch": "flux",
+      "filename": "CinematicStyleFlux_v1.safetensors",
+      "path": "loras",
+      "url": "https://civitai.com/api/download/models/857668"
+    }
+  ]
+}

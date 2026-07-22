@@ -1,7 +1,7 @@
 "use client"
 
-import { FolderOpenIcon } from "lucide-react"
-import { useEffect, useState } from "react"
+import { DownloadIcon, FolderOpenIcon, Trash2Icon } from "lucide-react"
+import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -13,8 +13,22 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { listModelFiles, openModelsDir, type ModelFileEntry } from "@/lib/host"
-import { notifyError } from "@/lib/notify"
+import { Input } from "@/components/ui/input"
+import {
+  deleteUserLora,
+  installLoraVariant,
+  listLoras,
+  listModelFiles,
+  onLoraProgress,
+  onLorasUpdated,
+  openModelsDir,
+  resolveModelUrl,
+  saveUserLora,
+  type LoraPack,
+  type ModelFileEntry,
+} from "@/lib/host"
+import { notifyError, notifySuccess } from "@/lib/notify"
+import { cn } from "@/lib/utils"
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -23,51 +37,334 @@ function formatBytes(n: number): string {
   return `${(n / 1024 ** 3).toFixed(2)} GB`
 }
 
+const ARCH_OPTIONS = [
+  "krea2",
+  "z-image",
+  "flux",
+  "flux2",
+  "sdxl",
+  "sd15",
+] as const
+
 type ModelsLibraryDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** When set, Install buttons target this arch first. */
+  preferArch?: string | null
+  onLoraInstallStarted?: (id: string, arch: string, filename: string) => void
 }
 
-function ModelsLibraryBody() {
+function ModelsLibraryBody({
+  preferArch,
+  onLoraInstallStarted,
+}: {
+  preferArch?: string | null
+  onLoraInstallStarted?: (id: string, arch: string, filename: string) => void
+}) {
+  const [tab, setTab] = useState<"loras" | "files">("loras")
   const [files, setFiles] = useState<ModelFileEntry[] | null>(null)
+  const [packs, setPacks] = useState<LoraPack[] | null>(null)
+  const [busyKeys, setBusyKeys] = useState<string[]>([])
+  const [adding, setAdding] = useState(false)
+  const [newName, setNewName] = useState("")
+  const [newId, setNewId] = useState("")
+  const [newArch, setNewArch] = useState<string>("krea2")
+  const [newUrl, setNewUrl] = useState("")
+  const [saving, setSaving] = useState(false)
+
+  const refresh = useCallback(() => {
+    void listLoras()
+      .then(setPacks)
+      .catch((e) => {
+        notifyError(e instanceof Error ? e.message : String(e), "LoRAs")
+        setPacks([])
+      })
+    void listModelFiles()
+      .then(setFiles)
+      .catch((e) => {
+        notifyError(e instanceof Error ? e.message : String(e), "Models")
+        setFiles([])
+      })
+  }, [])
 
   useEffect(() => {
-    let cancelled = false
-    void listModelFiles()
-      .then((list) => {
-        if (!cancelled) setFiles(list)
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          notifyError(e instanceof Error ? e.message : String(e), "Models")
-          setFiles([])
-        }
-      })
+    refresh()
+    let unlistenUpdated: (() => void) | undefined
+    let unlistenProgress: (() => void) | undefined
+    void onLorasUpdated(() => refresh()).then((u) => {
+      unlistenUpdated = u
+    })
+    void onLoraProgress((p) => {
+      const key = `${p.loraId}:${p.arch}`
+      if (
+        p.stage === "done" ||
+        p.stage === "error" ||
+        p.stage === "cancelled"
+      ) {
+        setBusyKeys((prev) => prev.filter((k) => k !== key))
+        refresh()
+      } else if (p.stage === "queued" || p.stage === "download") {
+        setBusyKeys((prev) => (prev.includes(key) ? prev : [...prev, key]))
+      }
+    }).then((u) => {
+      unlistenProgress = u
+    })
     return () => {
-      cancelled = true
+      unlistenUpdated?.()
+      unlistenProgress?.()
     }
-  }, [])
+  }, [refresh])
 
   const list = files ?? []
   const totalBytes = list.reduce((sum, f) => sum + f.bytes, 0)
+  const loraList = packs ?? []
+
+  async function handleInstall(pack: LoraPack, arch: string) {
+    const variant = pack.variants.find((v) => v.arch === arch)
+    if (!variant) return
+    const key = `${pack.id}:${arch}`
+    setBusyKeys((prev) => (prev.includes(key) ? prev : [...prev, key]))
+    onLoraInstallStarted?.(pack.id, arch, variant.filename)
+    try {
+      await installLoraVariant(pack.id, arch)
+      // Queued or started — stay busy until progress clears this key.
+    } catch (e) {
+      notifyError(e instanceof Error ? e.message : String(e), "LoRA install")
+      setBusyKeys((prev) => prev.filter((k) => k !== key))
+    }
+  }
+
+  async function handleSaveUser() {
+    const name = newName.trim()
+    const id =
+      newId.trim() ||
+      name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "")
+    if (!name || !id || !newUrl.trim()) {
+      notifyError("Name and URL are required", "Add LoRA")
+      return
+    }
+    setSaving(true)
+    try {
+      const resolved = await resolveModelUrl(newUrl.trim())
+      const filename =
+        resolved.filename?.trim() || `${id}-${newArch}.safetensors`
+      await saveUserLora({
+        id,
+        name,
+        variants: [
+          {
+            arch: newArch,
+            filename,
+            path: "loras",
+            url: resolved.downloadUrl || newUrl.trim(),
+          },
+        ],
+      })
+      notifySuccess("LoRA pack saved", name)
+      setAdding(false)
+      setNewName("")
+      setNewId("")
+      setNewUrl("")
+      refresh()
+    } catch (e) {
+      notifyError(e instanceof Error ? e.message : String(e), "Add LoRA")
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <>
       <DialogHeader>
         <DialogTitle>Models library</DialogTitle>
         <DialogDescription>
-          Shared weights used by all blueprints
+          Shared weights and LoRA packs
           {files && files.length > 0
             ? ` · ${files.length} files · ${formatBytes(totalBytes)}`
             : null}
         </DialogDescription>
       </DialogHeader>
-      <DialogPanel className="max-h-[50vh] overflow-y-auto">
-        {files == null ? (
+      <DialogPanel className="max-h-[55vh] overflow-y-auto">
+        <div className="mb-3 flex gap-1 rounded-lg border border-border/60 p-0.5">
+          <button
+            type="button"
+            className={cn(
+              "flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+              tab === "loras"
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+            onClick={() => setTab("loras")}
+          >
+            LoRAs
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+              tab === "files"
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+            onClick={() => setTab("files")}
+          >
+            Files
+          </button>
+        </div>
+
+        {tab === "loras" ? (
+          <div className="space-y-3">
+            {packs == null ? (
+              <p className="text-sm text-muted-foreground">Loading…</p>
+            ) : loraList.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No LoRA packs yet.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {loraList.map((pack) => (
+                  <li
+                    key={pack.id}
+                    className="rounded-xl border border-border/50 bg-card/40 px-3 py-2.5"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">
+                          {pack.name}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          {pack.source === "official" ? "Official" : "Mine"}
+                          {" · "}
+                          {pack.variantsReady}/{pack.variantCount} files
+                          {" · "}
+                          {pack.arches.join(", ")}
+                        </p>
+                      </div>
+                      {pack.source === "user" ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="shrink-0 rounded-full px-2"
+                          onClick={() => {
+                            void deleteUserLora(pack.id)
+                              .then(() => {
+                                notifySuccess("LoRA removed")
+                                refresh()
+                              })
+                              .catch((e) =>
+                                notifyError(
+                                  e instanceof Error ? e.message : String(e)
+                                )
+                              )
+                          }}
+                        >
+                          <Trash2Icon className="size-3.5" />
+                        </Button>
+                      ) : null}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {pack.variants.map((v) => {
+                        const key = `${pack.id}:${v.arch}`
+                        const prefer =
+                          preferArch != null && v.arch === preferArch
+                        const busy = busyKeys.includes(key)
+                        return (
+                          <Button
+                            key={v.arch}
+                            type="button"
+                            size="sm"
+                            variant={v.ready ? "secondary" : "outline"}
+                            className={cn(
+                              "rounded-full before:hidden",
+                              prefer && !v.ready && "border-primary/50"
+                            )}
+                            disabled={v.ready || busy}
+                            onClick={() => void handleInstall(pack, v.arch)}
+                          >
+                            {!v.ready ? (
+                              <DownloadIcon className="size-3.5" />
+                            ) : null}
+                            {v.arch}
+                            {v.ready ? " ✓" : busy ? "…" : ""}
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {adding ? (
+              <div className="space-y-2 rounded-xl border border-border/60 p-3">
+                <p className="text-xs font-medium">Add My LoRA</p>
+                <Input
+                  placeholder="Name"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                />
+                <Input
+                  placeholder="Id (optional)"
+                  value={newId}
+                  onChange={(e) => setNewId(e.target.value)}
+                />
+                <select
+                  className="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                  value={newArch}
+                  onChange={(e) => setNewArch(e.target.value)}
+                >
+                  {ARCH_OPTIONS.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+                <Input
+                  placeholder="CivitAI / download URL"
+                  value={newUrl}
+                  onChange={(e) => setNewUrl(e.target.value)}
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setAdding(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={saving}
+                    onClick={() => void handleSaveUser()}
+                  >
+                    Save
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="w-full before:hidden"
+                onClick={() => setAdding(true)}
+              >
+                Add My LoRA
+              </Button>
+            )}
+          </div>
+        ) : files == null ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : list.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No model files yet. Install a blueprint to download weights here.
+            No model files yet. Install a blueprint or LoRA to download weights
+            here.
           </p>
         ) : (
           <ul className="space-y-1.5 font-mono text-[11px]">
@@ -114,11 +411,18 @@ function ModelsLibraryBody() {
 export function ModelsLibraryDialog({
   open,
   onOpenChange,
+  preferArch,
+  onLoraInstallStarted,
 }: ModelsLibraryDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup className="max-w-lg">
-        {open ? <ModelsLibraryBody key="models-body" /> : null}
+        {open ? (
+          <ModelsLibraryBody
+            preferArch={preferArch}
+            onLoraInstallStarted={onLoraInstallStarted}
+          />
+        ) : null}
       </DialogPopup>
     </Dialog>
   )

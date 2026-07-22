@@ -2,6 +2,12 @@
 
 import { RotateCcwIcon, Trash2Icon } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
+import {
+  SideRail,
+  SideRailBody,
+  SideRailHeader,
+  SIDE_RAIL_WIDTH,
+} from "@/components/side-rail"
 import { Button } from "@/components/ui/button"
 import { gallerySrc, parseGalleryRecipe, type GalleryItem } from "@/lib/host"
 import { cn } from "@/lib/utils"
@@ -48,25 +54,9 @@ export function GalleryPanel({
   }
 
   return (
-    <aside
-      className={cn(
-        "absolute inset-y-0 right-0 z-20 flex w-[min(22rem,42vw)] flex-col border-l border-white/8 bg-background/95 backdrop-blur-md transition-transform duration-300 ease-out",
-        open ? "translate-x-0" : "pointer-events-none translate-x-full"
-      )}
-      aria-hidden={!open}
-    >
-      <div className="flex shrink-0 items-center gap-3 px-4 pt-5 pb-3 md:px-5 md:pt-6">
-        <div className="min-w-0">
-          <p className="text-sm font-medium tracking-tight">{title}</p>
-          <p className="text-xs text-muted-foreground">
-            {items.length === 0
-              ? "Nothing here yet"
-              : `${items.length} item${items.length === 1 ? "" : "s"}`}
-          </p>
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4 md:px-4">
+    <SideRail open={open} side="right" width={SIDE_RAIL_WIDTH}>
+      <SideRailHeader title={title} count={items.length} />
+      <SideRailBody>
         {items.length === 0 ? (
           <p className="px-1 py-16 text-center text-sm text-muted-foreground">
             Generate something to fill this shelf.
@@ -80,7 +70,7 @@ export function GalleryPanel({
                 <div
                   key={item.id}
                   className={cn(
-                    "group relative aspect-square overflow-hidden rounded-lg bg-muted/80",
+                    "group relative aspect-square overflow-hidden rounded-lg bg-black/45",
                     !isSelected && "hover:brightness-110"
                   )}
                 >
@@ -135,7 +125,7 @@ export function GalleryPanel({
             })}
           </div>
         )}
-      </div>
-    </aside>
+      </SideRailBody>
+    </SideRail>
   )
 }

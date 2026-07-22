@@ -445,6 +445,92 @@ export async function cancelBlueprintInstall(): Promise<void> {
   return invoke("cancel_blueprint_install")
 }
 
+export type LoraVariantInfo = {
+  arch: string
+  filename: string
+  path: string
+  url: string
+  ready: boolean
+}
+
+export type LoraPack = {
+  id: string
+  name: string
+  description: string
+  source: "official" | "user" | string
+  triggerWords: string[]
+  defaultStrength: number
+  strengthMin: number
+  strengthMax: number
+  arches: string[]
+  variants: LoraVariantInfo[]
+  variantsReady: number
+  variantCount: number
+}
+
+/** Selected LoRA for generate — host resolves id → filename for the blueprint arch. */
+export type LoraStackEntry = {
+  id: string
+  strength: number
+}
+
+export type LoraProgress = {
+  loraId: string
+  arch: string
+  stage: string
+  message: string
+  filename?: string
+}
+
+export async function listLoras(): Promise<LoraPack[]> {
+  return invoke("list_loras")
+}
+
+export async function getLora(id: string): Promise<LoraPack> {
+  return invoke("get_lora", { id })
+}
+
+export async function installLoraVariant(
+  id: string,
+  arch: string
+): Promise<void> {
+  return invoke("install_lora_variant", { id, arch })
+}
+
+export async function saveUserLora(input: {
+  id: string
+  name: string
+  description?: string
+  triggerWords?: string[]
+  defaultStrength?: number
+  strengthMin?: number
+  strengthMax?: number
+  variants: Array<{
+    arch: string
+    filename: string
+    path?: string
+    url: string
+  }>
+}): Promise<LoraPack> {
+  return invoke("save_user_lora", { args: input })
+}
+
+export async function deleteUserLora(id: string): Promise<void> {
+  return invoke("delete_user_lora", { id })
+}
+
+export function onLorasUpdated(
+  handler: (id: string) => void
+): Promise<UnlistenFn> {
+  return listen<string>("loras://updated", (e) => handler(e.payload))
+}
+
+export function onLoraProgress(
+  handler: (progress: LoraProgress) => void
+): Promise<UnlistenFn> {
+  return listen<LoraProgress>("loras://progress", (e) => handler(e.payload))
+}
+
 export type ModelFileEntry = {
   relativePath: string
   bytes: number

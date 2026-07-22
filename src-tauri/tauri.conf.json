@@ -30,7 +30,10 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "resources": ["../blueprints/official"],
+    "resources": {
+      "../blueprints/official/": "blueprints/official/",
+      "../loras/official/": "loras/official/"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

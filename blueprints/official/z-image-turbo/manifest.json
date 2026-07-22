@@ -11,7 +11,7 @@
   "scheduler": "simple",
   "capabilities": {
     "negative": false,
-    "loras": false,
+    "loras": true,
     "controlnet": false,
     "upscale": false
   },

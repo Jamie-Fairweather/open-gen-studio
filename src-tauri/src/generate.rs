@@ -569,6 +569,12 @@ pub fn run_generate(
     resolve_random_seeds(&mut values);
     let (manifest, workflow) = {
         let (_dir, manifest) = blueprints::load_manifest(app, blueprint_id)?;
+        if manifest.capabilities.loras {
+            crate::loras::resolve_stack_for_generate(app, &manifest.arch, &mut values)?;
+        } else if values.get("loras").and_then(|v| v.as_array()).is_some_and(|a| !a.is_empty())
+        {
+            return Err("This blueprint does not support LoRAs".into());
+        }
         let workflow = crate::recipe::compile(&manifest, &values)?;
         (manifest, workflow)
     };

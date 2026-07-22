@@ -1,0 +1,23 @@
+{
+  "id": "age-slider",
+  "name": "THE age slider",
+  "description": "Age slider LoRA for Krea 2 and Z-Image Turbo. Strength can go outside 0–1 (try negative to positive).",
+  "triggerWords": [],
+  "defaultStrength": 0,
+  "strengthMin": -3,
+  "strengthMax": 10,
+  "variants": [
+    {
+      "arch": "krea2",
+      "filename": "age_krea2_loraholic.safetensors",
+      "path": "loras",
+      "url": "https://civitai.com/api/download/models/3067659"
+    },
+    {
+      "arch": "z-image",
+      "filename": "age_loraholic.safetensors",
+      "path": "loras",
+      "url": "https://civitai.com/api/download/models/2846807"
+    }
+  ]
+}

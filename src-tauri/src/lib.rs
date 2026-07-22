@@ -6,6 +6,7 @@ mod db;
 mod download;
 mod generate;
 mod gpu;
+mod loras;
 mod providers;
 mod recipe;
 
@@ -58,6 +59,8 @@ pub fn run() {
                 processes: Mutex::new(ProcessState::default()),
                 comfy_install_busy: Mutex::new(false),
                 blueprint_install_busy: Mutex::new(None),
+                lora_install_busy: Mutex::new(None),
+                lora_install_queue: Mutex::new(Vec::new()),
                 cancelled_jobs: Mutex::new(Default::default()),
             });
 
@@ -72,6 +75,12 @@ pub fn run() {
                     .allow_directory(&canonical, true);
             }
             if let Ok(dir) = blueprints::user_dir(app.handle()) {
+                let canonical = dir.canonicalize().unwrap_or(dir);
+                let _ = app
+                    .asset_protocol_scope()
+                    .allow_directory(&canonical, true);
+            }
+            if let Ok(dir) = loras::user_dir(app.handle()) {
                 let canonical = dir.canonicalize().unwrap_or(dir);
                 let _ = app
                     .asset_protocol_scope()
@@ -111,6 +120,11 @@ pub fn run() {
             commands::list_blueprints,
             commands::install_official_blueprint,
             commands::cancel_blueprint_install,
+            commands::list_loras,
+            commands::get_lora,
+            commands::install_lora_variant,
+            commands::save_user_lora,
+            commands::delete_user_lora,
             commands::list_model_files,
             commands::open_models_dir,
             commands::get_official_blueprint,

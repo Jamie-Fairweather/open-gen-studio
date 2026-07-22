@@ -37,6 +37,16 @@ import {
 import { GalleryPanel } from "@/components/gallery-panel"
 import { CivitaiTokenDialog } from "@/components/civitai-token-dialog"
 import { HfTokenDialog } from "@/components/hf-token-dialog"
+import { AdvancedPanel } from "@/components/advanced-panel"
+import { LoraPickerDialog } from "@/components/lora-picker-dialog"
+import { LoraStack } from "@/components/lora-stack"
+import { SideRailHandle, SIDE_RAIL_WIDTH } from "@/components/side-rail"
+import {
+  Frame,
+  FrameHeader,
+  FramePanel,
+  FrameTitle,
+} from "@/components/ui/frame"
 import { ModelsLibraryDialog } from "@/components/models-library-dialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -69,10 +79,13 @@ import {
   getBlueprint,
   getOfficialBlueprint,
   installComfyui,
+  deleteUserLora,
+  installLoraVariant,
   installOfficialBlueprint,
   isTauri,
   listGallery,
   listBlueprints,
+  listLoras,
   listRuntimes,
   listSettings,
   openExternalUrl,
@@ -82,6 +95,8 @@ import {
   onBlueprintSizes,
   onBlueprintsUpdated,
   onDownloadProgress,
+  onLoraProgress,
+  onLorasUpdated,
   onGalleryDeleted,
   onGalleryUpdated,
   onJobProgress,
@@ -94,6 +109,8 @@ import {
   type BlueprintDetail,
   type GalleryItem,
   type GalleryRecipe,
+  type LoraPack,
+  type LoraStackEntry,
   type GpuInfo,
   type Blueprint,
   type RuntimeInstall,
@@ -280,6 +297,12 @@ export function AppShell() {
   const [editBlueprintId, setEditBlueprintId] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [modelsOpen, setModelsOpen] = useState(false)
+  const [loraPickerOpen, setLoraPickerOpen] = useState(false)
+  const [loraPacks, setLoraPacks] = useState<LoraPack[]>([])
+  const [loraStack, setLoraStack] = useState<LoraStackEntry[]>([])
+  const [loraInstallingKey, setLoraInstallingKey] = useState<string | null>(
+    null
+  )
   const [hfToken, setHfToken] = useState("")
   const [hfTokenDirty, setHfTokenDirty] = useState(false)
   const [hfTokenSaving, setHfTokenSaving] = useState(false)
@@ -424,6 +447,18 @@ export function AppShell() {
       1
   )
 
+  const supportsLoras = Boolean(activeDetail?.capabilities?.loras)
+  const activeArch = activeDetail?.arch ?? null
+  const activeLoraStack = useMemo(() => {
+    if (!activeArch) return [] as LoraStackEntry[]
+    return loraStack.filter((entry) =>
+      loraPacks.some(
+        (p) =>
+          p.id === entry.id && p.variants.some((v) => v.arch === activeArch)
+      )
+    )
+  }, [loraStack, activeArch, loraPacks])
+
   const hasNegativePrompt = useMemo(
     () => Boolean(activeDetail?.capabilities?.negative && cfgValue > 1),
     [activeDetail, cfgValue]
@@ -513,6 +548,8 @@ export function AppShell() {
     let unlistenJobProgress: (() => void) | undefined
     let unlistenGallery: (() => void) | undefined
     let unlistenGalleryDeleted: (() => void) | undefined
+    let unlistenLorasUpdated: (() => void) | undefined
+    let unlistenLoraProgress: (() => void) | undefined
 
     /** Rolling window for download speed — longer span = smoother ETA. */
     const SPEED_WINDOW_MS = 10_000
@@ -534,20 +571,23 @@ export function AppShell() {
           )
         })
 
-        const [gpuInfo, rts, status, bps, items, settings] = await Promise.all([
-          detectGpu(),
-          listRuntimes(),
-          comfyuiStatus(),
-          listBlueprints(),
-          listGallery(),
-          listSettings(),
-        ])
+        const [gpuInfo, rts, status, bps, items, settings, loras] =
+          await Promise.all([
+            detectGpu(),
+            listRuntimes(),
+            comfyuiStatus(),
+            listBlueprints(),
+            listGallery(),
+            listSettings(),
+            listLoras(),
+          ])
         preferredBlueprintIdRef.current =
           settings[SETTING_SELECTED_BLUEPRINT]?.trim() || null
         setGpu(gpuInfo)
         setRuntimes(rts)
         setBlueprints(bps)
         setBlueprintsLoaded(true)
+        setLoraPacks(loras)
         setGallery(items)
         setSelectedGalleryId((prev) => prev ?? items[0]?.id ?? null)
         setComfyHealthy(status.healthy)
@@ -916,6 +956,80 @@ export function AppShell() {
       unlistenGalleryDeleted = u
     })
 
+    void onLorasUpdated(() => {
+      void listLoras()
+        .then(setLoraPacks)
+        .catch((e) =>
+          notifyError(e instanceof Error ? e.message : String(e), "LoRAs")
+        )
+    }).then((u) => {
+      unlistenLorasUpdated = u
+    })
+
+    void onLoraProgress((p) => {
+      const key = `lora:${p.loraId}:${p.arch}`
+      if (p.stage === "queued") {
+        setPendingByBlueprint((prev) => {
+          if (prev[key]?.length) return prev
+          return {
+            ...prev,
+            [key]: [
+              {
+                blueprintId: key,
+                blueprintName: `${p.loraId} · ${p.arch}`,
+                filename: p.filename || p.loraId,
+                path: "loras",
+              },
+            ],
+          }
+        })
+        return
+      }
+      if (p.stage === "download") {
+        setLoraInstallingKey(`${p.loraId}:${p.arch}`)
+        installingIdRef.current = key
+        setInstallingId(key)
+        setInstallProgress({
+          blueprintId: key,
+          stage: "download",
+          message: p.message,
+          modelIndex: 1,
+          modelTotal: 1,
+          filename: p.filename ?? null,
+          downloaded: 0,
+          total: null,
+          bytesPerSec: 0,
+        })
+        return
+      }
+      if (
+        p.stage === "done" ||
+        p.stage === "error" ||
+        p.stage === "cancelled"
+      ) {
+        setPendingByBlueprint((prev) => {
+          if (!(key in prev)) return prev
+          const next = { ...prev }
+          delete next[key]
+          return next
+        })
+        if (installingIdRef.current === key) {
+          setLoraInstallingKey(null)
+          installingIdRef.current = null
+          setInstallingId(null)
+          setInstallProgress(null)
+        }
+        if (p.stage === "error") {
+          notifyError(p.message, "LoRA install failed")
+        }
+        void listLoras()
+          .then(setLoraPacks)
+          .catch(() => {})
+      }
+    }).then((u) => {
+      unlistenLoraProgress = u
+    })
+
     return () => {
       unlistenRuntimes?.()
       unlistenProgress?.()
@@ -928,6 +1042,8 @@ export function AppShell() {
       unlistenJobProgress?.()
       unlistenGallery?.()
       unlistenGalleryDeleted?.()
+      unlistenLorasUpdated?.()
+      unlistenLoraProgress?.()
     }
   }, [desktop])
 
@@ -1272,6 +1388,67 @@ export function AppShell() {
     await requestBlueprintInstall(id)
   }
 
+  function trackLoraInstall(
+    id: string,
+    arch: string,
+    filename: string,
+    active: boolean
+  ) {
+    const pack = loraPacks.find((p) => p.id === id)
+    const key = `lora:${id}:${arch}`
+    const item = {
+      blueprintId: key,
+      blueprintName: `${pack?.name ?? id} · ${arch}`,
+      filename,
+      path: "loras",
+    }
+    setPendingByBlueprint((prev) => ({
+      ...prev,
+      [key]: [item],
+    }))
+    if (active) {
+      setLoraInstallingKey(`${id}:${arch}`)
+      installingIdRef.current = key
+      setInstallingId(key)
+      setInstallProgress({
+        blueprintId: key,
+        stage: "download",
+        message: `Downloading ${filename}`,
+        modelIndex: 1,
+        modelTotal: 1,
+        filename,
+        downloaded: 0,
+        total: null,
+        bytesPerSec: 0,
+      })
+    }
+  }
+
+  async function beginLoraInstall(id: string, arch: string) {
+    const pack = loraPacks.find((p) => p.id === id)
+    const filename = pack?.variants.find((v) => v.arch === arch)?.filename ?? id
+    const alreadyActive = loraInstallingKey != null
+    trackLoraInstall(id, arch, filename, !alreadyActive)
+    try {
+      await installLoraVariant(id, arch)
+    } catch (e) {
+      const key = `lora:${id}:${arch}`
+      setPendingByBlueprint((prev) => {
+        if (!(key in prev)) return prev
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
+      if (installingIdRef.current === key) {
+        setLoraInstallingKey(null)
+        installingIdRef.current = null
+        setInstallingId(null)
+        setInstallProgress(null)
+      }
+      notifyError(e instanceof Error ? e.message : String(e), "LoRA install")
+    }
+  }
+
   async function handleHfTokenDialogConfirm(token: string) {
     const id = pendingInstallId
     await setSetting("huggingface_token", token)
@@ -1408,6 +1585,11 @@ export function AppShell() {
       } else {
         delete values.negative
       }
+      if (supportsLoras && activeLoraStack.length > 0) {
+        values.loras = activeLoraStack
+      } else {
+        delete values.loras
+      }
       const job = await generateImage(selected.id, values)
       setActiveJobId(job.id)
     } catch (e) {
@@ -1508,16 +1690,21 @@ export function AppShell() {
   const showCreator = studioTab === "creator"
   const showDownloads = studioTab === "downloads"
   const showGalleryRail = !showCreator && !showDownloads
+  const showAdvancedRail = showGalleryRail && canGenerate
+  const stageInsetLeft =
+    showAdvancedRail && advancedOpen ? SIDE_RAIL_WIDTH : undefined
+  const stageInsetRight =
+    showGalleryRail && galleryOpen ? SIDE_RAIL_WIDTH : undefined
 
   return (
     <div className="relative flex min-h-dvh flex-col overflow-hidden bg-background">
-      <header className="z-20 flex shrink-0 items-center justify-between gap-4 px-5 py-3 md:px-8">
-        <div className="flex min-w-0 items-center gap-6">
-          <div className="flex items-center gap-2 text-sm font-medium">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-3 pt-3">
+        <header className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-border bg-card/90 px-2 py-1 shadow-lg shadow-black/30 backdrop-blur-md sm:gap-3 sm:px-3">
+          <div className="flex shrink-0 items-center gap-2 pl-1 text-sm font-medium">
             <LayersIcon className="size-4 text-primary" />
             <span className="hidden sm:inline">Open Gen AI</span>
           </div>
-          <nav className="flex items-center gap-1 text-sm">
+          <nav className="flex min-w-0 [scrollbar-width:none] items-center gap-0.5 overflow-x-auto text-sm [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             {STUDIO_TABS.map((tab) => {
               const active = studioTab === tab.id
               const downloading =
@@ -1529,7 +1716,7 @@ export function AppShell() {
                   type="button"
                   onClick={() => setStudioTab(tab.id)}
                   className={cn(
-                    "relative px-3 py-1.5 transition-colors",
+                    "relative shrink-0 px-2.5 py-1.5 transition-colors sm:px-3",
                     active
                       ? "font-medium text-foreground"
                       : "text-muted-foreground hover:text-foreground"
@@ -1545,40 +1732,32 @@ export function AppShell() {
                     ) : null}
                   </span>
                   {active ? (
-                    <span className="absolute inset-x-3 -bottom-0.5 h-0.5 rounded-full bg-primary" />
+                    <span className="absolute inset-x-2.5 -bottom-0.5 h-0.5 rounded-full bg-primary sm:inset-x-3" />
                   ) : null}
                 </button>
               )
             })}
           </nav>
-        </div>
-        <div className="flex items-center gap-2">
-          {gpu?.available ? (
-            <p className="hidden max-w-[14rem] truncate text-right text-[11px] text-muted-foreground lg:block">
-              {gpu.name}
-            </p>
-          ) : null}
           <Button
             type="button"
-            size="sm"
-            variant="outline"
-            className="rounded-full"
+            size="icon-sm"
+            variant="ghost"
+            className="shrink-0 rounded-full"
+            aria-label="Settings"
             onClick={() => setSettingsOpen(true)}
           >
             <SettingsIcon />
-            Settings
           </Button>
-        </div>
-      </header>
+        </header>
+      </div>
 
       <div className="relative min-h-0 flex-1 overflow-hidden">
         <div
-          className="absolute inset-0 flex flex-col transition-[right] duration-300 ease-out"
-          style={
-            showGalleryRail && galleryOpen
-              ? { right: "min(22rem, 42vw)" }
-              : undefined
-          }
+          className="absolute inset-0 flex flex-col pt-14 transition-[left,right] duration-300 ease-out"
+          style={{
+            left: stageInsetLeft,
+            right: stageInsetRight,
+          }}
         >
           {showCreator ? (
             <CreatorPanel
@@ -1667,8 +1846,8 @@ export function AppShell() {
               </main>
 
               <div className="pointer-events-none relative z-40 shrink-0 px-4 pt-1 pb-5 md:px-8">
-                <div className="pointer-events-auto mx-auto max-w-3xl overflow-hidden rounded-3xl border border-white/10 bg-[#141416]/95 shadow-2xl backdrop-blur-xl">
-                  <div className="bg-black/25 px-4 pt-3.5 pb-3 md:px-5">
+                <div className="pointer-events-auto mx-auto max-w-3xl overflow-hidden rounded-3xl border border-border bg-card shadow-2xl backdrop-blur-xl">
+                  <div className="bg-background/50 px-4 pt-3.5 pb-3 md:px-5">
                     <textarea
                       ref={promptRef}
                       value={prompt}
@@ -1889,24 +2068,6 @@ export function AppShell() {
                       </Popover>
                     ) : null}
 
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={advancedOpen ? "default" : "secondary"}
-                      className="rounded-full"
-                      onClick={() => setAdvancedOpen((v) => !v)}
-                      disabled={!canGenerate}
-                    >
-                      <SlidersHorizontalIcon className="size-3.5" />
-                      Advanced
-                      <ChevronDownIcon
-                        className={cn(
-                          "size-3.5 opacity-60 transition-transform",
-                          advancedOpen && "rotate-180"
-                        )}
-                      />
-                    </Button>
-
                     <div className="ms-auto flex items-center gap-2">
                       {generating ? (
                         <Button
@@ -1936,144 +2097,240 @@ export function AppShell() {
                       </Button>
                     </div>
                   </div>
-
-                  {advancedOpen && canGenerate ? (
-                    <div className="border-t border-white/8 px-3 pb-3 md:px-4">
-                      <div className="mt-3 grid gap-3 rounded-2xl border border-white/8 bg-black/20 px-3 py-3 sm:grid-cols-2">
-                        {advancedControls.length === 0 ? (
-                          <p className="text-xs text-muted-foreground sm:col-span-2">
-                            No advanced controls for this blueprint.
-                          </p>
-                        ) : (
-                          advancedControls.map((control) => {
-                            if (
-                              control.type === "number" ||
-                              control.type === "slider"
-                            ) {
-                              const value = Number(
-                                controlValues[control.id] ??
-                                  control.default ??
-                                  0
-                              )
-                              const isSeed = control.id === "seed"
-                              return (
-                                <label
-                                  key={control.id}
-                                  className="flex flex-col gap-1.5 text-xs"
-                                >
-                                  <span className="text-muted-foreground">
-                                    {isSeed
-                                      ? "Seed (0 = random)"
-                                      : control.label || control.id}
-                                  </span>
-                                  <div className="flex items-center gap-1.5">
-                                    <NumberField
-                                      size="sm"
-                                      className="min-w-0 flex-1"
-                                      value={Number.isFinite(value) ? value : 0}
-                                      onValueChange={(v) =>
-                                        setControlValues((prev) => ({
-                                          ...prev,
-                                          [control.id]: v ?? 0,
-                                        }))
-                                      }
-                                    >
-                                      <NumberFieldGroup>
-                                        <NumberFieldInput />
-                                      </NumberFieldGroup>
-                                    </NumberField>
-                                    {isSeed ? (
-                                      <Button
-                                        type="button"
-                                        size="icon-sm"
-                                        variant="outline"
-                                        title="Set to 0 (random each generate)"
-                                        onClick={() =>
-                                          setControlValues((prev) => ({
-                                            ...prev,
-                                            seed: 0,
-                                          }))
-                                        }
-                                      >
-                                        <DicesIcon />
-                                      </Button>
-                                    ) : null}
-                                  </div>
-                                </label>
-                              )
-                            }
-                            return (
-                              <label
-                                key={control.id}
-                                className="flex flex-col gap-1.5 text-xs sm:col-span-2"
-                              >
-                                <span className="text-muted-foreground">
-                                  {control.label || control.id}
-                                </span>
-                                <input
-                                  className="h-8 rounded-lg border border-input bg-background px-2"
-                                  value={String(
-                                    controlValues[control.id] ?? ""
-                                  )}
-                                  onChange={(e) =>
-                                    setControlValues((prev) => ({
-                                      ...prev,
-                                      [control.id]: e.target.value,
-                                    }))
-                                  }
-                                />
-                              </label>
-                            )
-                          })
-                        )}
-                        {selected && !isInstalled(selected) ? (
-                          <p className="text-xs text-warning-foreground sm:col-span-2">
-                            Models not installed yet — open the blueprint picker
-                            to download.
-                          </p>
-                        ) : null}
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
               </div>
             </>
           )}
         </div>
 
+        {showAdvancedRail ? (
+          <>
+            <SideRailHandle
+              side="left"
+              open={advancedOpen}
+              offset={SIDE_RAIL_WIDTH}
+              count={activeLoraStack.length}
+              icon={<SlidersHorizontalIcon className="size-3.5 opacity-90" />}
+              onClick={() => setAdvancedOpen((open) => !open)}
+              aria-label={advancedOpen ? "Close advanced" : "Open advanced"}
+              title={advancedOpen ? "Close advanced" : "Open advanced"}
+            >
+              {advancedOpen ? (
+                <ChevronLeftIcon className="size-4 opacity-70" />
+              ) : (
+                <ChevronRightIcon className="size-4 opacity-70" />
+              )}
+            </SideRailHandle>
+
+            <AdvancedPanel open={advancedOpen}>
+              {(() => {
+                const seedControl = advancedControls.find(
+                  (c) => c.id === "seed"
+                )
+                const stepsControl = advancedControls.find(
+                  (c) => c.id === "steps"
+                )
+                const cfgControl = advancedControls.find(
+                  (c) => c.id === "cfg" || c.id === "cfg_scale"
+                )
+                const otherControls = advancedControls.filter(
+                  (c) =>
+                    c.id !== "seed" &&
+                    c.id !== "steps" &&
+                    c.id !== "cfg" &&
+                    c.id !== "cfg_scale"
+                )
+
+                function renderNumberControl(
+                  control: (typeof advancedControls)[number],
+                  opts?: { stretch?: boolean; isSeed?: boolean }
+                ) {
+                  const value = Number(
+                    controlValues[control.id] ?? control.default ?? 0
+                  )
+                  const isSeed = opts?.isSeed ?? control.id === "seed"
+                  return (
+                    <label
+                      key={control.id}
+                      className={cn(
+                        "flex flex-col gap-1",
+                        opts?.stretch
+                          ? "w-full"
+                          : "min-w-[calc(50%-0.25rem)] flex-1"
+                      )}
+                    >
+                      <span className="text-[10px] text-muted-foreground">
+                        {isSeed
+                          ? "Seed (0 = random)"
+                          : control.label || control.id}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <NumberField
+                          size="sm"
+                          className="min-w-0 flex-1 gap-0"
+                          value={Number.isFinite(value) ? value : 0}
+                          onValueChange={(v) =>
+                            setControlValues((prev) => ({
+                              ...prev,
+                              [control.id]: v ?? 0,
+                            }))
+                          }
+                        >
+                          <NumberFieldGroup className="h-8">
+                            <NumberFieldInput
+                              className={cn(
+                                "h-full! font-mono text-sm leading-none! font-medium tabular-nums sm:h-full!",
+                                "text-center!"
+                              )}
+                            />
+                          </NumberFieldGroup>
+                        </NumberField>
+                        {isSeed ? (
+                          <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="outline"
+                            className="size-8 shrink-0"
+                            title="Set to 0 (random each generate)"
+                            onClick={() =>
+                              setControlValues((prev) => ({
+                                ...prev,
+                                seed: 0,
+                              }))
+                            }
+                          >
+                            <DicesIcon className="size-3.5" />
+                          </Button>
+                        ) : null}
+                      </div>
+                    </label>
+                  )
+                }
+
+                return (
+                  <>
+                    {seedControl || stepsControl || cfgControl ? (
+                      <Frame className="w-full bg-accent/70">
+                        <FrameHeader className="px-3 py-2.5">
+                          <FrameTitle>Sampling</FrameTitle>
+                        </FrameHeader>
+                        <FramePanel className="bg-card p-3">
+                          <div className="flex flex-wrap gap-2">
+                            {seedControl
+                              ? renderNumberControl(seedControl, {
+                                  stretch: true,
+                                  isSeed: true,
+                                })
+                              : null}
+                            {stepsControl
+                              ? renderNumberControl(stepsControl)
+                              : null}
+                            {cfgControl
+                              ? renderNumberControl(cfgControl)
+                              : null}
+                          </div>
+                        </FramePanel>
+                      </Frame>
+                    ) : null}
+
+                    {otherControls.length > 0 ? (
+                      <Frame className="w-full bg-accent/70">
+                        <FrameHeader className="px-3 py-2.5">
+                          <FrameTitle>More</FrameTitle>
+                        </FrameHeader>
+                        <FramePanel className="bg-card p-3">
+                          <div className="flex flex-wrap gap-2">
+                            {otherControls.map((control) => {
+                              if (
+                                control.type === "number" ||
+                                control.type === "slider"
+                              ) {
+                                return renderNumberControl(control)
+                              }
+                              return (
+                                <label
+                                  key={control.id}
+                                  className="flex w-full flex-col gap-1"
+                                >
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {control.label || control.id}
+                                  </span>
+                                  <input
+                                    className="h-8 w-full rounded-lg border border-input bg-input/32 px-2.5 font-mono text-sm font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/24"
+                                    value={String(
+                                      controlValues[control.id] ?? ""
+                                    )}
+                                    onChange={(e) =>
+                                      setControlValues((prev) => ({
+                                        ...prev,
+                                        [control.id]: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </FramePanel>
+                      </Frame>
+                    ) : null}
+
+                    {supportsLoras && activeArch ? (
+                      <LoraStack
+                        arch={activeArch}
+                        packs={loraPacks}
+                        stack={activeLoraStack}
+                        onChange={setLoraStack}
+                        installingKey={loraInstallingKey}
+                        disabled={generating}
+                        onOpenLibrary={() => setLoraPickerOpen(true)}
+                        onInstallVariant={(id, arch) => {
+                          void beginLoraInstall(id, arch)
+                        }}
+                      />
+                    ) : null}
+
+                    {advancedControls.length === 0 && !supportsLoras ? (
+                      <p className="text-xs text-muted-foreground">
+                        No advanced controls for this blueprint.
+                      </p>
+                    ) : null}
+
+                    {selected && !isInstalled(selected) ? (
+                      <p className="text-xs text-warning-foreground">
+                        Models not installed yet. Open the blueprint picker to
+                        download.
+                      </p>
+                    ) : null}
+                  </>
+                )
+              })()}
+            </AdvancedPanel>
+          </>
+        ) : null}
+
         {showGalleryRail ? (
           <>
-            <button
-              type="button"
+            <SideRailHandle
+              side="right"
+              open={galleryOpen}
+              offset={SIDE_RAIL_WIDTH}
+              count={tabGallery.length}
+              icon={<ImagesIcon className="size-3.5 opacity-90" />}
               onClick={() => setGalleryOpen((open) => !open)}
-              className={cn(
-                "absolute top-1/2 z-30 flex h-20 w-8 -translate-y-1/2 flex-col items-center justify-center gap-1 border border-white/10 bg-[#141416]/90 text-muted-foreground shadow-lg backdrop-blur-md transition-[right,colors] duration-300 hover:text-foreground",
-                galleryOpen
-                  ? "rounded-l-lg rounded-r-none border-r-0"
-                  : "rounded-l-lg border-r-0"
-              )}
-              style={{
-                right: galleryOpen ? "min(22rem, 42vw)" : 0,
-              }}
               aria-label={galleryOpen ? "Close gallery" : "Open gallery"}
               title={galleryOpen ? "Close gallery" : "Open gallery"}
             >
-              <ImagesIcon className="size-3.5" />
               {galleryOpen ? (
-                <ChevronRightIcon className="size-4" />
+                <ChevronRightIcon className="size-4 opacity-70" />
               ) : (
-                <ChevronLeftIcon className="size-4" />
+                <ChevronLeftIcon className="size-4 opacity-70" />
               )}
-              {tabGallery.length > 0 ? (
-                <span className="text-[10px] font-medium text-primary">
-                  {tabGallery.length}
-                </span>
-              ) : null}
-            </button>
+            </SideRailHandle>
 
             <GalleryPanel
               open={galleryOpen}
-              title={`${studioLabel} gallery`}
+              title={`${studioLabel} Gallery`}
               items={tabGallery}
               selectedId={selectedGalleryId}
               onSelect={setSelectedGalleryId}
@@ -2100,7 +2357,45 @@ export function AppShell() {
         }}
       />
 
-      <ModelsLibraryDialog open={modelsOpen} onOpenChange={setModelsOpen} />
+      <LoraPickerDialog
+        open={loraPickerOpen}
+        onOpenChange={setLoraPickerOpen}
+        packs={loraPacks}
+        arch={activeArch}
+        selectedIds={activeLoraStack.map((s) => s.id)}
+        installingKey={loraInstallingKey}
+        onSelect={(id) => {
+          const pack = loraPacks.find((p) => p.id === id)
+          if (!pack) return
+          setLoraStack((prev) => {
+            if (prev.some((s) => s.id === id)) return prev
+            return [...prev, { id, strength: pack.defaultStrength }]
+          })
+        }}
+        onInstall={(id, arch) => {
+          void beginLoraInstall(id, arch)
+        }}
+        onDeleteUser={(id) => {
+          void deleteUserLora(id)
+            .then(() => {
+              setLoraStack((prev) => prev.filter((s) => s.id !== id))
+              notifySuccess("LoRA removed")
+              return listLoras().then(setLoraPacks)
+            })
+            .catch((e) =>
+              notifyError(e instanceof Error ? e.message : String(e))
+            )
+        }}
+      />
+
+      <ModelsLibraryDialog
+        open={modelsOpen}
+        onOpenChange={setModelsOpen}
+        preferArch={activeDetail?.arch ?? null}
+        onLoraInstallStarted={(id, arch, filename) => {
+          trackLoraInstall(id, arch, filename, loraInstallingKey == null)
+        }}
+      />
 
       <HfTokenDialog
         key={

@@ -1,8 +1,8 @@
 # Recipe Blueprints & Dynamic Graph Generation
 
-> Status: **in progress** (2026-07-21)  
+> Status: **in progress** (2026-07-22)  
 > Relates to: [`PLAN.md`](./PLAN.md) — revises Creator Mode and what a Blueprint stores for image generation.  
-> Implemented: `recipe.rs` compilers (`z-image`, `krea2`, `flux`, `flux2`, `sdxl`/`sd15`); generate is **recipe-only**; UI controls synthesized from arch/capabilities; Creator recipe form; Official `z-image-turbo` / `krea2-turbo` recipes.
+> Implemented: `recipe.rs` compilers (`z-image`, `krea2`, `flux`, `flux2`, `sdxl`/`sd15`); generate is **recipe-only**; UI controls synthesized from arch/capabilities; Creator recipe form; Official `z-image-turbo` / `krea2-turbo` recipes; **multi-arch LoRA library** (`loras/official` + user packs, User Mode stack, `LoraLoader` compile).
 
 ## Summary
 
@@ -61,7 +61,7 @@ Reuse the existing control `group` idea. Target groups:
 | **refine**     | Upscale / detailer toggles + params | Later; only if `capabilities.upscale`                 |
 | **controlnet** | Enable + model + strength + image   | Later; only if `capabilities.controlnet`              |
 
-LoRAs can live under **core** or a dedicated **models** strip — product choice. Compiler treats them as optional stack inputs when `capabilities.loras` is true.
+LoRAs are a **shared library** (not blueprint `models[]`): Official + user multi-arch packs under `loras/`, files in `models/loras/`. User Mode picks a stack when `capabilities.loras` is true; the compiler filters by blueprint `arch`.
 
 Settings that a recipe does not support are hidden, not shown disabled for every pack.
 
@@ -127,7 +127,7 @@ Preferred model roles the compiler understands:
 - `unet` / `diffusion`
 - `vae`
 - `text_encoder` (repeatable)
-- `lora` (optional list / user-picked)
+- ~~`lora` in blueprint models~~ — use LoRA library packs instead (user-picked at generate)
 - later: `controlnet`, `upscale`
 
 `path` still maps to the shared models library folders. `url` remains optional when the file is already local.
@@ -283,7 +283,7 @@ No change to “models already on disk ⇒ skip download.”
 
 ### Phase D — Optional blocks
 
-- LoRA stack in UI + compiler
+- LoRA stack in UI + compiler ✅ (library packs, arch-filtered, Official cinematic-shot / age-slider / lenovo-ultrareal)
 - Upscale refine group
 - ControlNet group
 
@@ -304,8 +304,8 @@ No change to “models already on disk ⇒ skip download.”
 
 ## Open questions
 
-1. Exact `arch` enum and which two ship first.
-2. Whether LoRAs are blueprint-owned, user-picked at generate time, or both.
+1. Exact `arch` enum and which two ship first. _(settled for v1: `z-image`, `krea2`, `flux`, `flux2`, `sdxl`, `sd15`)_
+2. ~~Whether LoRAs are blueprint-owned, user-picked at generate time, or both.~~ → **Library packs** (Official + user), user-picked at generate; multi-arch variants per pack.
 3. Sampler/scheduler lists per arch (expose full Comfy enums vs curated).
 4. Image count / batch: Comfy latent batch vs queued jobs.
 5. How aggressively to deprecate frozen-workflow Official packs.

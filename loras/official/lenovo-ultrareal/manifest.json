@@ -1,0 +1,35 @@
+{
+  "id": "lenovo-ultrareal",
+  "name": "Lenovo UltraReal",
+  "description": "Realism / dramatic lighting LoRA. Recommended strength ~0.8–1.2 depending on arch.",
+  "triggerWords": [],
+  "defaultStrength": 0.85,
+  "strengthMin": 0,
+  "strengthMax": 2,
+  "variants": [
+    {
+      "arch": "krea2",
+      "filename": "lenovo_krea2.safetensors",
+      "path": "loras",
+      "url": "https://civitai.com/api/download/models/3075606"
+    },
+    {
+      "arch": "z-image",
+      "filename": "lenovo_z.safetensors",
+      "path": "loras",
+      "url": "https://civitai.com/api/download/models/2452071"
+    },
+    {
+      "arch": "flux2",
+      "filename": "lenovo_flux2.safetensors",
+      "path": "loras",
+      "url": "https://civitai.com/api/download/models/2449027"
+    },
+    {
+      "arch": "flux",
+      "filename": "IDunnohowtonameLora.safetensors",
+      "path": "loras",
+      "url": "https://civitai.com/api/download/models/1881976"
+    }
+  ]
+}

@@ -224,6 +224,112 @@ fn scheduler_name(manifest: &ManifestFile) -> &str {
     }
 }
 
+/// Resolved LoRA stack from generate values: `[{ filename, strength }]`.
+fn lora_stack(values: &HashMap<String, Value>) -> Vec<(String, f64)> {
+    let Some(arr) = values.get("loras").and_then(|v| v.as_array()) else {
+        return Vec::new();
+    };
+    arr.iter()
+        .filter_map(|item| {
+            let filename = item.get("filename")?.as_str()?.trim();
+            if filename.is_empty() {
+                return None;
+            }
+            let strength = item
+                .get("strength")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(1.0);
+            Some((filename.to_string(), strength))
+        })
+        .collect()
+}
+
+/// Chain `LoraLoader` after model/clip sources; rewire consumer inputs to the stack tip.
+fn apply_lora_stack(
+    graph: &mut Map<String, Value>,
+    model_src: (&str, u64),
+    clip_src: (&str, u64),
+    stack: &[(String, f64)],
+    model_consumers: &[(&str, &str)],
+    clip_consumers: &[(&str, &str)],
+) -> Result<(), String> {
+    if stack.is_empty() {
+        return Ok(());
+    }
+    let mut model = (model_src.0.to_string(), model_src.1);
+    let mut clip = (clip_src.0.to_string(), clip_src.1);
+    let mut next_id = 100u64;
+    while graph.contains_key(&next_id.to_string()) {
+        next_id += 1;
+    }
+    for (filename, strength) in stack {
+        let sid = next_id.to_string();
+        graph.insert(
+            sid.clone(),
+            json!({
+                "class_type": "LoraLoader",
+                "inputs": {
+                    "model": [model.0, model.1],
+                    "clip": [clip.0, clip.1],
+                    "lora_name": filename,
+                    "strength_model": strength,
+                    "strength_clip": strength
+                }
+            }),
+        );
+        model = (sid.clone(), 0);
+        clip = (sid, 1);
+        next_id += 1;
+    }
+    for (node_id, input) in model_consumers {
+        let node = graph
+            .get_mut(*node_id)
+            .ok_or_else(|| format!("missing node {node_id} for LoRA rewire"))?;
+        let inputs = node
+            .get_mut("inputs")
+            .and_then(|v| v.as_object_mut())
+            .ok_or_else(|| format!("node {node_id} missing inputs"))?;
+        inputs.insert(input.to_string(), json!([model.0, model.1]));
+    }
+    for (node_id, input) in clip_consumers {
+        let node = graph
+            .get_mut(*node_id)
+            .ok_or_else(|| format!("missing node {node_id} for LoRA rewire"))?;
+        let inputs = node
+            .get_mut("inputs")
+            .and_then(|v| v.as_object_mut())
+            .ok_or_else(|| format!("node {node_id} missing inputs"))?;
+        inputs.insert(input.to_string(), json!([clip.0, clip.1]));
+    }
+    Ok(())
+}
+
+fn finish_with_loras(
+    mut graph: Value,
+    values: &HashMap<String, Value>,
+    model_src: (&str, u64),
+    clip_src: (&str, u64),
+    model_consumers: &[(&str, &str)],
+    clip_consumers: &[(&str, &str)],
+) -> Result<Value, String> {
+    let stack = lora_stack(values);
+    if stack.is_empty() {
+        return Ok(graph);
+    }
+    let obj = graph
+        .as_object_mut()
+        .ok_or_else(|| "compile graph is not an object".to_string())?;
+    apply_lora_stack(
+        obj,
+        model_src,
+        clip_src,
+        &stack,
+        model_consumers,
+        clip_consumers,
+    )?;
+    Ok(graph)
+}
+
 /// Krea 2: UNET + CLIP(krea2) + VAE + EmptyLatentImage + KSampler (no sampling wrapper).
 /// Negative is ConditioningZeroOut (no text negative). Official turbo template defaults.
 fn compile_krea2(
@@ -254,75 +360,82 @@ fn compile_krea2(
         .and_then(|v| v.as_str())
         .unwrap_or("default");
 
-    Ok(json!({
-        "1": {
-            "class_type": "UNETLoader",
-            "inputs": {
-                "unet_name": unet.filename,
-                "weight_dtype": weight_dtype
+    finish_with_loras(
+        json!({
+            "1": {
+                "class_type": "UNETLoader",
+                "inputs": {
+                    "unet_name": unet.filename,
+                    "weight_dtype": weight_dtype
+                }
+            },
+            "2": {
+                "class_type": "CLIPLoader",
+                "inputs": {
+                    "clip_name": te.filename,
+                    "type": clip_type,
+                    "device": "default"
+                }
+            },
+            "3": {
+                "class_type": "VAELoader",
+                "inputs": { "vae_name": vae.filename }
+            },
+            "4": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {
+                    "text": prompt,
+                    "clip": ["2", 0]
+                }
+            },
+            "5": {
+                "class_type": "ConditioningZeroOut",
+                "inputs": { "conditioning": ["4", 0] }
+            },
+            "6": {
+                "class_type": "EmptyLatentImage",
+                "inputs": {
+                    "width": width,
+                    "height": height,
+                    "batch_size": batch
+                }
+            },
+            "7": {
+                "class_type": "KSampler",
+                "inputs": {
+                    "seed": seed,
+                    "steps": steps,
+                    "cfg": cfg,
+                    "sampler_name": sampler_name(manifest),
+                    "scheduler": scheduler_name(manifest),
+                    "denoise": 1.0,
+                    "model": ["1", 0],
+                    "positive": ["4", 0],
+                    "negative": ["5", 0],
+                    "latent_image": ["6", 0]
+                }
+            },
+            "8": {
+                "class_type": "VAEDecode",
+                "inputs": {
+                    "samples": ["7", 0],
+                    "vae": ["3", 0]
+                }
+            },
+            "9": {
+                "class_type": "SaveImage",
+                "inputs": {
+                    "filename_prefix": manifest.id,
+                    "images": ["8", 0]
+                }
             }
-        },
-        "2": {
-            "class_type": "CLIPLoader",
-            "inputs": {
-                "clip_name": te.filename,
-                "type": clip_type,
-                "device": "default"
-            }
-        },
-        "3": {
-            "class_type": "VAELoader",
-            "inputs": { "vae_name": vae.filename }
-        },
-        "4": {
-            "class_type": "CLIPTextEncode",
-            "inputs": {
-                "text": prompt,
-                "clip": ["2", 0]
-            }
-        },
-        "5": {
-            "class_type": "ConditioningZeroOut",
-            "inputs": { "conditioning": ["4", 0] }
-        },
-        "6": {
-            "class_type": "EmptyLatentImage",
-            "inputs": {
-                "width": width,
-                "height": height,
-                "batch_size": batch
-            }
-        },
-        "7": {
-            "class_type": "KSampler",
-            "inputs": {
-                "seed": seed,
-                "steps": steps,
-                "cfg": cfg,
-                "sampler_name": sampler_name(manifest),
-                "scheduler": scheduler_name(manifest),
-                "denoise": 1.0,
-                "model": ["1", 0],
-                "positive": ["4", 0],
-                "negative": ["5", 0],
-                "latent_image": ["6", 0]
-            }
-        },
-        "8": {
-            "class_type": "VAEDecode",
-            "inputs": {
-                "samples": ["7", 0],
-                "vae": ["3", 0]
-            }
-        },
-        "9": {
-            "class_type": "SaveImage",
-            "inputs": {
-                "filename_prefix": manifest.id,
-                "images": ["8", 0]
-            }
-        }
-    }))
+        }),
+        values,
+        ("1", 0),
+        ("2", 0),
+        &[("7", "model")],
+        &[("4", "clip")],
+    )
 }
 
 /// Z-Image / Lumina2-style: UNET + CLIP(lumina2) + VAE + EmptySD3Latent + AuraFlow + KSampler.
@@ -355,7 +468,7 @@ fn compile_z_image(
         .and_then(|v| v.as_f64())
         .unwrap_or(3.0);
 
-    Ok(json!({
+    let graph = json!({
         "1": {
             "class_type": "UNETLoader",
             "inputs": {
@@ -430,7 +543,15 @@ fn compile_z_image(
                 "images": ["9", 0]
             }
         }
-    }))
+    });
+    finish_with_loras(
+        graph,
+        values,
+        ("1", 0),
+        ("2", 0),
+        &[("7", "model")],
+        &[("4", "clip")],
+    )
 }
 
 /// Flux.1 txt2img: UNET + DualCLIP (t5 + clip_l) + VAE + FluxGuidance + ModelSamplingFlux.
@@ -474,92 +595,99 @@ fn compile_flux(
         .and_then(|v| v.as_f64())
         .unwrap_or(0.5);
 
-    Ok(json!({
-        "1": {
-            "class_type": "UNETLoader",
-            "inputs": {
-                "unet_name": unet.filename,
-                "weight_dtype": weight_dtype
+    finish_with_loras(
+        json!({
+            "1": {
+                "class_type": "UNETLoader",
+                "inputs": {
+                    "unet_name": unet.filename,
+                    "weight_dtype": weight_dtype
+                }
+            },
+            "2": {
+                "class_type": "DualCLIPLoader",
+                "inputs": {
+                    "clip_name1": t5.filename,
+                    "clip_name2": clip_l.filename,
+                    "type": "flux"
+                }
+            },
+            "3": {
+                "class_type": "VAELoader",
+                "inputs": { "vae_name": vae.filename }
+            },
+            "4": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {
+                    "text": prompt,
+                    "clip": ["2", 0]
+                }
+            },
+            "5": {
+                "class_type": "FluxGuidance",
+                "inputs": {
+                    "guidance": guidance,
+                    "conditioning": ["4", 0]
+                }
+            },
+            "6": {
+                "class_type": "ConditioningZeroOut",
+                "inputs": { "conditioning": ["4", 0] }
+            },
+            "7": {
+                "class_type": "EmptySD3LatentImage",
+                "inputs": {
+                    "width": width,
+                    "height": height,
+                    "batch_size": batch
+                }
+            },
+            "8": {
+                "class_type": "ModelSamplingFlux",
+                "inputs": {
+                    "max_shift": max_shift,
+                    "base_shift": base_shift,
+                    "width": width,
+                    "height": height,
+                    "model": ["1", 0]
+                }
+            },
+            "9": {
+                "class_type": "KSampler",
+                "inputs": {
+                    "seed": seed,
+                    "steps": steps,
+                    "cfg": 1.0,
+                    "sampler_name": sampler_name(manifest),
+                    "scheduler": scheduler_name(manifest),
+                    "denoise": 1.0,
+                    "model": ["8", 0],
+                    "positive": ["5", 0],
+                    "negative": ["6", 0],
+                    "latent_image": ["7", 0]
+                }
+            },
+            "10": {
+                "class_type": "VAEDecode",
+                "inputs": {
+                    "samples": ["9", 0],
+                    "vae": ["3", 0]
+                }
+            },
+            "11": {
+                "class_type": "SaveImage",
+                "inputs": {
+                    "filename_prefix": manifest.id,
+                    "images": ["10", 0]
+                }
             }
-        },
-        "2": {
-            "class_type": "DualCLIPLoader",
-            "inputs": {
-                "clip_name1": t5.filename,
-                "clip_name2": clip_l.filename,
-                "type": "flux"
-            }
-        },
-        "3": {
-            "class_type": "VAELoader",
-            "inputs": { "vae_name": vae.filename }
-        },
-        "4": {
-            "class_type": "CLIPTextEncode",
-            "inputs": {
-                "text": prompt,
-                "clip": ["2", 0]
-            }
-        },
-        "5": {
-            "class_type": "FluxGuidance",
-            "inputs": {
-                "guidance": guidance,
-                "conditioning": ["4", 0]
-            }
-        },
-        "6": {
-            "class_type": "ConditioningZeroOut",
-            "inputs": { "conditioning": ["4", 0] }
-        },
-        "7": {
-            "class_type": "EmptySD3LatentImage",
-            "inputs": {
-                "width": width,
-                "height": height,
-                "batch_size": batch
-            }
-        },
-        "8": {
-            "class_type": "ModelSamplingFlux",
-            "inputs": {
-                "max_shift": max_shift,
-                "base_shift": base_shift,
-                "width": width,
-                "height": height,
-                "model": ["1", 0]
-            }
-        },
-        "9": {
-            "class_type": "KSampler",
-            "inputs": {
-                "seed": seed,
-                "steps": steps,
-                "cfg": 1.0,
-                "sampler_name": sampler_name(manifest),
-                "scheduler": scheduler_name(manifest),
-                "denoise": 1.0,
-                "model": ["8", 0],
-                "positive": ["5", 0],
-                "negative": ["6", 0],
-                "latent_image": ["7", 0]
-            }
-        },
-        "10": {
-            "class_type": "VAEDecode",
-            "inputs": {
-                "samples": ["9", 0],
-                "vae": ["3", 0]
-            }
-        },
-        "11": {
-            "class_type": "SaveImage",
-            "inputs": {
-                "filename_prefix": manifest.id,
-                "images": ["10", 0]
-            }
-        }
-    }))
+        }),
+        values,
+        ("1", 0),
+        ("2", 0),
+        &[("8", "model")],
+        &[("4", "clip")],
+    )
 }
 
 /// Flux.2 txt2img: UNET + single CLIP (Mistral/Qwen, type=flux2) + VAE.
@@ -596,96 +724,103 @@ fn compile_flux2(
         .and_then(|v| v.as_str())
         .unwrap_or("default");
 
-    Ok(json!({
-        "1": {
-            "class_type": "UNETLoader",
-            "inputs": {
-                "unet_name": unet.filename,
-                "weight_dtype": weight_dtype
+    finish_with_loras(
+        json!({
+            "1": {
+                "class_type": "UNETLoader",
+                "inputs": {
+                    "unet_name": unet.filename,
+                    "weight_dtype": weight_dtype
+                }
+            },
+            "2": {
+                "class_type": "CLIPLoader",
+                "inputs": {
+                    "clip_name": clip.filename,
+                    "type": "flux2",
+                    "device": clip_device
+                }
+            },
+            "3": {
+                "class_type": "VAELoader",
+                "inputs": { "vae_name": vae.filename }
+            },
+            "4": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {
+                    "text": prompt,
+                    "clip": ["2", 0]
+                }
+            },
+            "5": {
+                "class_type": "FluxGuidance",
+                "inputs": {
+                    "guidance": guidance,
+                    "conditioning": ["4", 0]
+                }
+            },
+            "6": {
+                "class_type": "EmptyFlux2LatentImage",
+                "inputs": {
+                    "width": width,
+                    "height": height,
+                    "batch_size": batch
+                }
+            },
+            "7": {
+                "class_type": "RandomNoise",
+                "inputs": { "noise_seed": seed }
+            },
+            "8": {
+                "class_type": "BasicGuider",
+                "inputs": {
+                    "model": ["1", 0],
+                    "conditioning": ["5", 0]
+                }
+            },
+            "9": {
+                "class_type": "KSamplerSelect",
+                "inputs": { "sampler_name": sampler_name(manifest) }
+            },
+            "10": {
+                "class_type": "Flux2Scheduler",
+                "inputs": {
+                    "steps": steps,
+                    "width": width,
+                    "height": height
+                }
+            },
+            "11": {
+                "class_type": "SamplerCustomAdvanced",
+                "inputs": {
+                    "noise": ["7", 0],
+                    "guider": ["8", 0],
+                    "sampler": ["9", 0],
+                    "sigmas": ["10", 0],
+                    "latent_image": ["6", 0]
+                }
+            },
+            "12": {
+                "class_type": "VAEDecode",
+                "inputs": {
+                    "samples": ["11", 0],
+                    "vae": ["3", 0]
+                }
+            },
+            "13": {
+                "class_type": "SaveImage",
+                "inputs": {
+                    "filename_prefix": manifest.id,
+                    "images": ["12", 0]
+                }
             }
-        },
-        "2": {
-            "class_type": "CLIPLoader",
-            "inputs": {
-                "clip_name": clip.filename,
-                "type": "flux2",
-                "device": clip_device
-            }
-        },
-        "3": {
-            "class_type": "VAELoader",
-            "inputs": { "vae_name": vae.filename }
-        },
-        "4": {
-            "class_type": "CLIPTextEncode",
-            "inputs": {
-                "text": prompt,
-                "clip": ["2", 0]
-            }
-        },
-        "5": {
-            "class_type": "FluxGuidance",
-            "inputs": {
-                "guidance": guidance,
-                "conditioning": ["4", 0]
-            }
-        },
-        "6": {
-            "class_type": "EmptyFlux2LatentImage",
-            "inputs": {
-                "width": width,
-                "height": height,
-                "batch_size": batch
-            }
-        },
-        "7": {
-            "class_type": "RandomNoise",
-            "inputs": { "noise_seed": seed }
-        },
-        "8": {
-            "class_type": "BasicGuider",
-            "inputs": {
-                "model": ["1", 0],
-                "conditioning": ["5", 0]
-            }
-        },
-        "9": {
-            "class_type": "KSamplerSelect",
-            "inputs": { "sampler_name": sampler_name(manifest) }
-        },
-        "10": {
-            "class_type": "Flux2Scheduler",
-            "inputs": {
-                "steps": steps,
-                "width": width,
-                "height": height
-            }
-        },
-        "11": {
-            "class_type": "SamplerCustomAdvanced",
-            "inputs": {
-                "noise": ["7", 0],
-                "guider": ["8", 0],
-                "sampler": ["9", 0],
-                "sigmas": ["10", 0],
-                "latent_image": ["6", 0]
-            }
-        },
-        "12": {
-            "class_type": "VAEDecode",
-            "inputs": {
-                "samples": ["11", 0],
-                "vae": ["3", 0]
-            }
-        },
-        "13": {
-            "class_type": "SaveImage",
-            "inputs": {
-                "filename_prefix": manifest.id,
-                "images": ["12", 0]
-            }
-        }
-    }))
+        }),
+        values,
+        ("1", 0),
+        ("2", 0),
+        &[("8", "model")],
+        &[("4", "clip")],
+    )
 }
 
 /// SD1.5 / SDXL checkpoint txt2img with optional real negative when CFG > 1.
@@ -780,7 +915,14 @@ fn compile_checkpoint(
             .map(|i| i.insert("vae".into(), json!(["8", 0])));
     }
 
-    Ok(graph)
+    finish_with_loras(
+        graph,
+        values,
+        ("1", 0),
+        ("1", 1),
+        &[("5", "model")],
+        &[("2", "clip"), ("3", "clip")],
+    )
 }
 
 #[cfg(test)]
@@ -857,6 +999,36 @@ mod tests {
         assert_eq!(g["4"]["inputs"]["text"], "a cat");
         assert_eq!(g["8"]["inputs"]["seed"], 42);
         assert_eq!(g["7"]["class_type"], "ModelSamplingAuraFlow");
+    }
+
+    #[test]
+    fn compiles_krea2_with_lora_stack() {
+        let m = manifest_from(json!({
+            "id": "krea2-turbo",
+            "name": "Krea 2",
+            "category": "image",
+            "runtime": "comfyui",
+            "flowType": "txt2img",
+            "arch": "krea2",
+            "capabilities": { "loras": true },
+            "models": [
+                { "filename": "unet.safetensors", "path": "diffusion_models", "role": "unet" },
+                { "filename": "te.safetensors", "path": "text_encoders", "role": "text_encoder" },
+                { "filename": "vae.safetensors", "path": "vae", "role": "vae" }
+            ]
+        }));
+        let mut values = HashMap::new();
+        values.insert("prompt".into(), json!("test"));
+        values.insert(
+            "loras".into(),
+            json!([{ "filename": "style.safetensors", "strength": 0.8 }]),
+        );
+        let g = compile(&m, &values).unwrap();
+        assert_eq!(g["100"]["class_type"], "LoraLoader");
+        assert_eq!(g["100"]["inputs"]["lora_name"], "style.safetensors");
+        assert_eq!(g["100"]["inputs"]["strength_model"], 0.8);
+        assert_eq!(g["4"]["inputs"]["clip"], json!(["100", 1]));
+        assert_eq!(g["7"]["inputs"]["model"], json!(["100", 0]));
     }
 
     #[test]

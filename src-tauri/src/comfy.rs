@@ -439,11 +439,7 @@ pub fn start(
         }
     }
 
-    emit_progress(
-        app,
-        "start",
-        &format!("Starting ComfyUI on 127.0.0.1:{port}…"),
-    );
+    emit_progress(app, "start", "Starting runtime…");
 
     let child = Command::new(&python)
         .args([

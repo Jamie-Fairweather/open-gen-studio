@@ -6,6 +6,8 @@ mod db;
 mod download;
 mod generate;
 mod gpu;
+mod providers;
+mod recipe;
 
 use comfy::ProcessState;
 use commands::AppState;
@@ -48,6 +50,9 @@ pub fn run() {
             if let Ok(token) = db.get_setting(download::SETTING_HF_TOKEN) {
                 download::set_stored_hf_token(token);
             }
+            if let Ok(token) = db.get_setting(download::SETTING_CIVITAI_TOKEN) {
+                download::set_stored_civitai_token(token);
+            }
             app.manage(AppState {
                 db: Mutex::new(db),
                 processes: Mutex::new(ProcessState::default()),
@@ -55,6 +60,9 @@ pub fn run() {
                 blueprint_install_busy: Mutex::new(None),
                 cancelled_jobs: Mutex::new(Default::default()),
             });
+
+            // Restore remote model sizes so installed blueprints look ready immediately.
+            blueprints::load_remote_size_cache(app.handle());
 
             // Blueprint thumbnails (Official + user app-data).
             if let Ok(dir) = blueprints::official_dir(app.handle()) {
@@ -115,6 +123,7 @@ pub fn run() {
             commands::creator_open_comfy,
             commands::creator_capture_workflow,
             commands::creator_suggest_packaging,
+            commands::resolve_model_url,
             commands::generate_image,
             commands::cancel_job,
         ])

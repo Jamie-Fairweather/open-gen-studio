@@ -1,5 +1,5 @@
 use crate::blueprints::{
-    self, Blueprint, BlueprintControl, BlueprintDetail, ModelEntry, ModelFileEntry,
+    self, Blueprint, BlueprintDetail, ModelEntry, ModelFileEntry, RecipeCapabilities,
 };
 use crate::comfy::{self, ProcessState};
 use crate::creator::{
@@ -9,6 +9,7 @@ use crate::db::{Db, GalleryItem, Job, RuntimeInstall};
 use crate::download;
 use crate::generate;
 use crate::gpu::{self, GpuInfo};
+use crate::providers::{self, ResolvedModelUrl};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -53,6 +54,10 @@ pub fn set_setting(
     if key == download::SETTING_HF_TOKEN {
         download::set_stored_hf_token(Some(value));
         // Gated sizes often fail HEAD before a token exists — re-probe with auth.
+        blueprints::clear_remote_size_cache();
+        blueprints::enqueue_size_probe(&app);
+    } else if key == download::SETTING_CIVITAI_TOKEN {
+        download::set_stored_civitai_token(Some(value));
         blueprints::clear_remote_size_cache();
         blueprints::enqueue_size_probe(&app);
     }
@@ -136,13 +141,15 @@ pub fn delete_gallery_item(
         if path.is_file() {
             let _ = fs::remove_file(&path);
         }
-        // Remove empty job folder if we created one under gallery/<job_id>/
+        // Remove empty day folder (YYYY-MM-DD) or legacy job folder (gallery/<job_id>/).
         if let Some(parent) = path.parent() {
-            if parent
-                .file_name()
-                .and_then(|s| s.to_str())
-                .is_some_and(|name| item.job_id.as_deref() == Some(name))
-            {
+            let name = parent.file_name().and_then(|s| s.to_str()).unwrap_or("");
+            let is_job_folder = item.job_id.as_deref() == Some(name);
+            let is_day_folder = name.len() == 10
+                && name.as_bytes().get(4) == Some(&b'-')
+                && name.as_bytes().get(7) == Some(&b'-')
+                && name.bytes().all(|b| b.is_ascii_digit() || b == b'-');
+            if is_job_folder || is_day_folder {
                 let _ = fs::remove_dir(parent);
             }
         }
@@ -154,6 +161,12 @@ pub fn delete_gallery_item(
 #[tauri::command]
 pub fn detect_gpu() -> GpuInfo {
     gpu::detect_nvidia()
+}
+
+/// Resolve a model page/file URL (Hugging Face, CivitAI, direct) to a download URL + filename.
+#[tauri::command]
+pub fn resolve_model_url(url: String) -> Result<ResolvedModelUrl, String> {
+    providers::resolve(&url)
 }
 
 #[tauri::command]
@@ -357,7 +370,7 @@ pub fn start_comfyui(app: AppHandle, state: State<'_, AppState>) -> Result<Runti
         comfy::RuntimeProgress {
             engine: comfy::ENGINE.into(),
             stage: "start".into(),
-            message: format!("Waiting for ComfyUI on 127.0.0.1:{port}…"),
+            message: "Waiting for runtime…".into(),
         },
     );
 
@@ -379,7 +392,7 @@ pub fn start_comfyui(app: AppHandle, state: State<'_, AppState>) -> Result<Runti
                     comfy::RuntimeProgress {
                         engine: comfy::ENGINE.into(),
                         stage: "ready".into(),
-                        message: format!("ComfyUI is healthy on 127.0.0.1:{port}"),
+                        message: "Runtime is ready".into(),
                     },
                 );
             }
@@ -463,10 +476,18 @@ pub struct SaveUserBlueprintArgs {
     #[serde(default)]
     pub runtime: String,
     #[serde(default)]
-    pub controls: Vec<BlueprintControl>,
-    #[serde(default)]
     pub models: Vec<ModelEntry>,
-    pub workflow: Value,
+    #[serde(default)]
+    pub flow_type: String,
+    pub arch: String,
+    #[serde(default)]
+    pub sampler: String,
+    #[serde(default)]
+    pub scheduler: String,
+    #[serde(default)]
+    pub capabilities: RecipeCapabilities,
+    #[serde(default)]
+    pub defaults: serde_json::Map<String, Value>,
 }
 
 #[tauri::command]
@@ -481,9 +502,13 @@ pub fn save_user_blueprint(
         &args.category,
         &args.description,
         &args.runtime,
-        args.controls,
         args.models,
-        &args.workflow,
+        &args.flow_type,
+        &args.arch,
+        &args.sampler,
+        &args.scheduler,
+        args.capabilities,
+        args.defaults,
     )?;
     Ok(dir.display().to_string())
 }
@@ -781,6 +806,7 @@ pub fn install_official_blueprint(
                     },
                     model_index: 0,
                     model_total: 0,
+                    filename: None,
                     downloaded: None,
                     total: None,
                 },

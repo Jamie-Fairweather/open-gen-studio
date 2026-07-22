@@ -21,7 +21,7 @@ export type GalleryItem = {
 }
 
 export type MediaCategory = "image" | "video" | "audio"
-export type StudioTab = MediaCategory | "creator"
+export type StudioTab = MediaCategory | "creator" | "downloads"
 
 export type GalleryRecipe = {
   blueprintId: string | null
@@ -158,6 +158,18 @@ export type OfficialBlueprint = {
   thumbnailPath: string | null
   /** True if any model URL is a gated Hugging Face repo. */
   requiresHfToken: boolean
+  /** True if any model URL is from CivitAI (API key required). */
+  requiresCivitaiToken: boolean
+}
+
+export type ModelProvider = "huggingFace" | "civitAi" | "direct"
+
+export type ResolvedModelUrl = {
+  provider: ModelProvider
+  sourceUrl: string
+  downloadUrl: string
+  filename: string | null
+  requiresAuth: boolean
 }
 
 /** Alias — Official + user blueprints share one shape. */
@@ -169,6 +181,8 @@ export type SuggestedModel = {
   url: string
   /** Gated HF download — needs Settings → Hugging Face token. */
   gated: boolean
+  /** Recipe model role (`unet`, `vae`, `checkpoint`, …). */
+  role?: string
 }
 
 export type EmbeddedModel = {
@@ -218,6 +232,8 @@ export type BlueprintProgress = {
   message: string
   modelIndex: number
   modelTotal: number
+  /** Current model filename for download/skip stages. */
+  filename?: string | null
   /** Overall bytes accounted for (completed models / offset before current file). */
   downloaded?: number | null
   /** Overall expected bytes for the install when known. */
@@ -234,6 +250,24 @@ export type BlueprintControl = {
   default?: unknown
 }
 
+export type RecipeCapabilities = {
+  negative: boolean
+  loras: boolean
+  controlnet: boolean
+  upscale: boolean
+}
+
+export type BlueprintModelEntry = {
+  filename: string
+  path: string
+  url: string
+  sha256?: string | null
+  gated?: boolean
+  role?: string
+  /** Present on getBlueprint detail — file already usable on disk. */
+  ready?: boolean
+}
+
 export type BlueprintDetail = {
   id: string
   name: string
@@ -243,7 +277,17 @@ export type BlueprintDetail = {
   minimumVramGb: number | null
   modelCount: number
   modelsReady: number
+  /** Synthesized from recipe arch / capabilities — not stored in manifest. */
   controls: BlueprintControl[]
+  flowType?: string
+  arch?: string
+  capabilities?: RecipeCapabilities
+  /** `"official"` | `"user"` */
+  source?: BlueprintSource
+  sampler?: string
+  scheduler?: string
+  models?: BlueprintModelEntry[]
+  defaults?: Record<string, unknown>
 }
 
 export type JobProgress = {
@@ -388,6 +432,11 @@ export async function listBlueprints(): Promise<Blueprint[]> {
   return invoke("list_blueprints")
 }
 
+/** Resolve a model page/file URL to a download URL + suggested filename. */
+export async function resolveModelUrl(url: string): Promise<ResolvedModelUrl> {
+  return invoke("resolve_model_url", { url })
+}
+
 export async function installOfficialBlueprint(id: string): Promise<void> {
   return invoke("install_official_blueprint", { id })
 }
@@ -425,9 +474,19 @@ export async function saveUserBlueprint(input: {
   category: string
   description?: string
   runtime?: string
-  controls: BlueprintControl[]
-  models: SuggestedModel[]
-  workflow: unknown
+  models: Array<{
+    filename: string
+    path: string
+    url: string
+    gated?: boolean
+    role?: string
+  }>
+  flowType?: string
+  arch: string
+  sampler?: string
+  scheduler?: string
+  capabilities?: RecipeCapabilities
+  defaults?: Record<string, unknown>
 }): Promise<string> {
   return invoke("save_user_blueprint", { args: input })
 }

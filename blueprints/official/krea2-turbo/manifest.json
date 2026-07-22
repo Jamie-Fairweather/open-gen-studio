@@ -1,0 +1,47 @@
+{
+  "id": "krea2-turbo",
+  "name": "Krea 2 Turbo",
+  "category": "image",
+  "description": "Open Krea 2 turbo — fast text-to-image with Qwen3-VL text encoder. Requires ComfyUI with native Krea 2 support.",
+  "runtime": "comfyui",
+  "minimumVramGb": 8,
+  "flowType": "txt2img",
+  "arch": "krea2",
+  "sampler": "euler",
+  "scheduler": "simple",
+  "capabilities": {
+    "negative": false,
+    "loras": false,
+    "controlnet": false,
+    "upscale": false
+  },
+  "defaults": {
+    "width": 1024,
+    "height": 1024,
+    "steps": 8,
+    "cfg": 1,
+    "seed": 0,
+    "clipType": "krea2",
+    "weightDtype": "default"
+  },
+  "models": [
+    {
+      "role": "unet",
+      "filename": "krea2_turbo_fp8_scaled.safetensors",
+      "path": "diffusion_models",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors"
+    },
+    {
+      "role": "text_encoder",
+      "filename": "qwen3vl_4b_fp8_scaled.safetensors",
+      "path": "text_encoders",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_fp8_scaled.safetensors"
+    },
+    {
+      "role": "vae",
+      "filename": "qwen_image_vae.safetensors",
+      "path": "vae",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors"
+    }
+  ]
+}

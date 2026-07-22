@@ -33,6 +33,7 @@ commands.allow = [
   "creator_open_comfy",
   "creator_capture_workflow",
   "creator_suggest_packaging",
+  "resolve_model_url",
   "generate_image",
   "cancel_job"
 ]

@@ -13,22 +13,29 @@ import {
   SettingsIcon,
   SlidersHorizontalIcon,
   SparklesIcon,
-  SquareIcon,
   XIcon,
 } from "lucide-react"
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
+  type CSSProperties,
 } from "react"
 import {
   BlueprintPickerDialog,
   type BlueprintInstallProgress,
+  type DownloadModelItem,
 } from "@/components/blueprint-picker-dialog"
 import { CreatorPanel } from "@/components/creator-panel"
+import {
+  DownloadsPanel,
+  type DownloadHistoryEntry,
+} from "@/components/downloads-panel"
 import { GalleryPanel } from "@/components/gallery-panel"
+import { CivitaiTokenDialog } from "@/components/civitai-token-dialog"
 import { HfTokenDialog } from "@/components/hf-token-dialog"
 import { ModelsLibraryDialog } from "@/components/models-library-dialog"
 import { Button } from "@/components/ui/button"
@@ -42,13 +49,14 @@ import {
   DialogTitle,
   DialogClose,
 } from "@/components/ui/dialog"
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@/components/ui/menu"
 import { Input } from "@/components/ui/input"
 import {
   NumberField,
   NumberFieldGroup,
   NumberFieldInput,
 } from "@/components/ui/number-field"
+import { Popover, PopoverPopup, PopoverTrigger } from "@/components/ui/popover"
+import { Slider } from "@/components/ui/slider"
 import {
   cancelBlueprintInstall,
   cancelJob,
@@ -58,6 +66,7 @@ import {
   galleryItemCategory,
   gallerySrc,
   generateImage,
+  getBlueprint,
   getOfficialBlueprint,
   installComfyui,
   installOfficialBlueprint,
@@ -97,6 +106,17 @@ import {
   notifyProgress,
   notifySuccess,
 } from "@/lib/notify"
+import {
+  ASPECT_RATIOS,
+  SIDE_LENGTH_DEFAULT,
+  SIDE_LENGTH_MAX,
+  SIDE_LENGTH_MIN,
+  SIDE_LENGTH_PRESETS,
+  SIDE_LENGTH_STEP,
+  sizeFromAspectAndSide,
+  syncSizeControls,
+  type AspectRatio,
+} from "@/lib/image-size"
 import { cn } from "@/lib/utils"
 
 const STUDIO_TABS: { id: StudioTab; label: string }[] = [
@@ -104,15 +124,109 @@ const STUDIO_TABS: { id: StudioTab; label: string }[] = [
   { id: "video", label: "Video" },
   { id: "audio", label: "Audio" },
   { id: "creator", label: "Creator" },
+  { id: "downloads", label: "Downloads" },
 ]
 
-const ASPECT_PRESETS = [
-  { id: "1:1", label: "1:1", width: 1024, height: 1024 },
-  { id: "16:9", label: "16:9", width: 1280, height: 720 },
-  { id: "9:16", label: "9:16", width: 720, height: 1280 },
-  { id: "4:3", label: "4:3", width: 1152, height: 864 },
-  { id: "3:4", label: "3:4", width: 864, height: 1152 },
-] as const
+const SETTING_SELECTED_BLUEPRINT = "selected_blueprint_id"
+
+function pickDefaultBlueprintId(
+  bps: Blueprint[],
+  preferred: string | null | undefined,
+  tab: StudioTab = "image"
+): string | null {
+  if (preferred && bps.some((bp) => bp.id === preferred)) return preferred
+  const forTab = bps.filter((bp) => bp.category.toLowerCase() === tab)
+  const installed = forTab.find(isInstalled)
+  return installed?.id ?? forTab[0]?.id ?? null
+}
+
+/** Mini frame for aspect picker tiles (max edge ~14px). */
+function aspectFrameStyle(aspect: AspectRatio): CSSProperties {
+  const max = 14
+  const scale = max / Math.max(aspect.w, aspect.h)
+  return {
+    width: Math.max(5, Math.round(aspect.w * scale)),
+    height: Math.max(5, Math.round(aspect.h * scale)),
+  }
+}
+
+/**
+ * Largest box with this aspect that fits a size container (needs container-type: size
+ * so both cqi and cqb resolve — inline-size alone breaks portrait).
+ */
+function stageFrameStyle(width: number, height: number): CSSProperties {
+  return {
+    aspectRatio: `${width} / ${height}`,
+    width: `min(100cqi, calc(100cqb * ${width} / ${height}))`,
+    height: `min(100cqb, calc(100cqi * ${height} / ${width}))`,
+    maxWidth: "100%",
+    maxHeight: "100%",
+  }
+}
+
+function StageImage({
+  src,
+  width,
+  height,
+  className,
+  onLoad,
+  overlay,
+}: {
+  src: string
+  width: number
+  height: number
+  className?: string
+  onLoad?: () => void
+  /** Hidden preload layer for the next preview frame. */
+  overlay?: boolean
+}) {
+  // Prefer decoded pixels over control/recipe size — wrong stage aspect letterboxes
+  // with object-contain and makes wide images look sharp-cornered.
+  const [natural, setNatural] = useState<{ w: number; h: number } | null>(null)
+  const [prevSrc, setPrevSrc] = useState(src)
+  if (prevSrc !== src) {
+    setPrevSrc(src)
+    setNatural(null)
+  }
+  const frameW = natural?.w ?? width
+  const frameH = natural?.h ?? height
+
+  const frame = (
+    <div
+      className={cn("rounded-3xl drop-shadow-lg", !overlay && className)}
+      style={stageFrameStyle(frameW, frameH)}
+    >
+      <div className="size-full overflow-hidden rounded-3xl">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt=""
+          onLoad={(e) => {
+            const im = e.currentTarget
+            if (im.naturalWidth > 0 && im.naturalHeight > 0) {
+              setNatural({ w: im.naturalWidth, h: im.naturalHeight })
+            }
+            onLoad?.()
+          }}
+          className="block size-full object-contain"
+        />
+      </div>
+    </div>
+  )
+  if (overlay) {
+    return (
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-0 flex items-center justify-center opacity-0",
+          className
+        )}
+      >
+        {frame}
+      </div>
+    )
+  }
+  return frame
+}
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -158,20 +272,29 @@ export function AppShell() {
   const desktop = useSyncExternalStore(subscribeNoop, isTauri, () => true)
   const [studioTab, setStudioTab] = useState<StudioTab>("image")
   const [blueprints, setBlueprints] = useState<Blueprint[]>([])
+  const blueprintsRef = useRef<Blueprint[]>([])
+  const [blueprintsLoaded, setBlueprintsLoaded] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const preferredBlueprintIdRef = useRef<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [editBlueprintId, setEditBlueprintId] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [modelsOpen, setModelsOpen] = useState(false)
   const [hfToken, setHfToken] = useState("")
   const [hfTokenDirty, setHfTokenDirty] = useState(false)
   const [hfTokenSaving, setHfTokenSaving] = useState(false)
   const [hfTokenDialogOpen, setHfTokenDialogOpen] = useState(false)
+  const [civitaiToken, setCivitaiToken] = useState("")
+  const [civitaiTokenDirty, setCivitaiTokenDirty] = useState(false)
+  const [civitaiTokenSaving, setCivitaiTokenSaving] = useState(false)
+  const [civitaiTokenDialogOpen, setCivitaiTokenDialogOpen] = useState(false)
   const [pendingInstallId, setPendingInstallId] = useState<string | null>(null)
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [prompt, setPrompt] = useState("")
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const [aspectId, setAspectId] = useState<string>("1:1")
+  const [sideLength, setSideLength] = useState(SIDE_LENGTH_DEFAULT)
   const [runtimes, setRuntimes] = useState<RuntimeInstall[]>([])
   const [gpu, setGpu] = useState<GpuInfo | null>(null)
   const [runtimeBusy, setRuntimeBusy] = useState(false)
@@ -179,11 +302,22 @@ export function AppShell() {
   const [comfyHealthy, setComfyHealthy] = useState(false)
   const [installingId, setInstallingId] = useState<string | null>(null)
   const installingIdRef = useRef<string | null>(null)
+  /** Blueprint ids waiting after the active install. */
+  const [installQueue, setInstallQueue] = useState<string[]>([])
+  const installQueueRef = useRef<string[]>([])
+  const pumpInstallQueueRef = useRef<() => void>(() => {})
+  /** Missing models per blueprint (for per-file Downloads queue). */
+  const [pendingByBlueprint, setPendingByBlueprint] = useState<
+    Record<string, DownloadModelItem[]>
+  >({})
   /** Completed-model bytes for the in-flight blueprint install (overall progress). */
   const installByteOffsetRef = useRef(0)
   const installByteTotalRef = useRef<number | null>(null)
   const [installProgress, setInstallProgress] =
     useState<BlueprintInstallProgress | null>(null)
+  const [downloadHistory, setDownloadHistory] = useState<
+    DownloadHistoryEntry[]
+  >([])
   const [sizesProbing, setSizesProbing] = useState(false)
   const [detail, setDetail] = useState<BlueprintDetail | null>(null)
   const [controlValues, setControlValues] = useState<Record<string, unknown>>(
@@ -232,21 +366,16 @@ export function AppShell() {
     setPendingPreviewSrc(next)
   }
 
-  const tabBlueprints = useMemo(
-    () =>
-      studioTab === "creator"
-        ? []
-        : blueprints.filter((bp) => bp.category.toLowerCase() === studioTab),
-    [blueprints, studioTab]
-  )
+  const tabBlueprints = useMemo(() => {
+    if (studioTab === "creator") return []
+    if (studioTab === "downloads") return blueprints
+    return blueprints.filter((bp) => bp.category.toLowerCase() === studioTab)
+  }, [blueprints, studioTab])
 
-  const tabGallery = useMemo(
-    () =>
-      studioTab === "creator"
-        ? []
-        : gallery.filter((item) => galleryItemCategory(item) === studioTab),
-    [gallery, studioTab]
-  )
+  const tabGallery = useMemo(() => {
+    if (studioTab === "creator" || studioTab === "downloads") return []
+    return gallery.filter((item) => galleryItemCategory(item) === studioTab)
+  }, [gallery, studioTab])
 
   const newestGalleryId = tabGallery[0]?.id ?? null
 
@@ -289,16 +418,22 @@ export function AppShell() {
     [activeDetail]
   )
 
+  const cfgValue = Number(
+    controlValues.cfg ??
+      activeDetail?.controls?.find((c) => c.id === "cfg")?.default ??
+      1
+  )
+
   const hasNegativePrompt = useMemo(
-    () => (activeDetail?.controls ?? []).some((c) => c.id === "negative"),
-    [activeDetail]
+    () => Boolean(activeDetail?.capabilities?.negative && cfgValue > 1),
+    [activeDetail, cfgValue]
   )
 
   const advancedControls = useMemo(
     () =>
       (activeDetail?.controls ?? []).filter(
         (c) =>
-          c.group === "advanced" &&
+          (c.group === "advanced" || c.group === "core") &&
           c.id !== "prompt" &&
           c.id !== "negative" &&
           !(hasSizeControls && (c.id === "width" || c.id === "height"))
@@ -306,8 +441,63 @@ export function AppShell() {
     [activeDetail, hasSizeControls]
   )
 
-  const aspectLabel =
-    ASPECT_PRESETS.find((a) => a.id === aspectId)?.label ?? aspectId
+  const aspectMeta =
+    ASPECT_RATIOS.find((a) => a.id === aspectId) ?? ASPECT_RATIOS[0]
+  const resolvedSize = useMemo(
+    () => sizeFromAspectAndSide(aspectId, sideLength),
+    [aspectId, sideLength]
+  )
+  const sizeLabel = useMemo(() => {
+    const width = Number(controlValues.width)
+    const height = Number(controlValues.height)
+    if (
+      Number.isFinite(width) &&
+      Number.isFinite(height) &&
+      width > 0 &&
+      height > 0
+    ) {
+      return `${width}×${height}`
+    }
+    return `${resolvedSize.width}×${resolvedSize.height}`
+  }, [controlValues.width, controlValues.height, resolvedSize])
+
+  /** Pixel size for the stage frame — live controls while streaming, else gallery recipe. */
+  const stageDims = useMemo(() => {
+    const fromPair = (wRaw: unknown, hRaw: unknown) => {
+      const w = Number(wRaw)
+      const h = Number(hRaw)
+      if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
+        return { width: w, height: h }
+      }
+      return null
+    }
+    if (livePreviewSrc || pendingPreviewSrc) {
+      return (
+        fromPair(controlValues.width, controlValues.height) ?? {
+          width: resolvedSize.width,
+          height: resolvedSize.height,
+        }
+      )
+    }
+    if (previewItem) {
+      const recipe = parseGalleryRecipe(previewItem)
+      const fromRecipe = fromPair(recipe?.values.width, recipe?.values.height)
+      if (fromRecipe) return fromRecipe
+    }
+    return (
+      fromPair(controlValues.width, controlValues.height) ?? {
+        width: resolvedSize.width,
+        height: resolvedSize.height,
+      }
+    )
+  }, [
+    livePreviewSrc,
+    pendingPreviewSrc,
+    previewItem,
+    controlValues.width,
+    controlValues.height,
+    resolvedSize,
+  ])
 
   useEffect(() => {
     if (!desktop) return
@@ -324,7 +514,10 @@ export function AppShell() {
     let unlistenGallery: (() => void) | undefined
     let unlistenGalleryDeleted: (() => void) | undefined
 
-    let lastSample: { t: number; bytes: number; url: string } | null = null
+    /** Rolling window for download speed — longer span = smoother ETA. */
+    const SPEED_WINDOW_MS = 10_000
+    const SPEED_MIN_MS = 3_000
+    let speedSamples: { t: number; bytes: number; url: string }[] = []
     let emaSpeed = 0
 
     async function load() {
@@ -336,37 +529,31 @@ export function AppShell() {
         unlistenBlueprintSizes = await onBlueprintSizes((bps) => {
           setBlueprints(bps)
           setSizesProbing(false)
-          setSelectedId((prev) => {
-            if (prev && bps.some((bp) => bp.id === prev)) return prev
-            const forTab = bps.filter(
-              (bp) => bp.category.toLowerCase() === "image"
-            )
-            const installed = forTab.find(isInstalled)
-            return installed?.id ?? forTab[0]?.id ?? null
-          })
+          setSelectedId((prev) =>
+            pickDefaultBlueprintId(bps, prev ?? preferredBlueprintIdRef.current)
+          )
         })
 
-        const [gpuInfo, rts, status, bps, items] = await Promise.all([
+        const [gpuInfo, rts, status, bps, items, settings] = await Promise.all([
           detectGpu(),
           listRuntimes(),
           comfyuiStatus(),
           listBlueprints(),
           listGallery(),
+          listSettings(),
         ])
+        preferredBlueprintIdRef.current =
+          settings[SETTING_SELECTED_BLUEPRINT]?.trim() || null
         setGpu(gpuInfo)
         setRuntimes(rts)
         setBlueprints(bps)
+        setBlueprintsLoaded(true)
         setGallery(items)
         setSelectedGalleryId((prev) => prev ?? items[0]?.id ?? null)
         setComfyHealthy(status.healthy)
-        setSelectedId((prev) => {
-          if (prev && bps.some((bp) => bp.id === prev)) return prev
-          const forTab = bps.filter(
-            (bp) => bp.category.toLowerCase() === "image"
-          )
-          const installed = forTab.find(isInstalled)
-          return installed?.id ?? forTab[0]?.id ?? null
-        })
+        setSelectedId((prev) =>
+          pickDefaultBlueprintId(bps, prev ?? preferredBlueprintIdRef.current)
+        )
         const installing = rts.some(
           (r) => r.engine === "comfyui" && r.status === "installing"
         )
@@ -381,6 +568,7 @@ export function AppShell() {
         }
       } catch (e) {
         setSizesProbing(false)
+        setBlueprintsLoaded(true)
         notifyError(e instanceof Error ? e.message : String(e))
       }
     }
@@ -400,15 +588,15 @@ export function AppShell() {
       )
       if (runtime.status === "ready") {
         setComfyHealthy(false)
-        setRuntimeMessage("ComfyUI ready")
+        setRuntimeMessage("Runtime ready")
         setRuntimeBusy(false)
       } else if (runtime.status === "running") {
         setComfyHealthy(true)
-        setRuntimeMessage("ComfyUI is running")
+        setRuntimeMessage("Runtime is running")
         setRuntimeBusy(false)
-        notifyProgress("runtime", "ComfyUI ready", "Running", true)
+        notifyProgress("runtime", "Runtime ready", "Running", true)
       } else if (runtime.status === "error" && runtime.error) {
-        notifyError(runtime.error, "ComfyUI error")
+        notifyError(runtime.error, "Runtime error")
         setComfyHealthy(false)
         setRuntimeBusy(false)
       }
@@ -421,13 +609,15 @@ export function AppShell() {
       if (p.stage === "done" || p.stage === "ready") {
         setRuntimeBusy(false)
         if (p.stage === "ready") setComfyHealthy(true)
-        notifyProgress("runtime", "ComfyUI ready", p.message, true)
+        notifyProgress("runtime", "Runtime ready", p.message, true)
       } else if (p.stage === "error") {
         setRuntimeBusy(false)
         setComfyHealthy(false)
-        notifyError(p.message, "ComfyUI error")
+        notifyError(p.message, "Runtime error")
+      } else if (p.stage === "start") {
+        notifyProgress("runtime", "Starting runtime", p.message)
       } else {
-        notifyProgress("runtime", "ComfyUI", p.message)
+        notifyProgress("runtime", "Runtime", p.message)
       }
     }).then((u) => {
       unlistenProgress = u
@@ -436,54 +626,57 @@ export function AppShell() {
     void onDownloadProgress((p) => {
       const now = performance.now()
       const bpId = installingIdRef.current
-      // Offset is owned by blueprints://progress (completed models only).
-      // Live downloads add the current file's transferred bytes on top.
-      const overallDownloaded = bpId
-        ? installByteOffsetRef.current + p.downloaded
-        : p.downloaded
+      // Blueprint installs: track the current file only (queue is per model).
+      const trackedBytes = p.downloaded
       if (p.done) {
-        lastSample = null
+        speedSamples = []
         emaSpeed = 0
-      } else if (
-        (bpId ? installByteTotalRef.current : p.total) != null &&
-        (bpId ? (installByteTotalRef.current as number) : (p.total as number)) >
-          overallDownloaded
-      ) {
-        if (lastSample && lastSample.url === p.url) {
-          const dt = (now - lastSample.t) / 1000
-          const db = overallDownloaded - lastSample.bytes
-          if (dt >= 0.2 && db >= 0) {
-            const instant = db / dt
-            emaSpeed = emaSpeed > 0 ? emaSpeed * 0.7 + instant * 0.3 : instant
-          }
-        } else {
+      } else if (p.total != null && p.total > trackedBytes) {
+        if (speedSamples.length > 0 && speedSamples[0]!.url !== p.url) {
+          speedSamples = []
           emaSpeed = 0
         }
-        lastSample = { t: now, bytes: overallDownloaded, url: p.url }
+        speedSamples.push({ t: now, bytes: trackedBytes, url: p.url })
+        const cutoff = now - SPEED_WINDOW_MS
+        while (speedSamples.length > 1 && speedSamples[0]!.t < cutoff) {
+          speedSamples.shift()
+        }
+        // Drop stale head if bytes went backwards (new file / resume reset).
+        while (
+          speedSamples.length > 1 &&
+          speedSamples[speedSamples.length - 1]!.bytes < speedSamples[0]!.bytes
+        ) {
+          speedSamples.shift()
+        }
+        if (speedSamples.length >= 2) {
+          const oldest = speedSamples[0]!
+          const newest = speedSamples[speedSamples.length - 1]!
+          const dtMs = newest.t - oldest.t
+          if (dtMs >= SPEED_MIN_MS) {
+            const windowSpeed = ((newest.bytes - oldest.bytes) / dtMs) * 1000
+            // Gentle blend on top of the windowed rate.
+            emaSpeed =
+              emaSpeed > 0 ? emaSpeed * 0.88 + windowSpeed * 0.12 : windowSpeed
+          }
+        }
       }
 
       if (bpId) {
-        // Prefer overall blueprint total; grow it if this file reveals a larger sum.
-        let total = installByteTotalRef.current
-        if (p.total != null) {
-          const fromFileTotal = installByteOffsetRef.current + p.total
-          total = total != null ? Math.max(total, fromFileTotal) : fromFileTotal
-          installByteTotalRef.current = total
-        }
         setInstallProgress((prev) => ({
           blueprintId: bpId,
           stage: prev?.stage ?? "download",
           message: prev?.message ?? "Downloading…",
           modelIndex: prev?.modelIndex ?? 0,
           modelTotal: prev?.modelTotal ?? 0,
-          downloaded: overallDownloaded,
-          total,
+          filename: prev?.filename,
+          downloaded: p.downloaded,
+          total: p.total,
           bytesPerSec: emaSpeed,
         }))
         return
       }
 
-      // Runtime / other downloads (e.g. Comfy portable) — keep toast.
+      // Runtime / other downloads (e.g. Comfy portable) — status line only.
       const total = p.total ? ` / ${formatBytes(p.total)}` : ""
       const pct =
         p.total && p.total > 0
@@ -503,48 +696,80 @@ export function AppShell() {
         ? "Download complete"
         : `${formatBytes(p.downloaded)}${total}${pct}${etaSuffix}`
       setRuntimeMessage(p.done ? msg : `Downloading… ${msg}`)
-      notifyProgress(
-        "download",
-        p.done ? "Download complete" : "Downloading",
-        msg,
-        p.done
-      )
     }).then((u) => {
       unlistenDownload = u
     })
 
+    function finishInstallHistory(
+      status: DownloadHistoryEntry["status"],
+      message: string,
+      blueprintId: string
+    ) {
+      const id = blueprintId || installingIdRef.current || ""
+      const name =
+        blueprintsRef.current.find((bp) => bp.id === id)?.name ||
+        id ||
+        "Blueprint"
+      if (id) {
+        setDownloadHistory((prev) =>
+          [
+            {
+              blueprintId: id,
+              name,
+              status,
+              message,
+              at: Date.now(),
+            },
+            ...prev,
+          ].slice(0, 12)
+        )
+        setPendingByBlueprint((prev) => {
+          if (!(id in prev)) return prev
+          const next = { ...prev }
+          delete next[id]
+          return next
+        })
+      }
+    }
+
     void onBlueprintProgress((p) => {
       if (p.stage === "done") {
+        finishInstallHistory("done", p.message, p.blueprintId)
         installingIdRef.current = null
         setInstallingId(null)
         setInstallProgress(null)
-        lastSample = null
+        speedSamples = []
         emaSpeed = 0
         installByteOffsetRef.current = 0
         installByteTotalRef.current = null
         notifySuccess("Blueprint ready", p.message)
+        pumpInstallQueueRef.current()
         return
       }
       if (p.stage === "error") {
+        finishInstallHistory("error", p.message, p.blueprintId)
         installingIdRef.current = null
         setInstallingId(null)
         setInstallProgress(null)
-        lastSample = null
+        speedSamples = []
         emaSpeed = 0
         installByteOffsetRef.current = 0
         installByteTotalRef.current = null
         notifyError(p.message, "Blueprint install failed")
+        pumpInstallQueueRef.current()
         return
       }
       if (p.stage === "cancelled") {
+        finishInstallHistory("cancelled", p.message, p.blueprintId)
         installingIdRef.current = null
         setInstallingId(null)
         setInstallProgress(null)
-        lastSample = null
+        speedSamples = []
         emaSpeed = 0
         installByteOffsetRef.current = 0
         installByteTotalRef.current = null
-        notifyInfo("Download cancelled", p.message, "blueprint")
+        notifyDismiss("blueprint")
+        pumpInstallQueueRef.current()
         return
       }
 
@@ -559,29 +784,48 @@ export function AppShell() {
       if (typeof p.total === "number") {
         installByteTotalRef.current = p.total
       }
-      setInstallProgress((prev) => ({
-        blueprintId: p.blueprintId || prev?.blueprintId || "",
-        stage: p.stage,
-        message: p.message,
-        modelIndex: p.modelIndex,
-        modelTotal: p.modelTotal,
-        downloaded:
-          typeof p.downloaded === "number"
-            ? p.downloaded
-            : p.stage === "download" && prev?.blueprintId === p.blueprintId
-              ? prev.downloaded
-              : 0,
-        total:
-          typeof p.total === "number"
-            ? p.total
-            : p.stage === "download" && prev?.blueprintId === p.blueprintId
-              ? prev.total
-              : null,
-        bytesPerSec:
-          p.stage === "download" && prev?.blueprintId === p.blueprintId
-            ? prev.bytesPerSec
-            : 0,
-      }))
+
+      // Drop finished/skipped models from the per-file queue.
+      if (
+        p.blueprintId &&
+        p.filename &&
+        (p.stage === "skip" || p.message.startsWith("Downloaded "))
+      ) {
+        const bpId = p.blueprintId
+        const filename = p.filename
+        setPendingByBlueprint((prev) => {
+          const list = prev[bpId]
+          if (!list?.some((m) => m.filename === filename)) return prev
+          return {
+            ...prev,
+            [bpId]: list.filter((m) => m.filename !== filename),
+          }
+        })
+      }
+
+      setInstallProgress((prev) => {
+        const filename = p.filename ?? prev?.filename ?? null
+        const newFile =
+          Boolean(p.filename) &&
+          p.stage === "download" &&
+          p.filename !== prev?.filename
+        if (newFile) {
+          speedSamples = []
+          emaSpeed = 0
+        }
+        return {
+          blueprintId: p.blueprintId || prev?.blueprintId || "",
+          stage: p.stage,
+          message: p.message,
+          modelIndex: p.modelIndex,
+          modelTotal: p.modelTotal,
+          filename,
+          // File bytes come from downloads://progress; reset when a new file starts.
+          downloaded: newFile ? 0 : (prev?.downloaded ?? 0),
+          total: newFile ? null : (prev?.total ?? null),
+          bytesPerSec: newFile ? 0 : (prev?.bytesPerSec ?? 0),
+        }
+      })
     }).then((u) => {
       unlistenBlueprintProgress = u
     })
@@ -646,7 +890,7 @@ export function AppShell() {
         clearLivePreview()
         notifyError(p.message, "Generation failed")
       } else if (p.stage === "start") {
-        notifyProgress("runtime", "Starting ComfyUI", p.message)
+        notifyProgress("runtime", "Starting runtime", p.message)
       }
     }).then((u) => {
       unlistenJobProgress = u
@@ -687,12 +931,21 @@ export function AppShell() {
     }
   }, [desktop])
 
-  useEffect(() => {
+  // Creator unmounts the textarea; re-run when returning so height isn't stuck at rows={1}.
+  // Measure with overflow hidden — overflow-y:auto during measure can add a scrollbar, wrap the
+  // last line, and leave a blank row (common on near-full lines).
+  useLayoutEffect(() => {
+    if (studioTab === "creator" || studioTab === "downloads") return
     const el = promptRef.current
     if (!el) return
-    el.style.height = "auto"
-    el.style.height = `${Math.min(Math.max(el.scrollHeight, 44), 160)}px`
-  }, [prompt])
+    const min = 44
+    const max = 160
+    el.style.overflowY = "hidden"
+    el.style.height = "0px"
+    const next = Math.min(Math.max(el.scrollHeight, min), max)
+    el.style.height = `${next}px`
+    el.style.overflowY = next >= max ? "auto" : "hidden"
+  }, [prompt, studioTab])
 
   useEffect(() => {
     if (!activeSelectedId || !desktop) return
@@ -711,16 +964,17 @@ export function AppShell() {
           }
         }
         // Reuse only restores prompts + size; advanced stays on blueprint defaults.
-        setControlValues(recipe ? applyReuseSizeAndPrompts(next, recipe) : next)
+        const values = recipe ? applyReuseSizeAndPrompts(next, recipe) : next
+        setControlValues(values)
         const hasW = d.controls.some((c) => c.id === "width")
         const hasH = d.controls.some((c) => c.id === "height")
         if (hasW && hasH) {
-          const preset = ASPECT_PRESETS.find(
-            (a) =>
-              a.width === Number(next.width) && a.height === Number(next.height)
-          )
-          if (preset) {
-            setAspectId(preset.id)
+          const width = Number(values.width)
+          const height = Number(values.height)
+          if (Number.isFinite(width) && Number.isFinite(height)) {
+            const synced = syncSizeControls(width, height)
+            setAspectId(synced.aspectId)
+            setSideLength(synced.sideLength)
           }
         }
         if (recipe?.prompt) {
@@ -747,6 +1001,8 @@ export function AppShell() {
         if (cancelled) return
         setHfToken(s.huggingface_token ?? "")
         setHfTokenDirty(false)
+        setCivitaiToken(s.civitai_api_key ?? "")
+        setCivitaiTokenDirty(false)
       })
       .catch((e) =>
         notifyError(e instanceof Error ? e.message : String(e), "Settings")
@@ -774,20 +1030,97 @@ export function AppShell() {
     }
   }
 
+  async function handleSaveCivitaiToken() {
+    setCivitaiTokenSaving(true)
+    try {
+      await setSetting("civitai_api_key", civitaiToken.trim())
+      setCivitaiTokenDirty(false)
+      notifySuccess(
+        "CivitAI API key saved",
+        civitaiToken.trim()
+          ? "CivitAI model downloads will use this key."
+          : "API key cleared."
+      )
+    } catch (e) {
+      notifyError(e instanceof Error ? e.message : String(e), "Settings")
+    } finally {
+      setCivitaiTokenSaving(false)
+    }
+  }
+
+  async function loadPendingModels(id: string): Promise<DownloadModelItem[]> {
+    const detail = await getBlueprint(id)
+    const blueprintName =
+      detail.name || blueprintsRef.current.find((b) => b.id === id)?.name || id
+    return (detail.models ?? [])
+      .filter((m) => m.url.trim() !== "" && !m.ready)
+      .map((m) => ({
+        blueprintId: id,
+        blueprintName,
+        filename: m.filename,
+        path: m.path,
+        role: m.role,
+      }))
+  }
+
+  function rememberPendingModels(id: string) {
+    void loadPendingModels(id)
+      .then((models) => {
+        setPendingByBlueprint((prev) => ({ ...prev, [id]: models }))
+      })
+      .catch((e) => {
+        notifyError(
+          e instanceof Error ? e.message : String(e),
+          "Could not list models"
+        )
+      })
+  }
+
+  function enqueueBlueprintInstall(id: string) {
+    if (installingIdRef.current === id) return
+    if (installQueueRef.current.includes(id)) return
+    const next = [...installQueueRef.current, id]
+    installQueueRef.current = next
+    setInstallQueue(next)
+    rememberPendingModels(id)
+  }
+
+  function removeQueuedInstall(id: string) {
+    const next = installQueueRef.current.filter((item) => item !== id)
+    installQueueRef.current = next
+    setInstallQueue(next)
+    setPendingByBlueprint((prev) => {
+      if (!(id in prev)) return prev
+      const copy = { ...prev }
+      delete copy[id]
+      return copy
+    })
+  }
+
   async function startBlueprintInstall(id: string) {
     installingIdRef.current = id
     setInstallingId(id)
-    const bp = blueprints.find((b) => b.id === id)
+    const bp = blueprintsRef.current.find((b) => b.id === id)
     installByteOffsetRef.current = 0
     installByteTotalRef.current = bp?.totalSizeBytes ?? null
+    try {
+      const models = await loadPendingModels(id)
+      setPendingByBlueprint((prev) => ({ ...prev, [id]: models }))
+    } catch (e) {
+      notifyError(
+        e instanceof Error ? e.message : String(e),
+        "Could not list models"
+      )
+    }
     setInstallProgress({
       blueprintId: id,
       stage: "start",
       message: "Starting model download…",
       modelIndex: 0,
       modelTotal: bp?.modelCount ?? 0,
+      filename: null,
       downloaded: 0,
-      total: bp?.totalSizeBytes ?? null,
+      total: null,
       bytesPerSec: 0,
     })
     notifyDismiss("download")
@@ -795,35 +1128,148 @@ export function AppShell() {
     try {
       await installOfficialBlueprint(id)
     } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
       installingIdRef.current = null
       setInstallingId(null)
       setInstallProgress(null)
       installByteOffsetRef.current = 0
       installByteTotalRef.current = null
-      notifyError(
-        e instanceof Error ? e.message : String(e),
-        "Blueprint install failed"
+      // Backend still one-at-a-time — queue instead of surfacing a confusing error.
+      if (message.startsWith("Already installing blueprint:")) {
+        enqueueBlueprintInstall(id)
+        return
+      }
+      setPendingByBlueprint((prev) => {
+        if (!(id in prev)) return prev
+        const copy = { ...prev }
+        delete copy[id]
+        return copy
+      })
+      const name = blueprintsRef.current.find((b) => b.id === id)?.name || id
+      setDownloadHistory((prev) =>
+        [
+          {
+            blueprintId: id,
+            name,
+            status: "error" as const,
+            message,
+            at: Date.now(),
+          },
+          ...prev,
+        ].slice(0, 12)
       )
+      notifyError(message, "Blueprint install failed")
+      pumpInstallQueueRef.current()
     }
   }
 
-  async function handleInstallBlueprint(id: string) {
+  useEffect(() => {
+    blueprintsRef.current = blueprints
+  }, [blueprints])
+
+  useEffect(() => {
+    pumpInstallQueueRef.current = () => {
+      if (installingIdRef.current) return
+      const next = installQueueRef.current[0]
+      if (!next) return
+      const rest = installQueueRef.current.slice(1)
+      installQueueRef.current = rest
+      setInstallQueue(rest)
+      void startBlueprintInstall(next)
+    }
+  })
+
+  async function ensureInstallTokens(id: string): Promise<boolean> {
     const bp = blueprints.find((b) => b.id === id)
-    if (bp?.requiresHfToken) {
-      try {
-        const settings = await listSettings()
+    try {
+      const settings = await listSettings()
+      if (bp?.requiresHfToken) {
         const token = (settings.huggingface_token ?? "").trim()
         if (!token) {
           setPendingInstallId(id)
           setHfTokenDialogOpen(true)
-          return
+          return false
         }
-      } catch (e) {
-        notifyError(e instanceof Error ? e.message : String(e), "Settings")
-        return
       }
+      if (bp?.requiresCivitaiToken) {
+        const token = (settings.civitai_api_key ?? "").trim()
+        if (!token) {
+          setPendingInstallId(id)
+          setCivitaiTokenDialogOpen(true)
+          return false
+        }
+      }
+      return true
+    } catch (e) {
+      notifyError(e instanceof Error ? e.message : String(e), "Settings")
+      return false
+    }
+  }
+
+  async function requestBlueprintInstall(id: string) {
+    if (installingIdRef.current === id) return
+    if (installQueueRef.current.includes(id)) return
+    if (installingIdRef.current) {
+      enqueueBlueprintInstall(id)
+      return
     }
     await startBlueprintInstall(id)
+  }
+
+  const { activeModel, queuedModels } = useMemo(() => {
+    const queued: DownloadModelItem[] = []
+    let active: DownloadModelItem | null = null
+    const installing = installingId
+
+    if (installing) {
+      const pending = pendingByBlueprint[installing] ?? []
+      const currentName = installProgress?.filename ?? null
+      if (currentName) {
+        const idx = pending.findIndex((m) => m.filename === currentName)
+        if (idx >= 0) {
+          active = pending[idx]!
+          queued.push(...pending.slice(idx + 1))
+        } else {
+          // File started before pending list refreshed, or already dropped.
+          const bpName =
+            blueprints.find((b) => b.id === installing)?.name || installing
+          if (
+            installProgress?.stage === "download" ||
+            installProgress?.stage === "start" ||
+            installProgress?.stage === "deps"
+          ) {
+            active = {
+              blueprintId: installing,
+              blueprintName: bpName,
+              filename: currentName,
+              path: "",
+            }
+          }
+          queued.push(...pending)
+        }
+      } else if (pending.length > 0) {
+        active = pending[0]!
+        queued.push(...pending.slice(1))
+      }
+    }
+
+    for (const id of installQueue) {
+      queued.push(...(pendingByBlueprint[id] ?? []))
+    }
+
+    return { activeModel: active, queuedModels: queued }
+  }, [
+    installingId,
+    installQueue,
+    pendingByBlueprint,
+    installProgress?.filename,
+    installProgress?.stage,
+    blueprints,
+  ])
+
+  async function handleInstallBlueprint(id: string) {
+    if (!(await ensureInstallTokens(id))) return
+    await requestBlueprintInstall(id)
   }
 
   async function handleHfTokenDialogConfirm(token: string) {
@@ -832,9 +1278,25 @@ export function AppShell() {
     setHfToken(token)
     setHfTokenDirty(false)
     setHfTokenDialogOpen(false)
+    notifySuccess("Hugging Face token saved", "Continuing…")
+    if (id) {
+      if (!(await ensureInstallTokens(id))) return
+      setPendingInstallId(null)
+      await requestBlueprintInstall(id)
+    } else {
+      setPendingInstallId(null)
+    }
+  }
+
+  async function handleCivitaiTokenDialogConfirm(token: string) {
+    const id = pendingInstallId
+    await setSetting("civitai_api_key", token)
+    setCivitaiToken(token)
+    setCivitaiTokenDirty(false)
+    setCivitaiTokenDialogOpen(false)
     setPendingInstallId(null)
-    notifySuccess("Hugging Face token saved", "Continuing model download…")
-    if (id) await startBlueprintInstall(id)
+    notifySuccess("CivitAI API key saved", "Continuing model download…")
+    if (id) await requestBlueprintInstall(id)
   }
 
   async function handleInstallComfy() {
@@ -854,8 +1316,8 @@ export function AppShell() {
 
   async function handleStartComfy() {
     setRuntimeBusy(true)
-    setRuntimeMessage("Starting ComfyUI…")
-    notifyProgress("runtime", "Starting ComfyUI")
+    setRuntimeMessage("Starting runtime…")
+    notifyProgress("runtime", "Starting runtime")
     try {
       await startComfyui()
     } catch (e) {
@@ -863,7 +1325,7 @@ export function AppShell() {
       setComfyHealthy(false)
       notifyError(
         e instanceof Error ? e.message : String(e),
-        "Failed to start ComfyUI"
+        "Failed to start runtime"
       )
     }
   }
@@ -885,18 +1347,35 @@ export function AppShell() {
     }
   }
 
-  function applyAspect(id: string) {
-    const preset = ASPECT_PRESETS.find((a) => a.id === id)
-    if (!preset) return
-    setAspectId(id)
+  function applySize(nextAspectId: string, nextSideLength: number) {
+    const { width, height } = sizeFromAspectAndSide(
+      nextAspectId,
+      nextSideLength
+    )
+    setAspectId(nextAspectId)
+    setSideLength(nextSideLength)
     setControlValues((prev) => ({
       ...prev,
-      width: preset.width,
-      height: preset.height,
+      width,
+      height,
     }))
   }
 
+  function selectBlueprint(id: string) {
+    setSelectedId(id)
+    preferredBlueprintIdRef.current = id
+    void setSetting(SETTING_SELECTED_BLUEPRINT, id).catch(() => {})
+  }
+
   async function handleGenerate() {
+    if (!blueprintsLoaded) {
+      notifyInfo(
+        "Loading blueprints",
+        "Almost ready — try Generate again in a moment.",
+        "generate"
+      )
+      return
+    }
     if (!selected) {
       setPickerOpen(true)
       return
@@ -977,10 +1456,9 @@ export function AppShell() {
     const width = Number(recipe.values.width)
     const height = Number(recipe.values.height)
     if (Number.isFinite(width) && Number.isFinite(height)) {
-      const preset = ASPECT_PRESETS.find(
-        (a) => a.width === width && a.height === height
-      )
-      if (preset) setAspectId(preset.id)
+      const synced = syncSizeControls(width, height)
+      setAspectId(synced.aspectId)
+      setSideLength(synced.sideLength)
     }
 
     if (recipe.blueprintId) {
@@ -996,7 +1474,7 @@ export function AppShell() {
         setControlValues(applyReuseSizeAndPrompts(defaults, recipe))
       } else {
         pendingRecipeRef.current = recipe
-        setSelectedId(recipe.blueprintId)
+        selectBlueprint(recipe.blueprintId)
       }
     } else {
       setControlValues((prev) => applyReuseSizeAndPrompts(prev, recipe))
@@ -1028,7 +1506,8 @@ export function AppShell() {
     STUDIO_TABS.find((tab) => tab.id === studioTab)?.label ?? "Image"
   const canGenerate = studioTab === "image"
   const showCreator = studioTab === "creator"
-  const showGalleryRail = !showCreator
+  const showDownloads = studioTab === "downloads"
+  const showGalleryRail = !showCreator && !showDownloads
 
   return (
     <div className="relative flex min-h-dvh flex-col overflow-hidden bg-background">
@@ -1041,6 +1520,9 @@ export function AppShell() {
           <nav className="flex items-center gap-1 text-sm">
             {STUDIO_TABS.map((tab) => {
               const active = studioTab === tab.id
+              const downloading =
+                tab.id === "downloads" &&
+                (installingId != null || installQueue.length > 0)
               return (
                 <button
                   key={tab.id}
@@ -1053,7 +1535,15 @@ export function AppShell() {
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  {tab.label}
+                  <span className="inline-flex items-center gap-1.5">
+                    {tab.label}
+                    {downloading ? (
+                      <span
+                        className="size-1.5 rounded-full bg-primary"
+                        aria-label="Download in progress"
+                      />
+                    ) : null}
+                  </span>
                   {active ? (
                     <span className="absolute inset-x-3 -bottom-0.5 h-0.5 rounded-full bg-primary" />
                   ) : null}
@@ -1092,7 +1582,8 @@ export function AppShell() {
         >
           {showCreator ? (
             <CreatorPanel
-              comfyHealthy={comfyHealthy}
+              editBlueprintId={editBlueprintId}
+              onEditCleared={() => setEditBlueprintId(null)}
               onBlueprintsChanged={() => {
                 void listBlueprints()
                   .then(setBlueprints)
@@ -1101,26 +1592,42 @@ export function AppShell() {
                   )
               }}
             />
+          ) : showDownloads ? (
+            <DownloadsPanel
+              activeModel={activeModel}
+              queuedModels={queuedModels}
+              progress={installProgress}
+              history={downloadHistory}
+              onCancel={() => {
+                void cancelBlueprintInstall().catch((e) =>
+                  notifyError(
+                    e instanceof Error ? e.message : String(e),
+                    "Could not cancel"
+                  )
+                )
+              }}
+              onRemoveBlueprint={removeQueuedInstall}
+              onOpenBlueprints={() => setPickerOpen(true)}
+            />
           ) : (
             <>
               <main className="relative flex min-h-0 flex-1 items-center justify-center px-5 py-4 md:px-10">
                 {livePreviewSrc || pendingPreviewSrc ? (
-                  <div className="relative flex h-full min-h-0 w-full items-center justify-center">
+                  <div className="[container-type:size] relative flex h-full min-h-0 w-full items-center justify-center">
                     {livePreviewSrc ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <StageImage
                         src={livePreviewSrc}
-                        alt=""
-                        className="h-full max-h-full w-auto max-w-full rounded-3xl object-contain drop-shadow-lg"
+                        width={stageDims.width}
+                        height={stageDims.height}
                       />
                     ) : null}
                     {pendingPreviewSrc ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <StageImage
                         key={pendingPreviewSrc}
                         src={pendingPreviewSrc}
-                        alt=""
-                        className="pointer-events-none absolute h-full max-h-full w-auto max-w-full rounded-3xl object-contain opacity-0"
+                        width={stageDims.width}
+                        height={stageDims.height}
+                        overlay
                         onLoad={() => {
                           // Closure matches this keyed frame (not a newer pending).
                           const loaded = pendingPreviewSrc
@@ -1135,12 +1642,13 @@ export function AppShell() {
                     ) : null}
                   </div>
                 ) : previewItem ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={gallerySrc(previewItem.path)}
-                    alt=""
-                    className="h-full max-h-full w-auto max-w-full rounded-3xl object-contain drop-shadow-lg"
-                  />
+                  <div className="[container-type:size] relative flex h-full min-h-0 w-full items-center justify-center">
+                    <StageImage
+                      src={gallerySrc(previewItem.path)}
+                      width={stageDims.width}
+                      height={stageDims.height}
+                    />
+                  </div>
                 ) : (
                   <div className="flex flex-col items-center text-center">
                     <div className="relative mb-6 flex size-20 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 shadow-[0_0_48px_-8px] shadow-primary/40">
@@ -1173,8 +1681,8 @@ export function AppShell() {
                       disabled={!canGenerate}
                       rows={1}
                       className={cn(
-                        "min-h-11 w-full resize-none overflow-y-auto bg-transparent text-base leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70 disabled:opacity-60",
-                        // Match ScrollArea thumb — native scroll stays smooth in a textarea.
+                        "min-h-11 w-full resize-none bg-transparent text-base leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70 disabled:opacity-60",
+                        // Scroll only when height-capped (set in layout effect).
                         "[scrollbar-width:thin] [scrollbar-color:color-mix(in_oklab,var(--foreground)_20%,transparent)_transparent]",
                         "[&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:bg-transparent",
                         "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-foreground/20",
@@ -1245,8 +1753,8 @@ export function AppShell() {
                     </Button>
 
                     {hasSizeControls ? (
-                      <Menu>
-                        <MenuTrigger
+                      <Popover>
+                        <PopoverTrigger
                           render={
                             <Button
                               type="button"
@@ -1257,24 +1765,128 @@ export function AppShell() {
                           }
                         >
                           <RatioIcon className="size-3.5" />
-                          {aspectLabel}
+                          <span className="tabular-nums">
+                            {aspectMeta.label}
+                            <span className="text-muted-foreground">
+                              {" "}
+                              · {sizeLabel}
+                            </span>
+                          </span>
                           <ChevronDownIcon className="size-3.5 opacity-60" />
-                        </MenuTrigger>
-                        <MenuPopup align="start" side="top" sideOffset={8}>
-                          {ASPECT_PRESETS.map((preset) => (
-                            <MenuItem
-                              key={preset.id}
-                              onClick={() => applyAspect(preset.id)}
-                            >
-                              <SquareIcon className="size-3.5 opacity-60" />
-                              {preset.label}
-                              <span className="ms-auto text-xs text-muted-foreground">
-                                {preset.width}×{preset.height}
-                              </span>
-                            </MenuItem>
-                          ))}
-                        </MenuPopup>
-                      </Menu>
+                        </PopoverTrigger>
+                        <PopoverPopup
+                          align="start"
+                          side="top"
+                          sideOffset={8}
+                          className="w-[20.5rem]"
+                        >
+                          <div className="flex flex-col gap-4">
+                            <div className="flex items-end justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="font-mono text-xl leading-none font-medium tracking-tight tabular-nums">
+                                  {sizeLabel}
+                                </p>
+                                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                                  {aspectMeta.name}
+                                </p>
+                              </div>
+                              <div
+                                className="mb-0.5 flex size-10 shrink-0 items-center justify-center rounded-md border border-border/80 bg-muted/40"
+                                aria-hidden
+                              >
+                                <span
+                                  className="rounded-[2px] border border-primary bg-primary/15"
+                                  style={aspectFrameStyle(aspectMeta)}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-4 gap-1.5">
+                              {ASPECT_RATIOS.map((aspect) => {
+                                const selected = aspect.id === aspectId
+                                return (
+                                  <button
+                                    key={aspect.id}
+                                    type="button"
+                                    title={aspect.name}
+                                    onClick={() =>
+                                      applySize(aspect.id, sideLength)
+                                    }
+                                    className={cn(
+                                      "flex flex-col items-center gap-1.5 rounded-lg border px-1 py-2 transition-colors",
+                                      selected
+                                        ? "border-primary/50 bg-primary/10 text-foreground"
+                                        : "border-transparent bg-muted/35 text-muted-foreground hover:bg-muted/55 hover:text-foreground"
+                                    )}
+                                  >
+                                    <span className="flex h-4 items-center justify-center">
+                                      <span
+                                        className={cn(
+                                          "rounded-[1.5px] border",
+                                          selected
+                                            ? "border-primary bg-primary/20"
+                                            : "border-current/50 bg-transparent"
+                                        )}
+                                        style={aspectFrameStyle(aspect)}
+                                      />
+                                    </span>
+                                    <span className="text-[10px] font-medium tracking-tight">
+                                      {aspect.label}
+                                    </span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+
+                            <div className="flex flex-col gap-2.5 border-t border-border/60 pt-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[11px] font-medium text-muted-foreground">
+                                  Size
+                                </span>
+                                <span className="font-mono text-xs text-foreground tabular-nums">
+                                  {sideLength}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {SIDE_LENGTH_PRESETS.map((preset) => {
+                                  const selected = sideLength === preset
+                                  return (
+                                    <button
+                                      key={preset}
+                                      type="button"
+                                      onClick={() =>
+                                        applySize(aspectId, preset)
+                                      }
+                                      className={cn(
+                                        "rounded-md px-2 py-1 font-mono text-[11px] tabular-nums transition-colors",
+                                        selected
+                                          ? "bg-primary text-primary-foreground"
+                                          : "bg-muted/45 text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+                                      )}
+                                    >
+                                      {preset}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                              <Slider
+                                min={SIDE_LENGTH_MIN}
+                                max={SIDE_LENGTH_MAX}
+                                step={SIDE_LENGTH_STEP}
+                                value={[sideLength]}
+                                onValueChange={(value) => {
+                                  const next = Array.isArray(value)
+                                    ? value[0]
+                                    : value
+                                  if (typeof next === "number") {
+                                    applySize(aspectId, next)
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </PopoverPopup>
+                      </Popover>
                     ) : null}
 
                     <Button
@@ -1478,17 +2090,13 @@ export function AppShell() {
         blueprints={tabBlueprints}
         selectedId={activeSelectedId}
         installingId={installingId}
-        installProgress={installProgress}
+        queuedIds={installQueue}
         sizesProbing={sizesProbing}
-        onSelect={setSelectedId}
+        onSelect={selectBlueprint}
         onInstall={(id) => void handleInstallBlueprint(id)}
-        onCancelInstall={() => {
-          void cancelBlueprintInstall().catch((e) =>
-            notifyError(
-              e instanceof Error ? e.message : String(e),
-              "Could not cancel"
-            )
-          )
+        onEdit={(id) => {
+          setEditBlueprintId(id)
+          setStudioTab("creator")
         }}
       />
 
@@ -1503,7 +2111,7 @@ export function AppShell() {
         open={hfTokenDialogOpen}
         onOpenChange={(open) => {
           setHfTokenDialogOpen(open)
-          if (!open) setPendingInstallId(null)
+          if (!open && !civitaiTokenDialogOpen) setPendingInstallId(null)
         }}
         blueprintName={
           pendingInstallId
@@ -1511,6 +2119,25 @@ export function AppShell() {
             : null
         }
         onConfirm={handleHfTokenDialogConfirm}
+      />
+
+      <CivitaiTokenDialog
+        key={
+          civitaiTokenDialogOpen
+            ? (pendingInstallId ?? "civitai-token")
+            : "civitai-token-closed"
+        }
+        open={civitaiTokenDialogOpen}
+        onOpenChange={(open) => {
+          setCivitaiTokenDialogOpen(open)
+          if (!open) setPendingInstallId(null)
+        }}
+        blueprintName={
+          pendingInstallId
+            ? (blueprints.find((b) => b.id === pendingInstallId)?.name ?? null)
+            : null
+        }
+        onConfirm={handleCivitaiTokenDialogConfirm}
       />
 
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
@@ -1638,6 +2265,56 @@ export function AppShell() {
                   }}
                 >
                   Get a token
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-xl border p-4">
+              <p className="font-medium">CivitAI</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                API key for model downloads. On your account page, scroll to{" "}
+                <span className="font-medium text-foreground">API Keys</span>,
+                create a key, then paste it here.
+              </p>
+              <label className="mt-3 flex flex-col gap-1.5 text-xs">
+                <span className="text-muted-foreground">API key</span>
+                <Input
+                  type="password"
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="Paste API key…"
+                  value={civitaiToken}
+                  onChange={(e) => {
+                    setCivitaiToken(e.target.value)
+                    setCivitaiTokenDirty(true)
+                  }}
+                  className="font-mono text-xs"
+                />
+              </label>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={civitaiTokenSaving || !civitaiTokenDirty}
+                  onClick={() => void handleSaveCivitaiToken()}
+                >
+                  {civitaiTokenSaving ? "Saving…" : "Save key"}
+                </Button>
+                <button
+                  type="button"
+                  className="text-xs text-primary underline-offset-2 hover:underline"
+                  onClick={() => {
+                    void openExternalUrl(
+                      "https://civitai.com/user/account"
+                    ).catch((e) =>
+                      notifyError(
+                        e instanceof Error ? e.message : String(e),
+                        "Could not open browser"
+                      )
+                    )
+                  }}
+                >
+                  Open account settings
                 </button>
               </div>
             </div>

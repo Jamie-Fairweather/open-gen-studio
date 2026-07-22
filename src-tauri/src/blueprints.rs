@@ -1,5 +1,6 @@
 use crate::comfy;
 use crate::download;
+use crate::providers::{self, ProviderKind};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -10,12 +11,55 @@ use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager};
 
 /// Process-local cache of URL → Content-Length (from HEAD / Range probe).
+/// Also persisted to app data so cold start knows installed models immediately.
 static REMOTE_SIZE_CACHE: OnceLock<Mutex<HashMap<String, u64>>> = OnceLock::new();
 static SIZE_PROBE_BUSY: AtomicBool = AtomicBool::new(false);
 static SIZE_PROBE_PENDING: AtomicBool = AtomicBool::new(false);
 
 fn remote_size_cache() -> &'static Mutex<HashMap<String, u64>> {
     REMOTE_SIZE_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn remote_size_cache_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("remote-size-cache.json"))
+}
+
+/// Load persisted URL sizes before the first blueprint list (call from setup).
+pub fn load_remote_size_cache(app: &AppHandle) {
+    let Ok(path) = remote_size_cache_path(app) else {
+        return;
+    };
+    let Ok(raw) = fs::read_to_string(path) else {
+        return;
+    };
+    let Ok(map) = serde_json::from_str::<HashMap<String, u64>>(&raw) else {
+        return;
+    };
+    if let Ok(mut cache) = remote_size_cache().lock() {
+        for (k, v) in map {
+            cache.entry(k).or_insert(v);
+        }
+    }
+}
+
+fn save_remote_size_cache(app: &AppHandle) {
+    let Ok(path) = remote_size_cache_path(app) else {
+        return;
+    };
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let snapshot = match remote_size_cache().lock() {
+        Ok(cache) => cache.clone(),
+        Err(_) => return,
+    };
+    if let Ok(raw) = serde_json::to_string(&snapshot) {
+        let _ = fs::write(path, raw);
+    }
 }
 
 /// Drop cached remote sizes (e.g. after an HF token is saved so gated files can be re-probed).
@@ -48,6 +92,9 @@ pub struct Blueprint {
     /// True if any model URL is a gated Hugging Face repo (token required).
     #[serde(default)]
     pub requires_hf_token: bool,
+    /// True if any model URL is from CivitAI (API key required).
+    #[serde(default)]
+    pub requires_civitai_token: bool,
 }
 
 /// Back-compat alias for IPC / older call sites.
@@ -61,6 +108,9 @@ pub struct BlueprintProgress {
     pub message: String,
     pub model_index: usize,
     pub model_total: usize,
+    /// Current model filename when stage is download/skip/missing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filename: Option<String>,
     /// Bytes already accounted for (completed models, or offset before the current file).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub downloaded: Option<u64>,
@@ -91,6 +141,23 @@ fn default_group() -> String {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BlueprintModelInfo {
+    pub filename: String,
+    pub path: String,
+    #[serde(default)]
+    pub url: String,
+    #[serde(default)]
+    pub sha256: Option<String>,
+    #[serde(default)]
+    pub gated: bool,
+    #[serde(default)]
+    pub role: String,
+    /// True when the file is already usable in the shared models library.
+    pub ready: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BlueprintDetail {
     pub id: String,
     pub name: String,
@@ -101,24 +168,64 @@ pub struct BlueprintDetail {
     pub model_count: usize,
     pub models_ready: usize,
     pub controls: Vec<BlueprintControl>,
+    #[serde(default)]
+    pub flow_type: String,
+    #[serde(default)]
+    pub arch: String,
+    #[serde(default)]
+    pub capabilities: RecipeCapabilities,
+    /// `"official"` | `"user"`
+    #[serde(default)]
+    pub source: String,
+    #[serde(default)]
+    pub sampler: String,
+    #[serde(default)]
+    pub scheduler: String,
+    #[serde(default)]
+    pub models: Vec<BlueprintModelInfo>,
+    #[serde(default)]
+    pub defaults: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RecipeCapabilities {
+    #[serde(default)]
+    pub negative: bool,
+    #[serde(default)]
+    pub loras: bool,
+    #[serde(default)]
+    pub controlnet: bool,
+    #[serde(default)]
+    pub upscale: bool,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ManifestFile {
-    id: String,
+    pub(crate) id: String,
     pub(crate) name: String,
     pub(crate) category: String,
     #[serde(default)]
-    description: String,
+    pub(crate) description: String,
     pub(crate) runtime: String,
-    minimum_vram_gb: Option<u32>,
+    pub(crate) minimum_vram_gb: Option<u32>,
     #[serde(default)]
-    models: Vec<ModelEntry>,
+    pub(crate) models: Vec<ModelEntry>,
     #[serde(default)]
-    custom_nodes: Vec<CustomNodeDep>,
+    pub(crate) custom_nodes: Vec<CustomNodeDep>,
     #[serde(default)]
-    pub(crate) controls: Vec<BlueprintControl>,
+    pub(crate) flow_type: String,
+    #[serde(default)]
+    pub(crate) arch: String,
+    #[serde(default)]
+    pub(crate) sampler: String,
+    #[serde(default)]
+    pub(crate) scheduler: String,
+    #[serde(default)]
+    pub(crate) capabilities: RecipeCapabilities,
+    #[serde(default)]
+    pub(crate) defaults: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,6 +241,9 @@ pub struct ModelEntry {
     /// Hugging Face gated repo — anonymous download returns 401.
     #[serde(default)]
     pub gated: bool,
+    /// Recipe role: `unet` | `vae` | `text_encoder` | `checkpoint` | …
+    #[serde(default)]
+    pub role: String,
 }
 
 /// ComfyUI custom node repo to clone into `ComfyUI/custom_nodes/<name>`.
@@ -311,6 +421,7 @@ pub fn enqueue_size_probe(app: &AppHandle) {
             message: "Checking remote file sizes…".into(),
             model_index: 0,
             model_total: 0,
+            filename: None,
             downloaded: None,
             total: None,
         },
@@ -320,6 +431,7 @@ pub fn enqueue_size_probe(app: &AppHandle) {
         let result = list_official_probed(&app_bg);
         match result {
             Ok(list) => {
+                save_remote_size_cache(&app_bg);
                 let _ = app_bg.emit("blueprints://sizes", &list);
                 let _ = app_bg.emit(
                     "blueprints://probe",
@@ -329,6 +441,7 @@ pub fn enqueue_size_probe(app: &AppHandle) {
                         message: "Remote file sizes updated".into(),
                         model_index: 0,
                         model_total: 0,
+                        filename: None,
                         downloaded: None,
                         total: None,
                     },
@@ -343,6 +456,7 @@ pub fn enqueue_size_probe(app: &AppHandle) {
                         message: err,
                         model_index: 0,
                         model_total: 0,
+                        filename: None,
                         downloaded: None,
                         total: None,
                     },
@@ -375,6 +489,7 @@ pub fn install_models(app: &AppHandle, blueprint_id: &str) -> Result<(), String>
             manifest.models.len(),
             None,
             None,
+            None,
         );
         install_custom_nodes(app, &manifest.custom_nodes)?;
     }
@@ -390,6 +505,7 @@ pub fn install_models(app: &AppHandle, blueprint_id: &str) -> Result<(), String>
             0,
             Some(0),
             Some(0),
+            None,
         );
         return Ok(());
     }
@@ -442,6 +558,7 @@ pub fn install_models(app: &AppHandle, blueprint_id: &str) -> Result<(), String>
                 total,
                 Some(bytes_done),
                 bytes_total,
+                Some(&model.filename),
             );
             continue;
         }
@@ -450,7 +567,7 @@ pub fn install_models(app: &AppHandle, blueprint_id: &str) -> Result<(), String>
         let local = download::local_file_len(&dest).unwrap_or(0);
 
         if let Some(expected) = remote {
-            if local == expected {
+            if local == expected && download::local_file_usable(&dest) {
                 bytes_done += local;
                 emit_progress(
                     app,
@@ -465,8 +582,13 @@ pub fn install_models(app: &AppHandle, blueprint_id: &str) -> Result<(), String>
                     total,
                     Some(bytes_done),
                     bytes_total,
+                    Some(&model.filename),
                 );
                 continue;
+            }
+            // Size matched but file is HTML/corrupt (classic HF resume bug) — re-download.
+            if local == expected && !download::local_file_usable(&dest) {
+                let _ = fs::remove_file(&dest);
             }
             // Offset before this file — UI adds live per-file downloaded on top.
             emit_progress(
@@ -478,6 +600,7 @@ pub fn install_models(app: &AppHandle, blueprint_id: &str) -> Result<(), String>
                 total,
                 Some(bytes_done),
                 bytes_total,
+                Some(&model.filename),
             );
         } else {
             emit_progress(
@@ -489,6 +612,7 @@ pub fn install_models(app: &AppHandle, blueprint_id: &str) -> Result<(), String>
                 total,
                 Some(bytes_done),
                 bytes_total,
+                Some(&model.filename),
             );
         }
 
@@ -521,6 +645,7 @@ pub fn install_models(app: &AppHandle, blueprint_id: &str) -> Result<(), String>
             total,
             Some(bytes_done),
             bytes_total,
+            Some(&model.filename),
         );
     }
 
@@ -533,6 +658,7 @@ pub fn install_models(app: &AppHandle, blueprint_id: &str) -> Result<(), String>
         total,
         Some(bytes_done),
         bytes_total.or(Some(bytes_done)),
+        None,
     );
     Ok(())
 }
@@ -540,35 +666,58 @@ pub fn install_models(app: &AppHandle, blueprint_id: &str) -> Result<(), String>
 pub fn get_detail(app: &AppHandle, blueprint_id: &str) -> Result<BlueprintDetail, String> {
     let models_root = comfy::models_dir(app)?;
     let (_dir, manifest) = load_manifest(app, blueprint_id)?;
+    if manifest.arch.trim().is_empty() {
+        return Err(format!(
+            "Blueprint '{blueprint_id}' is missing arch — only recipe blueprints are supported"
+        ));
+    }
     let models_ready = manifest
         .models
         .iter()
         .filter(|m| model_is_ready(m, &models_root))
         .count();
+    let source = if user_dir(app)
+        .map(|d| d.join(blueprint_id).join("manifest.json").is_file())
+        .unwrap_or(false)
+    {
+        "user"
+    } else {
+        "official"
+    };
+
+    let models: Vec<BlueprintModelInfo> = manifest
+        .models
+        .iter()
+        .map(|m| BlueprintModelInfo {
+            filename: m.filename.clone(),
+            path: m.path.clone(),
+            url: m.url.clone(),
+            sha256: m.sha256.clone(),
+            gated: m.gated,
+            role: m.role.clone(),
+            ready: model_is_ready(m, &models_root),
+        })
+        .collect();
 
     Ok(BlueprintDetail {
-        id: manifest.id,
-        name: manifest.name,
-        category: manifest.category,
-        description: manifest.description,
-        runtime: manifest.runtime,
+        id: manifest.id.clone(),
+        name: manifest.name.clone(),
+        category: manifest.category.clone(),
+        description: manifest.description.clone(),
+        runtime: manifest.runtime.clone(),
         minimum_vram_gb: manifest.minimum_vram_gb,
         model_count: manifest.models.len(),
         models_ready,
-        controls: manifest.controls,
+        controls: crate::recipe::synthetic_controls(&manifest),
+        flow_type: manifest.flow_type.clone(),
+        arch: manifest.arch.clone(),
+        capabilities: manifest.capabilities.clone(),
+        source: source.into(),
+        sampler: manifest.sampler.clone(),
+        scheduler: manifest.scheduler.clone(),
+        models,
+        defaults: manifest.defaults.clone(),
     })
-}
-
-pub fn load_workflow(
-    app: &AppHandle,
-    blueprint_id: &str,
-) -> Result<(ManifestFile, serde_json::Value), String> {
-    let (dir, manifest) = load_manifest(app, blueprint_id)?;
-    let workflow_path = dir.join("workflow.api.json");
-    let raw = fs::read_to_string(&workflow_path).map_err(|e| e.to_string())?;
-    let workflow: serde_json::Value =
-        serde_json::from_str(&raw).map_err(|e| format!("invalid workflow.api.json: {e}"))?;
-    Ok((manifest, workflow))
 }
 
 pub(crate) fn load_manifest(
@@ -605,7 +754,8 @@ fn official_has_id(app: &AppHandle, blueprint_id: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Save a user blueprint package. Never writes to Official. Rejects Official id collisions.
+/// Save a user recipe blueprint. Never writes to Official. Rejects Official id collisions.
+/// Does not write `controls` or `workflow.api.json` — UI controls are synthesized from `arch`.
 pub fn save_user_blueprint(
     app: &AppHandle,
     id: &str,
@@ -613,31 +763,43 @@ pub fn save_user_blueprint(
     category: &str,
     description: &str,
     runtime: &str,
-    controls: Vec<BlueprintControl>,
     models: Vec<ModelEntry>,
-    workflow: &serde_json::Value,
+    flow_type: &str,
+    arch: &str,
+    sampler: &str,
+    scheduler: &str,
+    capabilities: RecipeCapabilities,
+    defaults: serde_json::Map<String, serde_json::Value>,
 ) -> Result<PathBuf, String> {
     validate_blueprint_id(id)?;
     if name.trim().is_empty() {
         return Err("name is required".into());
+    }
+    if arch.trim().is_empty() {
+        return Err("arch is required (recipe blueprint)".into());
     }
     if official_has_id(app, id) {
         return Err(format!(
             "id '{id}' is reserved by an Official blueprint — choose another id"
         ));
     }
-    if !workflow.is_object() {
-        return Err("workflow must be a JSON object".into());
-    }
     let mut models = models;
     for model in &mut models {
-        validate_model_paths_allow_empty_url(model)?;
-        if !model.url.trim().is_empty() {
-            // Re-probe anonymously so the flag stays correct even if the UI skipped it.
-            model.gated = download::url_is_gated(&model.url);
-        } else {
-            model.gated = false;
+        // Creator packs always ship downloadable model URLs.
+        validate_model_paths(model)?;
+        // Resolve provider pages (CivitAI, …) so filename matches the real file.
+        if let Ok(resolved) = providers::resolve(&model.url) {
+            if let Some(name) = resolved.filename.filter(|n| !n.is_empty()) {
+                if model.filename.trim().is_empty()
+                    || !model.filename.contains('.')
+                    || matches!(resolved.provider, ProviderKind::CivitAi)
+                {
+                    model.filename = name;
+                }
+            }
         }
+        // Re-probe anonymously so the flag stays correct even if the UI skipped it.
+        model.gated = download::url_is_gated(&model.url);
     }
 
     let dir = user_dir(app)?.join(id);
@@ -649,20 +811,26 @@ pub fn save_user_blueprint(
         "category": if category.trim().is_empty() { "image" } else { category.trim() },
         "description": description,
         "runtime": if runtime.trim().is_empty() { "comfyui" } else { runtime.trim() },
+        "flowType": if flow_type.trim().is_empty() { "txt2img" } else { flow_type.trim() },
+        "arch": arch.trim(),
+        "sampler": sampler,
+        "scheduler": scheduler,
+        "capabilities": capabilities,
+        "defaults": defaults,
         "models": models,
         "customNodes": [],
-        "controls": controls,
     });
     fs::write(
         dir.join("manifest.json"),
         serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())? + "\n",
     )
     .map_err(|e| e.to_string())?;
-    fs::write(
-        dir.join("workflow.api.json"),
-        serde_json::to_string_pretty(workflow).map_err(|e| e.to_string())? + "\n",
-    )
-    .map_err(|e| e.to_string())?;
+
+    // Remove legacy workflow file if present from an older save.
+    let legacy = dir.join("workflow.api.json");
+    if legacy.is_file() {
+        let _ = fs::remove_file(&legacy);
+    }
 
     let _ = app.emit("blueprints://updated", id);
     Ok(dir)
@@ -804,8 +972,8 @@ fn model_is_ready(model: &ModelEntry, models_root: &Path) -> bool {
             } else if let Some(remote) = cached_remote_size(&model.url) {
                 n == remote
             } else {
-                // Unknown remote size — don't treat partial downloads as ready.
-                false
+                // Cache miss (cold start / probe in flight): trust a usable file.
+                download::local_file_usable(&dest)
             }
         }
         _ => false,
@@ -814,23 +982,33 @@ fn model_is_ready(model: &ModelEntry, models_root: &Path) -> bool {
 
 fn read_blueprint(dir: &Path, models_root: &Path, probe_remote: bool) -> Option<Blueprint> {
     let manifest_path = dir.join("manifest.json");
-    let workflow_path = dir.join("workflow.api.json");
-    if !manifest_path.is_file() || !workflow_path.is_file() {
+    if !manifest_path.is_file() {
         return None;
     }
 
     let raw = fs::read_to_string(&manifest_path).ok()?;
     let manifest: ManifestFile = serde_json::from_str(&raw).ok()?;
+    // Skip non-recipe packs and the `_example` template folder.
+    if manifest.arch.trim().is_empty() || manifest.id.starts_with('_') {
+        return None;
+    }
 
     let mut models_ready = 0usize;
     let mut local_size_bytes = 0u64;
     let mut remote_sizes: Vec<u64> = Vec::new();
     let mut requires_hf_token = false;
+    let mut requires_civitai_token = false;
 
     for model in &manifest.models {
         let dest = models_root.join(&model.path).join(&model.filename);
         let local = download::local_file_len(&dest).unwrap_or(0);
         local_size_bytes += local;
+
+        if !model.url.trim().is_empty()
+            && matches!(providers::detect(&model.url), ProviderKind::CivitAi)
+        {
+            requires_civitai_token = true;
+        }
 
         let gated = if model.gated {
             true
@@ -861,9 +1039,11 @@ fn read_blueprint(dir: &Path, models_root: &Path, probe_remote: bool) -> Option<
             if local == remote {
                 models_ready += 1;
             }
+        } else if local > 0 && download::local_file_usable(&dest) {
+            // No cached remote size yet — still treat a usable local file as ready
+            // so Generate works before the background size probe finishes.
+            models_ready += 1;
         }
-        // If remote size is unknown, do not count local>0 as ready — a partial
-        // download would briefly show e.g. 1/3 then drop to 0/3 after probing.
     }
 
     // Only expose a total when every downloadable model has a known size.
@@ -902,6 +1082,7 @@ fn read_blueprint(dir: &Path, models_root: &Path, probe_remote: bool) -> Option<
         dir: path_for_asset_protocol(dir.to_path_buf()),
         thumbnail_path,
         requires_hf_token,
+        requires_civitai_token,
     })
 }
 
@@ -977,6 +1158,7 @@ fn emit_progress(
     model_total: usize,
     downloaded: Option<u64>,
     total: Option<u64>,
+    filename: Option<&str>,
 ) {
     let _ = app.emit(
         "blueprints://progress",
@@ -986,6 +1168,7 @@ fn emit_progress(
             message: message.into(),
             model_index,
             model_total,
+            filename: filename.map(|s| s.to_string()),
             downloaded,
             total,
         },

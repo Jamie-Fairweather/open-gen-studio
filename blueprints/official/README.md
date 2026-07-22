@@ -1,117 +1,88 @@
 # Official Blueprints (built into the app)
 
-Drop ComfyUI workflows here. They ship with the desktop build — no GitHub fetch required for Official.
+Recipe packages that ship with the desktop build. See [`docs/PLAN-RECIPE-BLUEPRINTS.md`](../../docs/PLAN-RECIPE-BLUEPRINTS.md).
 
 ## Layout
 
 ```
 blueprints/official/
   <blueprint-id>/
-    manifest.json       # metadata + UI controls + model deps
-    workflow.api.json   # ComfyUI API-format workflow (required)
+    manifest.json       # recipe: arch, models, defaults, capabilities
     thumbnail.png       # optional
 ```
 
-## Workflow JSON format
+No `workflow.api.json`. No `controls[]`. At generate time the app compiles a Comfy API graph from `arch` + live settings. User Mode controls are synthesized from the recipe (prompt / basic / core, etc.).
 
-Use **API format**, not the normal Save format:
-
-1. Open the workflow in ComfyUI
-2. **File → Export Workflow (API)**
-3. Save as `workflow.api.json` in the blueprint folder
-
-The `/prompt` endpoint needs this format (numeric node IDs, no canvas layout).
-
-## `manifest.json` (minimal)
+## `manifest.json` (recipe)
 
 ```json
 {
-  "id": "flux-dev",
-  "name": "FLUX Dev",
+  "id": "z-image-turbo",
+  "name": "Z-Image Turbo",
   "category": "image",
-  "description": "Official FLUX Dev text-to-image",
+  "description": "…",
   "runtime": "comfyui",
-  "minimumVramGb": 12,
+  "minimumVramGb": 8,
+  "flowType": "txt2img",
+  "arch": "z-image",
+  "sampler": "res_multistep",
+  "scheduler": "simple",
+  "capabilities": {
+    "negative": false,
+    "loras": false,
+    "controlnet": false,
+    "upscale": false
+  },
+  "defaults": {
+    "width": 1024,
+    "height": 1024,
+    "steps": 8,
+    "cfg": 1,
+    "seed": 0
+  },
   "models": [
     {
+      "role": "unet",
       "filename": "model.safetensors",
       "path": "diffusion_models",
       "url": "https://huggingface.co/…/resolve/main/model.safetensors"
     }
   ],
-  "controls": [
-    {
-      "id": "prompt",
-      "type": "textarea",
-      "nodeId": "6",
-      "input": "text",
-      "label": "Prompt",
-      "group": "default"
-    },
-    {
-      "id": "steps",
-      "type": "number",
-      "nodeId": "3",
-      "input": "steps",
-      "label": "Steps",
-      "default": 28,
-      "group": "advanced"
-    }
-  ]
+  "customNodes": []
 }
 ```
 
-### Control `group`
+### Supported `arch` (v1)
 
-| Value      | UI behaviour                                        |
-| ---------- | --------------------------------------------------- |
-| `default`  | Always shown in User Mode                           |
-| `advanced` | Hidden until the user toggles **Advanced controls** |
+| `arch`          | Loaders                                                                              | Negative                                    |
+| --------------- | ------------------------------------------------------------------------------------ | ------------------------------------------- |
+| `z-image`       | UNET + text encoder + VAE (+ AuraFlow)                                               | no                                          |
+| `krea2`         | UNET + text encoder (`CLIPLoader` type `krea2`) + VAE + EmptyLatentImage             | no                                          |
+| `flux`          | UNET + DualCLIP (`t5` + `clip_l`) + VAE (+ FluxGuidance / ModelSamplingFlux)         | no (use Guidance)                           |
+| `flux2`         | UNET + CLIP (`clip`) + VAE (+ FluxGuidance / EmptyFlux2LatentImage / Flux2Scheduler) | no (use Guidance)                           |
+| `sdxl` / `sd15` | Checkpoint (+ optional VAE)                                                          | when `capabilities.negative` and CFG &gt; 1 |
 
-If `group` is omitted, treat as `default`.
+### Model `role`
 
-`controls[].nodeId` + `input` map User Mode fields onto nodes in `workflow.api.json`.
-
-### `models[]` (preset download)
-
-When the user installs a Blueprint, the app downloads each entry into the **shared** models library:
-
-`%APPDATA%/com.open-gen-ai/models/<path>/<filename>`
-
-(Comfy sees these via `extra_model_paths.yaml`.)
-
-| Field      | Required | Meaning                                                                                |
-| ---------- | -------- | -------------------------------------------------------------------------------------- |
-| `filename` | yes      | Exact name the workflow loader expects                                                 |
-| `path`     | yes      | Comfy subfolder: `diffusion_models`, `text_encoders`, `vae`, `checkpoints`, `loras`, … |
-| `url`      | yes      | Direct download URL (Hugging Face `resolve/main/…`)                                    |
-| `sha256`   | no       | Optional integrity check after download                                                |
-
-**Sizes are not stored in the manifest.** The app probes each URL (HTTP HEAD / Range) for `Content-Length`, reads the local file size on disk, and skips download when they match. Optional `sha256` still verifies after download.
+| Role            | Typical `path`                     |
+| --------------- | ---------------------------------- |
+| `unet`          | `diffusion_models`                 |
+| `text_encoder`  | `text_encoders`                    |
+| `t5` / `clip_l` | `text_encoders` (Flux.1 DualCLIP)  |
+| `clip`          | `text_encoders` (Flux.2 single TE) |
+| `vae`           | `vae`                              |
+| `checkpoint`    | `checkpoints`                      |
 
 ### `customNodes[]` (optional)
 
-Git-cloned into the managed ComfyUI portable at install time (`ComfyUI/custom_nodes/<name>`). Requires `git` on PATH. Skipped when the folder already exists.
-
-```json
-"customNodes": [
-  {
-    "name": "ComfyUI-GGUF",
-    "url": "https://github.com/city96/ComfyUI-GGUF.git"
-  }
-]
-```
+Git-cloned into portable `ComfyUI/custom_nodes/<name>` on install. Prefer arches that need **no** custom nodes.
 
 ### Seed
 
-Use control id `seed` with `"default": 0`. User Mode treats **0 as random** (a new seed is chosen each generate and stored on the gallery item).
+Default `0` = random each generate.
 
 ## Tips
 
-- Keep ids stable (`z-image-turbo`, not `Z Image Turbo v2`)
-- Put prompt / aspect-ratio-style fields in `default`; sampler math (steps, cfg, seed, raw width/height) in `advanced`
-- Prefer seed default `0` and label `Seed (0 = random)`
-- Match `path` to the Comfy loader folder (UNET → `diffusion_models`, CLIP/text → `text_encoders` or `clip`, VAE → `vae`)
-- Use Hugging Face `…/resolve/main/…` URLs, not the `/blob/` page links
-- Community / remote catalogs can come later; Official stays in this folder
-- **Creator Mode** saves to the user folder (`%APPDATA%/com.open-gen-ai/blueprints/user/`), not here. To ship an Official pack, copy a finished user blueprint folder into this tree by hand.
+- Keep ids stable (`z-image-turbo`)
+- Folder names starting with `_` are ignored (e.g. `_example`)
+- **Creator Mode** uses the recipe form (arch + models) — no Comfy capture required

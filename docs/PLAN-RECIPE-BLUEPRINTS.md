@@ -1,7 +1,8 @@
 # Recipe Blueprints & Dynamic Graph Generation
 
-> Status: **proposal** (2026-07-21)  
-> Relates to: [`PLAN.md`](./PLAN.md) — revises Creator Mode and what a Blueprint stores for image generation.
+> Status: **in progress** (2026-07-21)  
+> Relates to: [`PLAN.md`](./PLAN.md) — revises Creator Mode and what a Blueprint stores for image generation.  
+> Implemented: `recipe.rs` compilers (`z-image`, `krea2`, `flux`, `flux2`, `sdxl`/`sd15`); generate is **recipe-only**; UI controls synthesized from arch/capabilities; Creator recipe form; Official `z-image-turbo` / `krea2-turbo` recipes.
 
 ## Summary
 
@@ -181,13 +182,15 @@ Those stay out until we explicitly add an optional block + tested compiler path.
 
 Do **not** build one universal graph. Build one compiler per family:
 
-| `arch`          | Typical loaders                          | Typical CFG | Negative   |
-| --------------- | ---------------------------------------- | ----------- | ---------- |
-| `sd15` / `sdxl` | Checkpoint (+ optional VAE)              | 5–7         | Yes        |
-| `flux`          | UNET + TE(s) + VAE                       | ~1          | Usually no |
-| `z-image`       | UNET + TE + VAE (Z-Image / Lumina-style) | ~1          | Usually no |
+| `arch`          | Typical loaders                                       | Typical CFG | Negative   |
+| --------------- | ----------------------------------------------------- | ----------- | ---------- |
+| `sd15` / `sdxl` | Checkpoint (+ optional VAE)                           | 5–7         | Yes        |
+| `flux`          | UNET + DualCLIP (T5 + CLIP-L) + VAE                   | ~1          | Usually no |
+| `flux2`         | UNET + CLIP (Mistral/Qwen) + VAE                      | ~1          | Usually no |
+| `z-image`       | UNET + TE + VAE (Z-Image / Lumina-style)              | ~1          | Usually no |
+| `krea2`         | UNET + TE + VAE (CLIP type `krea2`, EmptyLatentImage) | ~1          | no         |
 
-Ship **two** arches first (one checkpoint-style, one UNET+TE+VAE). Add families only when we have a tested graph and an Official recipe.
+Ship arches when we have a tested graph and an Official recipe.
 
 ---
 
@@ -253,29 +256,30 @@ No change to “models already on disk ⇒ skip download.”
 | User blueprints from Creator capture    | Leave runnable as static; new Creator writes recipes only                                                                                                                       |
 | Gallery reuse (prompt / size)           | Still applies — settings are first-class                                                                                                                                        |
 
-Prefer a **compatibility flag** on the manifest, e.g. `"execution": "recipe" | "workflow"` (default `workflow` when only `workflow.api.json` exists).
+~~Dual `execution` / frozen workflow~~ — **removed**. All blueprints are recipes (`arch` required).
 
 ---
 
 ## Phased delivery
 
-### Phase A — Foundation
+### Phase A — Foundation ✅
 
 - Manifest fields: `flowType`, `arch`, `sampler`, `scheduler`, `capabilities`, `defaults`, model `role`
-- Dual execution: recipe vs frozen workflow
-- Settings groups aligned in User Mode (prompt / basic / core)
+- No manifest `controls[]`; synthetic User Mode controls
+- No `workflow.api.json`
 - Dynamic negative visibility for CFG-capable recipes
 
-### Phase B — First compilers
+### Phase B — First compilers ✅
 
-- `txt2img` + checkpoint arch (`sdxl` or `sd15`)
-- `txt2img` + UNET+TE+VAE arch (`flux` or `z-image`)
-- One Official recipe each; generate without `workflow.api.json`
+- `txt2img` + checkpoint arch (`sdxl` / `sd15`)
+- `txt2img` + UNET+TE+VAE arch (`z-image`)
+- Official `z-image-turbo` recipe
 
-### Phase C — Creator form
+### Phase C — Creator form ✅
 
-- Replace Comfy-embed Creator with recipe form
-- Save My blueprints as `execution: "recipe"`
+- Recipe form: arch + model slots + sampler/defaults + capabilities
+- Save My blueprints as recipe manifests (no workflow / controls)
+- Comfy embed demoted to optional “Open ComfyUI”
 
 ### Phase D — Optional blocks
 

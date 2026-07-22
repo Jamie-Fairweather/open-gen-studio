@@ -2,27 +2,25 @@
   "id": "_example",
   "name": "Example (replace me)",
   "category": "image",
-  "description": "Template Official Blueprint — copy this folder, rename it, and drop a real workflow.api.json.",
+  "description": "Template Official recipe Blueprint — copy this folder, set arch/models, delete this underscore id.",
   "runtime": "comfyui",
   "minimumVramGb": 8,
-  "models": [],
-  "controls": [
-    {
-      "id": "prompt",
-      "type": "textarea",
-      "nodeId": "6",
-      "input": "text",
-      "label": "Prompt",
-      "group": "default"
-    },
-    {
-      "id": "seed",
-      "type": "number",
-      "nodeId": "3",
-      "input": "seed",
-      "label": "Seed (0 = random)",
-      "default": 0,
-      "group": "advanced"
-    }
-  ]
+  "flowType": "txt2img",
+  "arch": "sdxl",
+  "sampler": "euler",
+  "scheduler": "normal",
+  "capabilities": {
+    "negative": true,
+    "loras": false,
+    "controlnet": false,
+    "upscale": false
+  },
+  "defaults": {
+    "width": 1024,
+    "height": 1024,
+    "steps": 28,
+    "cfg": 7,
+    "seed": 0
+  },
+  "models": []
 }

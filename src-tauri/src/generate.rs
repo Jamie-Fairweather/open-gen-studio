@@ -1,4 +1,4 @@
-use crate::blueprints::{self, BlueprintControl};
+use crate::blueprints;
 use crate::comfy::{self, ProcessState};
 use crate::db::{Db, GalleryItem, Job, RuntimeInstall};
 use serde_json::{json, Value};
@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{ErrorKind, Write};
 use std::net::TcpStream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
@@ -14,79 +14,6 @@ use tauri::{AppHandle, Emitter, Manager};
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{connect, Message, WebSocket};
 use uuid::Uuid;
-
-/// Apply User Mode control values onto a Comfy API workflow object.
-pub fn patch_workflow(
-    workflow: &mut Value,
-    controls: &[BlueprintControl],
-    values: &HashMap<String, Value>,
-) -> Result<(), String> {
-    let obj = workflow
-        .as_object_mut()
-        .ok_or_else(|| "workflow must be a JSON object".to_string())?;
-
-    for control in controls {
-        let Some(value) = values.get(&control.id) else {
-            continue;
-        };
-        if value.is_null() {
-            continue;
-        }
-
-        let node = obj.get_mut(&control.node_id).ok_or_else(|| {
-            format!(
-                "workflow missing node '{}' for control '{}'",
-                control.node_id, control.id
-            )
-        })?;
-        let inputs = node
-            .get_mut("inputs")
-            .and_then(|v| v.as_object_mut())
-            .ok_or_else(|| {
-                format!(
-                    "node '{}' has no inputs object (control '{}')",
-                    control.node_id, control.id
-                )
-            })?;
-
-        let coerced = coerce_value(&control.control_type, value)?;
-        inputs.insert(control.input.clone(), coerced);
-    }
-    Ok(())
-}
-
-fn coerce_value(control_type: &str, value: &Value) -> Result<Value, String> {
-    match control_type {
-        "number" | "slider" => {
-            if let Some(n) = value.as_f64() {
-                // Prefer integers when whole.
-                if n.fract() == 0.0 && n >= i64::MIN as f64 && n <= i64::MAX as f64 {
-                    return Ok(json!(n as i64));
-                }
-                return Ok(json!(n));
-            }
-            if let Some(s) = value.as_str() {
-                let n: f64 = s
-                    .parse()
-                    .map_err(|_| format!("expected number, got '{s}'"))?;
-                if n.fract() == 0.0 {
-                    return Ok(json!(n as i64));
-                }
-                return Ok(json!(n));
-            }
-            Err(format!("expected number, got {value}"))
-        }
-        _ => {
-            if let Some(s) = value.as_str() {
-                Ok(json!(s))
-            } else if value.is_string() || value.is_number() || value.is_boolean() {
-                Ok(value.clone())
-            } else {
-                Ok(json!(value.to_string()))
-            }
-        }
-    }
-}
 
 pub fn queue_prompt(port: u16, workflow: &Value, client_id: &str) -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
@@ -496,6 +423,99 @@ pub fn gallery_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .join("gallery"))
 }
 
+/// `gallery/YYYY-MM-DD` (local calendar day).
+fn gallery_day_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let day = chrono::Local::now().format("%Y-%m-%d").to_string();
+    Ok(gallery_dir(app)?.join(day))
+}
+
+/// Comfy-style name: `{prefix}_{NNNNN}_.ext` with a day-folder counter.
+/// (Deleting Comfy's output makes it reuse `00001_`, so we own the sequence.)
+fn next_gallery_dest(dir: &Path, prefix: &str, ext: &str) -> PathBuf {
+    let prefix = {
+        let p = prefix.trim();
+        if p.is_empty() { "image" } else { p }
+    };
+    let ext = ext.trim_start_matches('.');
+    let ext = if ext.is_empty() { "png" } else { ext };
+    let mut max = 0u32;
+    if let Ok(entries) = fs::read_dir(dir) {
+        for ent in entries.flatten() {
+            let name = ent.file_name();
+            let Some(name) = name.to_str() else { continue };
+            if let Some(n) = gallery_sequence_number(name, prefix, ext) {
+                max = max.max(n);
+            }
+        }
+    }
+    let mut next = max.saturating_add(1).max(1);
+    loop {
+        let dest = dir.join(format!("{prefix}_{next:05}_.{ext}"));
+        if !dest.exists() {
+            return dest;
+        }
+        next = next.saturating_add(1);
+        if next > 99_999 {
+            return dir.join(format!("{prefix}_{}_.{}", Uuid::new_v4().simple(), ext));
+        }
+    }
+}
+
+/// `krea2-turbo_00007_.png` → Some(7); ignores collision junk like `…_00001_2.png`.
+fn gallery_sequence_number(filename: &str, prefix: &str, ext: &str) -> Option<u32> {
+    let suffix = format!(".{ext}");
+    if !filename.starts_with(prefix) || !filename.ends_with(&suffix) {
+        return None;
+    }
+    let mid = &filename[prefix.len()..filename.len() - suffix.len()];
+    let mid = mid.strip_prefix('_')?;
+    let digits = mid.strip_suffix('_')?;
+    if digits.len() == 5 && digits.bytes().all(|b| b.is_ascii_digit()) {
+        digits.parse().ok()
+    } else {
+        None
+    }
+}
+
+/// On-disk ComfyUI file for a `/view` image ref (portable layout).
+fn comfy_disk_path(runtime: &RuntimeInstall, image: &ComfyImageRef) -> Option<PathBuf> {
+    if runtime.install_path.is_empty() {
+        return None;
+    }
+    let folder = match image.image_type.as_str() {
+        "temp" => "temp",
+        "input" => "input",
+        _ => "output",
+    };
+    let mut path = PathBuf::from(&runtime.install_path)
+        .join("ComfyUI")
+        .join(folder);
+    if !image.subfolder.is_empty() {
+        // Reject path traversal in Comfy-reported subfolders.
+        if image.subfolder.split(['/', '\\']).any(|p| p == ".." || p.is_empty()) {
+            return None;
+        }
+        path.push(&image.subfolder);
+    }
+    if image.filename.contains("..")
+        || image.filename.contains('/')
+        || image.filename.contains('\\')
+    {
+        return None;
+    }
+    path.push(&image.filename);
+    Some(path)
+}
+
+fn remove_comfy_output(runtime: &RuntimeInstall, image: &ComfyImageRef) {
+    let Some(path) = comfy_disk_path(runtime, image) else {
+        return;
+    };
+    if path.is_file() {
+        let _ = fs::remove_file(path);
+    }
+}
+
 /// `seed: 0` means “pick a random seed” (common Comfy / UI convention).
 fn resolve_random_seeds(values: &mut HashMap<String, Value>) {
     let Some(seed) = values.get("seed") else {
@@ -546,9 +566,12 @@ pub fn run_generate(
         ));
     }
 
-    let (manifest, mut workflow) = blueprints::load_workflow(app, blueprint_id)?;
     resolve_random_seeds(&mut values);
-    patch_workflow(&mut workflow, &manifest.controls, &values)?;
+    let (manifest, workflow) = {
+        let (_dir, manifest) = blueprints::load_manifest(app, blueprint_id)?;
+        let workflow = crate::recipe::compile(&manifest, &values)?;
+        (manifest, workflow)
+    };
 
     let port = runtime.port.unwrap_or(comfy::DEFAULT_PORT as i64) as u16;
 
@@ -561,12 +584,12 @@ pub fn run_generate(
             json!({
                 "jobId": job.id,
                 "stage": "start",
-                "message": "Starting ComfyUI…",
+                "message": "Starting runtime…",
             }),
         );
         comfy::start(app, processes, runtime, port)?;
         comfy::wait_until_healthy(port, 60)?;
-        // Mark runtime running so UI clears the "Starting ComfyUI…" toast.
+        // Mark runtime running so UI clears the "Starting runtime…" toast.
         {
             let db = db.lock().map_err(|e| e.to_string())?;
             if let Ok(updated) = db.update_runtime_status(
@@ -583,7 +606,7 @@ pub fn run_generate(
             json!({
                 "engine": comfy::ENGINE,
                 "stage": "ready",
-                "message": format!("ComfyUI is healthy on 127.0.0.1:{port}"),
+                "message": "Runtime is ready",
             }),
         );
     }
@@ -627,13 +650,21 @@ pub fn run_generate(
         return Err("Comfy finished but returned no images".into());
     }
 
-    let dir = gallery_dir(app)?.join(&job.id);
+    let dir = gallery_day_dir(app)?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 
     let mut items = Vec::new();
-    for (i, image) in images.iter().enumerate() {
-        let dest = dir.join(format!("{:02}_{}", i, image.filename));
+    for image in images.iter() {
+        let ext = Path::new(&image.filename)
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("png");
+        let dest = next_gallery_dest(&dir, blueprint_id, ext);
         download_view(port, image, &dest)?;
+        // Only drop Comfy's copy after we have a non-empty gallery file.
+        if fs::metadata(&dest).map(|m| m.len() > 0).unwrap_or(false) {
+            remove_comfy_output(runtime, image);
+        }
         let prompt = values
             .get("prompt")
             .and_then(|v| v.as_str())
@@ -670,4 +701,49 @@ pub fn run_generate(
     );
 
     Ok(items)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn gallery_dest_increments_comfy_counter() {
+        let dir = std::env::temp_dir().join(format!("oga-gal-{}", Uuid::new_v4().simple()));
+        fs::create_dir_all(&dir).unwrap();
+        let first = next_gallery_dest(&dir, "krea2-turbo", "png");
+        assert_eq!(first.file_name().unwrap(), "krea2-turbo_00001_.png");
+        fs::File::create(&first).unwrap().write_all(b"x").unwrap();
+        // Legacy collision names must not break the sequence.
+        fs::File::create(dir.join("krea2-turbo_00001_2.png"))
+            .unwrap()
+            .write_all(b"x")
+            .unwrap();
+        let second = next_gallery_dest(&dir, "krea2-turbo", "png");
+        assert_eq!(second.file_name().unwrap(), "krea2-turbo_00002_.png");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn comfy_path_under_output() {
+        let runtime = RuntimeInstall {
+            id: "r1".into(),
+            engine: "comfyui".into(),
+            version: "x".into(),
+            install_path: r"C:\ComfyUI_windows_portable".into(),
+            port: Some(8188),
+            status: "running".into(),
+            error: None,
+            created_at: 0,
+            updated_at: 0,
+        };
+        let image = ComfyImageRef {
+            filename: "krea2-turbo_00001_.png".into(),
+            subfolder: String::new(),
+            image_type: "output".into(),
+        };
+        let path = comfy_disk_path(&runtime, &image).unwrap();
+        assert!(path.ends_with(r"ComfyUI\output\krea2-turbo_00001_.png") || path.ends_with("ComfyUI/output/krea2-turbo_00001_.png"));
+    }
 }

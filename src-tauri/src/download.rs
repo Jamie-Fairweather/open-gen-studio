@@ -1,22 +1,17 @@
+use crate::providers::{self, ProviderKind};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
 const USER_AGENT: &str = "OpenGenAI/0.1 (local; +https://github.com/open-gen-ai)";
 
-/// Settings key for the user's Hugging Face access token (gated model downloads).
-pub const SETTING_HF_TOKEN: &str = "huggingface_token";
+pub use crate::providers::{SETTING_CIVITAI_TOKEN, SETTING_HF_TOKEN};
 
-static STORED_HF_TOKEN: Mutex<Option<String>> = Mutex::new(None);
-/// Cache of URL → gated (unauthenticated probe). Avoids re-HEADing during packaging/list.
-static GATED_URL_CACHE: OnceLock<Mutex<HashMap<String, bool>>> = OnceLock::new();
 /// Cooperative cancel for in-flight `download_file` / blueprint installs.
 static DOWNLOAD_CANCEL: AtomicBool = AtomicBool::new(false);
 
@@ -33,18 +28,14 @@ pub fn is_cancelled() -> bool {
     DOWNLOAD_CANCEL.load(Ordering::SeqCst)
 }
 
-fn gated_url_cache() -> &'static Mutex<HashMap<String, bool>> {
-    GATED_URL_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+/// Sync Hugging Face token from Settings DB (or clear it).
+pub fn set_stored_hf_token(token: Option<String>) {
+    providers::set_stored_token(ProviderKind::HuggingFace, token);
 }
 
-/// Sync token from Settings DB (or clear it). Called on launch and when saved.
-pub fn set_stored_hf_token(token: Option<String>) {
-    let cleaned = token
-        .map(|t| t.trim().to_string())
-        .filter(|t| !t.is_empty());
-    if let Ok(mut guard) = STORED_HF_TOKEN.lock() {
-        *guard = cleaned;
-    }
+/// Sync CivitAI API key from Settings DB (or clear it).
+pub fn set_stored_civitai_token(token: Option<String>) {
+    providers::set_stored_token(ProviderKind::CivitAi, token);
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,93 +58,38 @@ fn http_client() -> Result<reqwest::blocking::Client, String> {
         .map_err(|e| e.to_string())
 }
 
-/// Hugging Face gated repos need a token after accepting the model license.
-/// Prefers Settings → Hugging Face token, then HF_TOKEN / HUGGING_FACE_HUB_TOKEN env.
-fn hf_auth_header() -> Option<String> {
-    if let Ok(guard) = STORED_HF_TOKEN.lock() {
-        if let Some(ref token) = *guard {
-            return Some(format!("Bearer {token}"));
-        }
-    }
-    for key in ["HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"] {
-        if let Ok(token) = std::env::var(key) {
-            let token = token.trim();
-            if !token.is_empty() {
-                return Some(format!("Bearer {token}"));
-            }
-        }
-    }
-    None
-}
-
 fn apply_auth(mut req: reqwest::blocking::RequestBuilder, url: &str) -> reqwest::blocking::RequestBuilder {
-    if url.contains("huggingface.co") || url.contains("hf.co") {
-        if let Some(auth) = hf_auth_header() {
-            req = req.header(reqwest::header::AUTHORIZATION, auth);
-        }
+    if let Some(auth) = providers::auth_header_for(url) {
+        req = req.header(reqwest::header::AUTHORIZATION, auth);
     }
     req
 }
 
 fn http_status_error(status: reqwest::StatusCode, url: &str) -> String {
-    if status.as_u16() == 401
-        && (url.contains("huggingface.co") || url.contains("hf.co"))
-    {
-        return format!(
-            "download failed: HTTP 401 — gated Hugging Face model. \
-Accept the license on the model page, then add your Hugging Face token in Settings and retry. \
-URL: {url}"
-        );
+    if let Some(hint) = providers::http_status_hint(status, url) {
+        return format!("{hint} URL: {url}");
     }
     format!("download failed: HTTP {status} ({url})")
 }
 
-fn is_hf_url(url: &str) -> bool {
-    url.contains("huggingface.co") || url.contains("hf.co")
-}
-
-/// Probe whether a URL requires auth when fetched anonymously.
-/// Always probes without the stored HF token so gated models stay detectable.
+/// Probe whether a Hugging Face URL requires auth when fetched anonymously.
 pub fn url_is_gated(url: &str) -> bool {
-    let url = url.trim();
-    if url.is_empty() || !is_hf_url(url) {
-        return false;
-    }
-
-    if let Ok(cache) = gated_url_cache().lock() {
-        if let Some(known) = cache.get(url) {
-            return *known;
-        }
-    }
-
-    let gated = probe_gated_uncached(url);
-    if let Ok(mut cache) = gated_url_cache().lock() {
-        cache.insert(url.to_string(), gated);
-    }
-    gated
+    matches!(providers::detect(url), ProviderKind::HuggingFace) && providers::requires_auth(url)
 }
 
-fn probe_gated_uncached(url: &str) -> bool {
-    let Ok(client) = http_client() else {
-        return false;
-    };
-    // Intentionally no Authorization header.
-    let Ok(res) = client.head(url).send() else {
-        return false;
-    };
-    if res.status().as_u16() == 401 {
-        return true;
-    }
-    if let Some(code) = res.headers().get("x-error-code").and_then(|v| v.to_str().ok()) {
-        if code.eq_ignore_ascii_case("GatedRepo") {
-            return true;
-        }
-    }
-    false
+/// Resolve a user URL (page or direct) to the HTTP download URL.
+pub fn resolve_download_url(url: &str) -> Result<String, String> {
+    Ok(providers::resolve(url)?.download_url)
 }
 
 /// Probe remote object size via HEAD (Content-Length), with a Range GET fallback.
+/// Accepts page URLs (e.g. CivitAI model pages) — resolves first.
 pub fn remote_content_length(url: &str) -> Result<Option<u64>, String> {
+    let download_url = resolve_download_url(url).unwrap_or_else(|_| url.trim().to_string());
+    remote_content_length_direct(&download_url)
+}
+
+fn remote_content_length_direct(url: &str) -> Result<Option<u64>, String> {
     let client = http_client()?;
 
     let head = apply_auth(client.head(url), url)
@@ -208,7 +144,58 @@ pub fn local_file_len(path: &Path) -> Option<u64> {
     fs::metadata(path).ok().map(|m| m.len())
 }
 
+/// True when a local model file looks like real weights (not an HTML error page).
+/// Size-only skip is unsafe: a resumed HF HTML gate + Range can match remote length.
+pub fn local_file_usable(path: &Path) -> bool {
+    let Ok(mut file) = File::open(path) else {
+        return false;
+    };
+    let mut head = [0u8; 16];
+    let Ok(n) = file.read(&mut head) else {
+        return false;
+    };
+    if n == 0 {
+        return false;
+    }
+    if looks_like_html(&head[..n]) {
+        return false;
+    }
+    let is_st = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("safetensors"));
+    if !is_st {
+        return true;
+    }
+    if n < 8 {
+        return false;
+    }
+    let header_len = u64::from_le_bytes(head[0..8].try_into().unwrap());
+    // Real safetensors JSON headers are small; HTML-as-u64 is huge garbage.
+    if !(2..=16 * 1024 * 1024).contains(&header_len) {
+        return false;
+    }
+    // JSON starts at byte 8 — already in `head` when we read ≥9 bytes.
+    if n > 8 {
+        return head[8] == b'{';
+    }
+    let mut first = [0u8; 1];
+    matches!(file.read_exact(&mut first), Ok(())) && first[0] == b'{'
+}
+
+fn looks_like_html(bytes: &[u8]) -> bool {
+    let lower: Vec<u8> = bytes
+        .iter()
+        .map(|b| b.to_ascii_lowercase())
+        .take(64)
+        .collect();
+    lower.starts_with(b"<!doctype")
+        || lower.starts_with(b"<html")
+        || lower.windows(6).any(|w| w == b"<html ")
+}
+
 /// Download with resume (HTTP Range) and optional SHA-256 verify.
+/// `url` may be a provider page URL (CivitAI model page, etc.).
 /// On HTTP 416 (stale partial / GitHub redirect), deletes the partial and retries once.
 pub fn download_file(
     app: &AppHandle,
@@ -216,10 +203,11 @@ pub fn download_file(
     dest: &Path,
     expected_sha256: Option<&str>,
 ) -> Result<(), String> {
-    match download_once(app, url, dest, expected_sha256, true) {
+    let download_url = resolve_download_url(url)?;
+    match download_once(app, &download_url, dest, expected_sha256, true) {
         Err(err) if err.contains("416") => {
             let _ = fs::remove_file(dest);
-            download_once(app, url, dest, expected_sha256, false)
+            download_once(app, &download_url, dest, expected_sha256, false)
         }
         other => other,
     }
@@ -236,8 +224,14 @@ fn download_once(
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
 
+    // Don't Range-resume over an HTML / corrupt partial — that yields size-correct junk.
     let existing = if allow_resume && dest.exists() {
-        fs::metadata(dest).map(|m| m.len()).unwrap_or(0)
+        if local_file_usable(dest) {
+            fs::metadata(dest).map(|m| m.len()).unwrap_or(0)
+        } else {
+            let _ = fs::remove_file(dest);
+            0
+        }
     } else {
         0
     };
@@ -259,6 +253,21 @@ fn download_once(
 
     if !(status.is_success() || status.as_u16() == 206) {
         return Err(http_status_error(status, url));
+    }
+
+    // HF (and others) often return 200 text/html for login / gate pages.
+    if status.as_u16() == 200 {
+        if let Some(ct) = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+        {
+            if ct.to_ascii_lowercase().contains("text/html") {
+                return Err(format!(
+                    "download returned HTML instead of model weights (auth/gate page?). URL: {url}"
+                ));
+            }
+        }
     }
 
     let resume = status.as_u16() == 206;
@@ -345,6 +354,25 @@ fn download_once(
         }
     }
 
+    if !local_file_usable(dest) {
+        let _ = fs::remove_file(dest);
+        let err = format!(
+            "downloaded file is not valid model weights (got HTML or corrupt data). URL: {url}"
+        );
+        let _ = app.emit(
+            "downloads://progress",
+            DownloadProgress {
+                url: url.into(),
+                dest: dest_str,
+                downloaded,
+                total,
+                done: true,
+                error: Some(err.clone()),
+            },
+        );
+        return Err(err);
+    }
+
     let _ = app.emit(
         "downloads://progress",
         DownloadProgress {
@@ -372,4 +400,38 @@ fn sha256_file(path: &Path) -> Result<String, String> {
         hasher.update(&buf[..n]);
     }
     Ok(format!("{:x}", hasher.finalize()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn rejects_html_prefix_as_unusable() {
+        let dir = std::env::temp_dir().join(format!("oga-dl-html-{}", std::process::id()));
+        let _ = fs::create_dir_all(&dir);
+        let path = dir.join("fake.safetensors");
+        let mut f = File::create(&path).unwrap();
+        f.write_all(b"<!doctype html><html><body>login</body></html>")
+            .unwrap();
+        drop(f);
+        assert!(!local_file_usable(&path));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn accepts_minimal_safetensors_header() {
+        let dir = std::env::temp_dir().join(format!("oga-dl-ok-{}", std::process::id()));
+        let _ = fs::create_dir_all(&dir);
+        let path = dir.join("ok.safetensors");
+        let header = br#"{"a":{"dtype":"F32","shape":[1],"data_offsets":[0,4]}}"#;
+        let mut f = File::create(&path).unwrap();
+        f.write_all(&(header.len() as u64).to_le_bytes()).unwrap();
+        f.write_all(header).unwrap();
+        f.write_all(&[0u8; 4]).unwrap();
+        drop(f);
+        assert!(local_file_usable(&path));
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

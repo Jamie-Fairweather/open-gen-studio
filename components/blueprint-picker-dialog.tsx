@@ -5,8 +5,8 @@ import {
   DownloadIcon,
   ImageIcon,
   KeyRoundIcon,
+  PencilIcon,
   SearchIcon,
-  XIcon,
 } from "lucide-react"
 import { useMemo, useState } from "react"
 import { Badge } from "@/components/ui/badge"
@@ -20,11 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import {
-  Progress,
-  ProgressIndicator,
-  ProgressTrack,
-} from "@/components/ui/progress"
+import { Spinner } from "@/components/ui/spinner"
 import { gallerySrc, type Blueprint } from "@/lib/host"
 import { cn } from "@/lib/utils"
 
@@ -34,9 +30,20 @@ export type BlueprintInstallProgress = {
   message: string
   modelIndex: number
   modelTotal: number
+  filename?: string | null
+  /** Current file bytes (not whole-blueprint). */
   downloaded: number
   total: number | null
   bytesPerSec: number
+}
+
+/** One pending model file in the Downloads queue. */
+export type DownloadModelItem = {
+  blueprintId: string
+  blueprintName: string
+  filename: string
+  path: string
+  role?: string
 }
 
 function formatBytes(n: number): string {
@@ -44,17 +51,6 @@ function formatBytes(n: number): string {
   if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`
   if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`
   return `${(n / 1024 ** 3).toFixed(2)} GB`
-}
-
-function formatDuration(secs: number): string {
-  if (!Number.isFinite(secs) || secs < 0) return "—"
-  if (secs < 60) return `${Math.max(1, Math.ceil(secs))}s`
-  const m = Math.floor(secs / 60)
-  const s = Math.ceil(secs % 60)
-  if (m < 60) return s > 0 ? `${m}m ${s}s` : `${m}m`
-  const h = Math.floor(m / 60)
-  const rm = m % 60
-  return rm > 0 ? `${h}h ${rm}m` : `${h}h`
 }
 
 function isInstalled(bp: Blueprint): boolean {
@@ -67,11 +63,12 @@ type BlueprintPickerDialogProps = {
   blueprints: Blueprint[]
   selectedId: string | null
   installingId: string | null
-  installProgress: BlueprintInstallProgress | null
+  queuedIds?: string[]
   sizesProbing: boolean
   onSelect: (id: string) => void
   onInstall: (id: string) => void
-  onCancelInstall?: () => void
+  /** Open Creator with this user blueprint loaded for editing. */
+  onEdit?: (id: string) => void
 }
 
 export function BlueprintPickerDialog({
@@ -80,11 +77,11 @@ export function BlueprintPickerDialog({
   blueprints,
   selectedId,
   installingId,
-  installProgress,
+  queuedIds = [],
   sizesProbing,
   onSelect,
   onInstall,
-  onCancelInstall,
+  onEdit,
 }: BlueprintPickerDialogProps) {
   const [query, setQuery] = useState("")
 
@@ -113,21 +110,6 @@ export function BlueprintPickerDialog({
   const officialInstalled = official.filter(isInstalled)
   const officialAvailable = official.filter((bp) => !isInstalled(bp))
 
-  function cardProgress(bpId: string): BlueprintInstallProgress | null {
-    if (installingId !== bpId) return null
-    if (installProgress?.blueprintId === bpId) return installProgress
-    return {
-      blueprintId: bpId,
-      stage: "start",
-      message: "Starting…",
-      modelIndex: 0,
-      modelTotal: 0,
-      downloaded: 0,
-      total: null,
-      bytesPerSec: 0,
-    }
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup className="max-w-5xl sm:max-w-5xl" showCloseButton>
@@ -135,6 +117,7 @@ export function BlueprintPickerDialog({
           <DialogTitle>Blueprints</DialogTitle>
           <DialogDescription>
             Official packs plus your Creator saves. Installed appear first.
+            Download progress lives in Downloads.
           </DialogDescription>
           <div className="relative mt-2">
             <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -165,14 +148,21 @@ export function BlueprintPickerDialog({
                         bp={bp}
                         selected={selectedId === bp.id}
                         installing={installingId === bp.id}
-                        progress={cardProgress(bp.id)}
+                        queued={queuedIds.includes(bp.id)}
                         sizesProbing={sizesProbing}
                         onSelect={() => {
                           onSelect(bp.id)
                           onOpenChange(false)
                         }}
                         onInstall={() => onInstall(bp.id)}
-                        onCancelInstall={onCancelInstall}
+                        onEdit={
+                          onEdit
+                            ? () => {
+                                onEdit(bp.id)
+                                onOpenChange(false)
+                              }
+                            : undefined
+                        }
                       />
                     ))}
                   </div>
@@ -191,14 +181,13 @@ export function BlueprintPickerDialog({
                         bp={bp}
                         selected={selectedId === bp.id}
                         installing={installingId === bp.id}
-                        progress={cardProgress(bp.id)}
+                        queued={queuedIds.includes(bp.id)}
                         sizesProbing={sizesProbing}
                         onSelect={() => {
                           onSelect(bp.id)
                           onOpenChange(false)
                         }}
                         onInstall={() => onInstall(bp.id)}
-                        onCancelInstall={onCancelInstall}
                       />
                     ))}
                   </div>
@@ -217,11 +206,10 @@ export function BlueprintPickerDialog({
                         bp={bp}
                         selected={selectedId === bp.id}
                         installing={installingId === bp.id}
-                        progress={cardProgress(bp.id)}
+                        queued={queuedIds.includes(bp.id)}
                         sizesProbing={sizesProbing}
                         onSelect={() => onSelect(bp.id)}
                         onInstall={() => onInstall(bp.id)}
-                        onCancelInstall={onCancelInstall}
                       />
                     ))}
                   </div>
@@ -239,28 +227,24 @@ function BlueprintCard({
   bp,
   selected,
   installing,
-  progress,
+  queued,
   sizesProbing,
   onSelect,
   onInstall,
-  onCancelInstall,
+  onEdit,
 }: {
   bp: Blueprint
   selected: boolean
   installing: boolean
-  progress: BlueprintInstallProgress | null
+  queued: boolean
   sizesProbing: boolean
   onSelect: () => void
   onInstall: () => void
-  onCancelInstall?: () => void
+  onEdit?: () => void
 }) {
   const installed = isInstalled(bp)
-  // During install, prefer live overall bytes so this line matches the progress box.
-  const sizeTotal =
-    progress?.total != null && progress.total > 0
-      ? progress.total
-      : bp.totalSizeBytes
-  const sizeLocal = progress != null ? progress.downloaded : bp.localSizeBytes
+  const sizeTotal = bp.totalSizeBytes
+  const sizeLocal = bp.localSizeBytes
   const sizeLabel =
     sizeTotal != null
       ? `${formatBytes(sizeLocal)} / ${formatBytes(sizeTotal)}`
@@ -269,26 +253,6 @@ function BlueprintCard({
         : sizeLocal > 0
           ? `${formatBytes(sizeLocal)} on disk`
           : null
-
-  const filePct =
-    progress?.total != null && progress.total > 0
-      ? Math.min(100, Math.round((progress.downloaded / progress.total) * 100))
-      : null
-  const modelPct =
-    progress && progress.modelTotal > 0
-      ? Math.min(
-          100,
-          Math.round((progress.modelIndex / progress.modelTotal) * 100)
-        )
-      : null
-  const barValue = filePct ?? modelPct ?? (installing ? 0 : null)
-  const etaSecs =
-    progress &&
-    progress.total != null &&
-    progress.total > progress.downloaded &&
-    progress.bytesPerSec > 8 * 1024
-      ? (progress.total - progress.downloaded) / progress.bytesPerSec
-      : null
 
   return (
     <article
@@ -346,16 +310,32 @@ function BlueprintCard({
               HF token
             </Badge>
           ) : null}
+          {bp.requiresCivitaiToken ? (
+            <Badge
+              variant="warning"
+              className="rounded-md text-[10px] backdrop-blur-sm"
+              title="Requires a CivitAI API key in Settings"
+            >
+              <KeyRoundIcon className="size-3" />
+              CivitAI
+            </Badge>
+          ) : null}
         </div>
       </button>
 
       <div className="flex flex-1 flex-col gap-2 p-3">
         <div className="min-w-0">
           <h4 className="flex items-center gap-1.5 truncate leading-tight font-medium">
-            {bp.requiresHfToken ? (
+            {bp.requiresHfToken || bp.requiresCivitaiToken ? (
               <KeyRoundIcon
                 className="size-3.5 shrink-0 text-amber-500"
-                aria-label="Requires Hugging Face token"
+                aria-label={
+                  bp.requiresHfToken && bp.requiresCivitaiToken
+                    ? "Requires Hugging Face and CivitAI tokens"
+                    : bp.requiresCivitaiToken
+                      ? "Requires CivitAI API key"
+                      : "Requires Hugging Face token"
+                }
               />
             ) : null}
             <span className="truncate">{bp.name}</span>
@@ -370,48 +350,12 @@ function BlueprintCard({
           {bp.minimumVramGb != null ? ` · ≥${bp.minimumVramGb} GB` : ""}
         </p>
 
-        {progress ? (
-          <div className="min-h-[4.5rem] space-y-1.5 rounded-lg border border-border/60 bg-muted/30 px-2.5 py-2">
-            <Progress value={barValue ?? 0}>
-              <ProgressTrack>
-                <ProgressIndicator />
-              </ProgressTrack>
-            </Progress>
-            <div className="grid grid-cols-[1fr_auto] gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground tabular-nums">
-              <span className="truncate">
-                {progress.total != null
-                  ? `${formatBytes(progress.downloaded)} / ${formatBytes(progress.total)}`
-                  : progress.downloaded > 0
-                    ? formatBytes(progress.downloaded)
-                    : "Preparing…"}
-              </span>
-              <span className="w-8 text-right">
-                {filePct != null ? `${filePct}%` : "—"}
-              </span>
-              <span className="col-span-2 truncate">
-                {progress.bytesPerSec > 8 * 1024
-                  ? `${formatBytes(progress.bytesPerSec)}/s`
-                  : "—"}
-                {" · ETA "}
-                {etaSecs != null ? formatDuration(etaSecs) : "—"}
-              </span>
-              <span className="col-span-2 truncate" title={progress.message}>
-                {progress.modelTotal > 0
-                  ? `Model ${progress.modelIndex}/${progress.modelTotal}`
-                  : null}
-                {progress.modelTotal > 0 && progress.message ? " · " : null}
-                {progress.message}
-              </span>
-            </div>
-          </div>
-        ) : null}
-
         <div className="mt-auto flex gap-2 pt-1">
           <Button
             type="button"
             size="sm"
             variant={selected ? "default" : "outline"}
-            className="flex-1"
+            className="min-w-0 flex-1"
             onClick={onSelect}
           >
             {selected ? (
@@ -423,16 +367,38 @@ function BlueprintCard({
               "Select"
             )}
           </Button>
+          {onEdit ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={onEdit}
+              title="Edit in Creator"
+            >
+              <PencilIcon />
+              Edit
+            </Button>
+          ) : null}
           {installing ? (
             <Button
               type="button"
               size="sm"
               variant="outline"
-              onClick={onCancelInstall}
-              title="Cancel download"
+              disabled
+              title="Downloading models"
             >
-              <XIcon />
-              Cancel
+              <Spinner className="size-3.5" />
+              Downloading
+            </Button>
+          ) : queued ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled
+              title="Queued in Downloads"
+            >
+              Queued
             </Button>
           ) : (
             <Button

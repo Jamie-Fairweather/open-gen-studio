@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/progress"
 import { Spinner } from "@/components/ui/spinner"
 import { WithTooltip } from "@/components/ui/tooltip"
+import { formatBytes, formatDuration } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 export type DownloadHistoryEntry = {
@@ -38,24 +39,6 @@ type DownloadsPanelProps = {
   /** Remove a waiting blueprint (and all its queued model rows). */
   onRemoveBlueprint: (blueprintId: string) => void
   onOpenBlueprints?: () => void
-}
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`
-  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`
-  return `${(n / 1024 ** 3).toFixed(2)} GB`
-}
-
-function formatDuration(secs: number): string {
-  if (!Number.isFinite(secs) || secs < 0) return "-"
-  if (secs < 60) return `${Math.max(1, Math.ceil(secs))}s`
-  const m = Math.floor(secs / 60)
-  const s = Math.ceil(secs % 60)
-  if (m < 60) return s > 0 ? `${m}m ${s}s` : `${m}m`
-  const h = Math.floor(m / 60)
-  const rm = m % 60
-  return rm > 0 ? `${h}h ${rm}m` : `${h}h`
 }
 
 function statusLabel(status: DownloadHistoryEntry["status"]): string {

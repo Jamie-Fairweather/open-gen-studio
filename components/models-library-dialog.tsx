@@ -27,15 +27,9 @@ import {
   type LoraPack,
   type ModelFileEntry,
 } from "@/lib/host"
+import { formatBytes } from "@/lib/format"
 import { notifyError, notifySuccess } from "@/lib/notify"
 import { cn } from "@/lib/utils"
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`
-  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`
-  return `${(n / 1024 ** 3).toFixed(2)} GB`
-}
 
 const ARCH_OPTIONS = [
   "krea2",

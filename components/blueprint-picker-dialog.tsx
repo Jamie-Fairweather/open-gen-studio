@@ -22,6 +22,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { WithTooltip } from "@/components/ui/tooltip"
+import { isInstalled } from "@/lib/blueprint-helpers"
+import { formatBytes } from "@/lib/format"
 import { gallerySrc, type Blueprint } from "@/lib/host"
 import { cn } from "@/lib/utils"
 
@@ -45,17 +47,6 @@ export type DownloadModelItem = {
   filename: string
   path: string
   role?: string
-}
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`
-  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`
-  return `${(n / 1024 ** 3).toFixed(2)} GB`
-}
-
-function isInstalled(bp: Blueprint): boolean {
-  return bp.modelCount === 0 || bp.modelsReady >= bp.modelCount
 }
 
 type BlueprintPickerDialogProps = {

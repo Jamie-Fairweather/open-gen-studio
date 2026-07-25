@@ -1,5 +1,12 @@
-import { AppShell } from "@/components/app-shell"
+"use client"
 
-export default function Page() {
-  return <AppShell />
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+
+export default function HomePage() {
+  const router = useRouter()
+  useEffect(() => {
+    router.replace("/image")
+  }, [router])
+  return null
 }

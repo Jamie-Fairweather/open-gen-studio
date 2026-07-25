@@ -18,6 +18,7 @@ import {
   ProgressTrack,
 } from "@/components/ui/progress"
 import { Spinner } from "@/components/ui/spinner"
+import { WithTooltip } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
 export type DownloadHistoryEntry = {
@@ -275,17 +276,20 @@ export function DownloadsPanel({
                           </p>
                         </div>
                         {showRemove && isFirstOfBlueprint ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="shrink-0 rounded-full before:hidden"
-                            onClick={() => onRemoveBlueprint(item.blueprintId)}
-                            title="Remove this blueprint from the queue"
-                          >
-                            <XIcon />
-                            Remove
-                          </Button>
+                          <WithTooltip label="Remove this blueprint from the queue">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="shrink-0 rounded-full before:hidden"
+                              onClick={() =>
+                                onRemoveBlueprint(item.blueprintId)
+                              }
+                            >
+                              <XIcon />
+                              Remove
+                            </Button>
+                          </WithTooltip>
                         ) : (
                           <span className="shrink-0 text-xs text-muted-foreground">
                             Waiting
@@ -313,12 +317,11 @@ export function DownloadsPanel({
                         <p className="truncate text-sm font-medium">
                           {entry.name}
                         </p>
-                        <p
-                          className="mt-0.5 truncate text-xs text-muted-foreground"
-                          title={entry.message}
-                        >
-                          {entry.message}
-                        </p>
+                        <WithTooltip label={entry.message}>
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                            {entry.message}
+                          </p>
+                        </WithTooltip>
                       </div>
                       <span
                         className={cn(

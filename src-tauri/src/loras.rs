@@ -432,7 +432,8 @@ pub fn delete_user_lora(app: &AppHandle, id: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Resolve User Mode `loras: [{id, strength}]` into compiler input `[{filename, strength}]`.
+/// Resolve User Mode `loras: [{id, strength}]` into compiler input
+/// `[{id, filename, strength}]` (id kept for gallery reuse).
 /// Errors if a pack/variant is missing or the file is not on disk.
 pub fn resolve_stack_for_generate(
     app: &AppHandle,
@@ -454,26 +455,27 @@ pub fn resolve_stack_for_generate(
     let mut resolved = Vec::new();
 
     for item in items {
-        // Already resolved (filename present).
-        if let Some(filename) = item.get("filename").and_then(|v| v.as_str()) {
-            if !filename.is_empty() {
-                let strength = item
-                    .get("strength")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(1.0);
-                resolved.push(json!({ "filename": filename, "strength": strength }));
-                continue;
-            }
-        }
-
-        let id = item
-            .get("id")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| "LoRA stack entry missing id".to_string())?;
         let strength = item
             .get("strength")
             .and_then(|v| v.as_f64())
             .unwrap_or(1.0);
+        let id = item.get("id").and_then(|v| v.as_str());
+
+        // Already resolved (filename present) — keep id when available for gallery reuse.
+        if let Some(filename) = item.get("filename").and_then(|v| v.as_str()) {
+            if !filename.is_empty() {
+                let mut entry = json!({ "filename": filename, "strength": strength });
+                if let Some(id) = id.filter(|s| !s.is_empty()) {
+                    entry["id"] = json!(id);
+                }
+                resolved.push(entry);
+                continue;
+            }
+        }
+
+        let id = id
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| "LoRA stack entry missing id".to_string())?;
 
         let (_dir, manifest, _) = load_manifest(app, id)?;
         let variant = variant_for_arch(&manifest, arch)?;
@@ -482,7 +484,9 @@ pub fn resolve_stack_for_generate(
                 "LoRA '{id}' ({arch}) is not installed — install it from the LoRA library first"
             ));
         }
+        // Keep pack id alongside filename so gallery metadata can restore the stack.
         resolved.push(json!({
+            "id": id,
             "filename": variant.filename,
             "strength": strength,
         }));

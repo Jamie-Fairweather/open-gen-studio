@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
+import { WithTooltip } from "@/components/ui/tooltip"
 import type { LoraPack } from "@/lib/host"
 import { cn } from "@/lib/utils"
 
@@ -305,15 +306,17 @@ function LoraCard({
             )}
           </Button>
           {onDelete ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={onDelete}
-              title="Remove pack"
-            >
-              <Trash2Icon />
-            </Button>
+            <WithTooltip label="Remove pack">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onDelete}
+                aria-label="Remove pack"
+              >
+                <Trash2Icon />
+              </Button>
+            </WithTooltip>
           ) : null}
           {installing ? (
             <Button type="button" size="sm" variant="outline" disabled>
@@ -321,17 +324,18 @@ function LoraCard({
               Downloading
             </Button>
           ) : (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={onInstall}
-              disabled={ready}
-              title={ready ? "Already on disk" : "Download file"}
-            >
-              <DownloadIcon />
-              {ready ? "Ready" : "Install"}
-            </Button>
+            <WithTooltip label={ready ? "Already on disk" : "Download file"}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onInstall}
+                disabled={ready}
+              >
+                <DownloadIcon />
+                {ready ? "Ready" : "Install"}
+              </Button>
+            </WithTooltip>
           )}
         </div>
       </div>

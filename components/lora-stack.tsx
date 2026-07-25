@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/frame"
 import { Separator } from "@/components/ui/separator"
 import { Slider } from "@/components/ui/slider"
+import { WithTooltip } from "@/components/ui/tooltip"
 import type { LoraPack, LoraStackEntry } from "@/lib/host"
 
 type LoraStackProps = {
@@ -102,19 +103,21 @@ export function LoraStack({
                         Needs download
                       </span>
                     )}
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="size-7 shrink-0 rounded-md p-0 text-muted-foreground hover:text-foreground"
-                      disabled={disabled}
-                      aria-label={`Remove ${pack?.name ?? entry.id}`}
-                      onClick={() =>
-                        onChange(stack.filter((s) => s.id !== entry.id))
-                      }
-                    >
-                      <XIcon className="size-3.5" />
-                    </Button>
+                    <WithTooltip label={`Remove ${pack?.name ?? entry.id}`}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="size-7 shrink-0 rounded-md p-0 text-muted-foreground hover:text-foreground"
+                        disabled={disabled}
+                        aria-label={`Remove ${pack?.name ?? entry.id}`}
+                        onClick={() =>
+                          onChange(stack.filter((s) => s.id !== entry.id))
+                        }
+                      >
+                        <XIcon className="size-3.5" />
+                      </Button>
+                    </WithTooltip>
                   </div>
 
                   {!ready ? (

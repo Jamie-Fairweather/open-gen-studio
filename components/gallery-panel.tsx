@@ -1,7 +1,7 @@
 "use client"
 
-import { RotateCcwIcon, Trash2Icon } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { SlidersHorizontalIcon, Trash2Icon, TypeIcon } from "lucide-react"
+import { useMemo, useState } from "react"
 import {
   SideRail,
   SideRailBody,
@@ -9,6 +9,7 @@ import {
   SIDE_RAIL_WIDTH,
 } from "@/components/side-rail"
 import { Button } from "@/components/ui/button"
+import { WithTooltip } from "@/components/ui/tooltip"
 import { gallerySrc, parseGalleryRecipe, type GalleryItem } from "@/lib/host"
 import { cn } from "@/lib/utils"
 
@@ -17,9 +18,10 @@ type GalleryPanelProps = {
   title?: string
   items: GalleryItem[]
   selectedId: string | null
-  onSelect: (id: string) => void
+  onSelect: (id: string | null) => void
   onDelete: (id: string) => Promise<void>
-  onReuse: (item: GalleryItem) => void
+  onReusePrompt: (item: GalleryItem) => void
+  onReuseSettings: (item: GalleryItem) => void
 }
 
 export function GalleryPanel({
@@ -29,7 +31,8 @@ export function GalleryPanel({
   selectedId,
   onSelect,
   onDelete,
-  onReuse,
+  onReusePrompt,
+  onReuseSettings,
 }: GalleryPanelProps) {
   const [deleting, setDeleting] = useState(false)
 
@@ -37,12 +40,6 @@ export function GalleryPanel({
     () => items.find((item) => item.id === selectedId) ?? null,
     [items, selectedId]
   )
-
-  useEffect(() => {
-    if (!open) return
-    if (selectedId && items.some((item) => item.id === selectedId)) return
-    if (items[0]) onSelect(items[0].id)
-  }, [open, items, selectedId, onSelect])
 
   async function handleDeleteFor(id: string) {
     setDeleting(true)
@@ -65,20 +62,22 @@ export function GalleryPanel({
           <div className="grid grid-cols-2 gap-2">
             {items.map((item) => {
               const isSelected = selected?.id === item.id
-              const canReuse = parseGalleryRecipe(item) != null
+              const recipe = parseGalleryRecipe(item)
+              const canReusePrompt = Boolean(recipe?.prompt)
+              const canReuseSettings = recipe != null
               return (
                 <div
                   key={item.id}
                   className={cn(
-                    "group relative aspect-square overflow-hidden rounded-lg bg-black/45",
+                    "group relative aspect-square overflow-hidden rounded-lg bg-muted/80",
                     !isSelected && "hover:brightness-110"
                   )}
                 >
                   <button
                     type="button"
-                    onClick={() => onSelect(item.id)}
+                    onClick={() => onSelect(isSelected ? null : item.id)}
                     className="absolute inset-0 outline-none"
-                    aria-label="Select image"
+                    aria-label={isSelected ? "Deselect image" : "Select image"}
                     aria-pressed={isSelected}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -94,32 +93,51 @@ export function GalleryPanel({
                       className="pointer-events-none absolute inset-0 z-10 rounded-lg border-2 border-primary shadow-[inset_0_0_0_1px_rgba(0,0,0,0.35)]"
                     />
                   ) : null}
-                  {canReuse ? (
+                  {canReusePrompt || canReuseSettings ? (
+                    <div className="absolute start-1.5 bottom-1.5 z-20 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                      {canReusePrompt ? (
+                        <WithTooltip label="Reuse prompt">
+                          <Button
+                            type="button"
+                            size="icon-xs"
+                            variant="default"
+                            className="rounded-md shadow-md"
+                            onClick={() => onReusePrompt(item)}
+                            aria-label="Reuse prompt"
+                          >
+                            <TypeIcon />
+                          </Button>
+                        </WithTooltip>
+                      ) : null}
+                      {canReuseSettings ? (
+                        <WithTooltip label="Reuse all settings">
+                          <Button
+                            type="button"
+                            size="icon-xs"
+                            variant="default"
+                            className="rounded-md shadow-md"
+                            onClick={() => onReuseSettings(item)}
+                            aria-label="Reuse all settings"
+                          >
+                            <SlidersHorizontalIcon />
+                          </Button>
+                        </WithTooltip>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <WithTooltip label="Delete">
                     <Button
                       type="button"
-                      size="sm"
-                      variant="default"
-                      className="absolute start-1.5 bottom-1.5 z-20 h-7 gap-1 rounded-full px-2.5 text-[11px] font-semibold opacity-0 shadow-lg transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                      onClick={() => onReuse(item)}
-                      aria-label="Reuse settings"
-                      title="Reuse settings"
+                      size="icon-xs"
+                      variant="destructive"
+                      className="absolute end-1.5 top-1.5 z-20 rounded-md opacity-0 shadow-md transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                      disabled={deleting}
+                      onClick={() => void handleDeleteFor(item.id)}
+                      aria-label="Delete"
                     >
-                      <RotateCcwIcon className="size-3.5" />
-                      Reuse
+                      <Trash2Icon />
                     </Button>
-                  ) : null}
-                  <Button
-                    type="button"
-                    size="icon-xs"
-                    variant="destructive"
-                    className="absolute end-1.5 top-1.5 z-20 rounded-md opacity-0 shadow-md transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                    disabled={deleting}
-                    onClick={() => void handleDeleteFor(item.id)}
-                    aria-label="Delete"
-                    title="Delete"
-                  >
-                    <Trash2Icon />
-                  </Button>
+                  </WithTooltip>
                 </div>
               )
             })}

@@ -6,6 +6,7 @@ import {
   ChevronRightIcon,
   DicesIcon,
   HardDriveIcon,
+  HistoryIcon,
   ImageIcon,
   ImagesIcon,
   LayersIcon,
@@ -47,6 +48,7 @@ import {
   FramePanel,
   FrameTitle,
 } from "@/components/ui/frame"
+import { WithTooltip } from "@/components/ui/tooltip"
 import { ModelsLibraryDialog } from "@/components/models-library-dialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -267,18 +269,51 @@ function isInstalled(bp: Blueprint): boolean {
   return bp.modelCount === 0 || bp.modelsReady >= bp.modelCount
 }
 
-/** Gallery reuse keeps prompts + size; advanced controls stay on blueprint defaults. */
-function applyReuseSizeAndPrompts(
+/** Full gallery reuse: every stored control except prompt/loras (those are separate state). */
+function applyReuseAllSettings(
   base: Record<string, unknown>,
   recipe: GalleryRecipe
 ): Record<string, unknown> {
   const next = { ...base }
-  if (recipe.values.width !== undefined) next.width = recipe.values.width
-  if (recipe.values.height !== undefined) next.height = recipe.values.height
-  if (recipe.values.negative !== undefined) {
-    next.negative = recipe.values.negative
+  for (const [key, value] of Object.entries(recipe.values)) {
+    if (key === "prompt" || key === "loras") continue
+    next[key] = value
   }
   return next
+}
+
+function lorasFromRecipe(
+  recipe: GalleryRecipe,
+  packs: LoraPack[]
+): LoraStackEntry[] {
+  const raw = recipe.values.loras
+  if (!Array.isArray(raw)) return []
+  const out: LoraStackEntry[] = []
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue
+    const row = entry as {
+      id?: unknown
+      filename?: unknown
+      strength?: unknown
+    }
+    const strength =
+      typeof row.strength === "number" && Number.isFinite(row.strength)
+        ? row.strength
+        : null
+    if (strength == null) continue
+    if (typeof row.id === "string" && row.id) {
+      out.push({ id: row.id, strength })
+      continue
+    }
+    // Older gallery items only stored resolved filename — map back to pack id.
+    if (typeof row.filename === "string" && row.filename) {
+      const pack = packs.find((p) =>
+        p.variants.some((v) => v.filename === row.filename)
+      )
+      if (pack) out.push({ id: pack.id, strength })
+    }
+  }
+  return out
 }
 
 const subscribeNoop = () => () => {}
@@ -299,6 +334,7 @@ export function AppShell() {
   const [modelsOpen, setModelsOpen] = useState(false)
   const [loraPickerOpen, setLoraPickerOpen] = useState(false)
   const [loraPacks, setLoraPacks] = useState<LoraPack[]>([])
+  const loraPacksRef = useRef<LoraPack[]>([])
   const [loraStack, setLoraStack] = useState<LoraStackEntry[]>([])
   const [loraInstallingKey, setLoraInstallingKey] = useState<string | null>(
     null
@@ -318,6 +354,8 @@ export function AppShell() {
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const [aspectId, setAspectId] = useState<string>("1:1")
   const [sideLength, setSideLength] = useState(SIDE_LENGTH_DEFAULT)
+  const aspectIdRef = useRef(aspectId)
+  const sideLengthRef = useRef(sideLength)
   const [runtimes, setRuntimes] = useState<RuntimeInstall[]>([])
   const [gpu, setGpu] = useState<GpuInfo | null>(null)
   const [runtimeBusy, setRuntimeBusy] = useState(false)
@@ -402,15 +440,15 @@ export function AppShell() {
 
   const newestGalleryId = tabGallery[0]?.id ?? null
 
-  // Follow new arrivals / drop invalid selection without an effect.
+  // Drop invalid selection without an effect; never auto-select.
   if (newestGalleryId !== prevNewestGalleryId) {
     setPrevNewestGalleryId(newestGalleryId)
-    setSelectedGalleryId(newestGalleryId)
-  } else if (
+  }
+  if (
     selectedGalleryId != null &&
     !tabGallery.some((item) => item.id === selectedGalleryId)
   ) {
-    setSelectedGalleryId(newestGalleryId)
+    setSelectedGalleryId(null)
   }
 
   const activeSelectedId =
@@ -422,11 +460,8 @@ export function AppShell() {
     activeSelectedId && detail?.id === activeSelectedId ? detail : null
 
   const previewItem = useMemo(() => {
-    if (selectedGalleryId) {
-      const match = tabGallery.find((item) => item.id === selectedGalleryId)
-      if (match) return match
-    }
-    return tabGallery[0] ?? null
+    if (!selectedGalleryId) return null
+    return tabGallery.find((item) => item.id === selectedGalleryId) ?? null
   }, [tabGallery, selectedGalleryId])
 
   const selected = useMemo(
@@ -589,7 +624,6 @@ export function AppShell() {
         setBlueprintsLoaded(true)
         setLoraPacks(loras)
         setGallery(items)
-        setSelectedGalleryId((prev) => prev ?? items[0]?.id ?? null)
         setComfyHealthy(status.healthy)
         setSelectedId((prev) =>
           pickDefaultBlueprintId(bps, prev ?? preferredBlueprintIdRef.current)
@@ -943,8 +977,8 @@ export function AppShell() {
         return [item, ...prev]
       })
       setStudioTab(category)
+      // Select the new image on the stage; do not open the gallery rail.
       setSelectedGalleryId(item.id)
-      setGalleryOpen(true)
     }).then((u) => {
       unlistenGallery = u
     })
@@ -1072,27 +1106,38 @@ export function AppShell() {
         setDetail(d)
         const recipe = pendingRecipeRef.current
         pendingRecipeRef.current = null
-        // Always load this blueprint's defaults (don't keep prior blueprint values).
+        // Load this blueprint's defaults (don't keep prior blueprint advanced values).
         const next: Record<string, unknown> = {}
         for (const c of d.controls) {
           if (c.default !== undefined) {
             next[c.id] = c.default
           }
         }
-        // Reuse only restores prompts + size; advanced stays on blueprint defaults.
-        const values = recipe ? applyReuseSizeAndPrompts(next, recipe) : next
-        setControlValues(values)
+        let values = recipe ? applyReuseAllSettings(next, recipe) : next
+        if (recipe) {
+          setLoraStack(lorasFromRecipe(recipe, loraPacksRef.current))
+        }
         const hasW = d.controls.some((c) => c.id === "width")
         const hasH = d.controls.some((c) => c.id === "height")
         if (hasW && hasH) {
-          const width = Number(values.width)
-          const height = Number(values.height)
-          if (Number.isFinite(width) && Number.isFinite(height)) {
-            const synced = syncSizeControls(width, height)
-            setAspectId(synced.aspectId)
-            setSideLength(synced.sideLength)
+          if (recipe) {
+            const width = Number(values.width)
+            const height = Number(values.height)
+            if (Number.isFinite(width) && Number.isFinite(height)) {
+              const synced = syncSizeControls(width, height)
+              setAspectId(synced.aspectId)
+              setSideLength(synced.sideLength)
+            }
+          } else {
+            // Keep the user's aspect / resolution across blueprint switches.
+            const { width, height } = sizeFromAspectAndSide(
+              aspectIdRef.current,
+              sideLengthRef.current
+            )
+            values = { ...values, width, height }
           }
         }
+        setControlValues(values)
         if (recipe?.prompt) {
           setPrompt(recipe.prompt)
         }
@@ -1282,6 +1327,18 @@ export function AppShell() {
   useEffect(() => {
     blueprintsRef.current = blueprints
   }, [blueprints])
+
+  useEffect(() => {
+    loraPacksRef.current = loraPacks
+  }, [loraPacks])
+
+  useEffect(() => {
+    aspectIdRef.current = aspectId
+  }, [aspectId])
+
+  useEffect(() => {
+    sideLengthRef.current = sideLength
+  }, [sideLength])
 
   useEffect(() => {
     pumpInstallQueueRef.current = () => {
@@ -1621,7 +1678,18 @@ export function AppShell() {
     }
   }
 
-  function handleReuseGalleryItem(item: GalleryItem) {
+  function handleReuseGalleryPrompt(item: GalleryItem) {
+    const recipe = parseGalleryRecipe(item)
+    if (!recipe?.prompt) {
+      notifyInfo("No prompt", "This image has no reusable prompt.", "reuse")
+      return
+    }
+    setSelectedGalleryId(item.id)
+    setPrompt(recipe.prompt)
+    notifySuccess("Prompt loaded", "From gallery image")
+  }
+
+  function handleReuseGallerySettings(item: GalleryItem) {
     const recipe = parseGalleryRecipe(item)
     if (!recipe) {
       notifyInfo("No settings", "This image has no reusable settings.", "reuse")
@@ -1648,18 +1716,19 @@ export function AppShell() {
         recipe.blueprintId === activeSelectedId &&
         activeDetail?.id === recipe.blueprintId
       ) {
-        // Same blueprint — selection won't change, so reset advanced to defaults here.
         const defaults: Record<string, unknown> = {}
         for (const c of activeDetail.controls) {
           if (c.default !== undefined) defaults[c.id] = c.default
         }
-        setControlValues(applyReuseSizeAndPrompts(defaults, recipe))
+        setControlValues(applyReuseAllSettings(defaults, recipe))
+        setLoraStack(lorasFromRecipe(recipe, loraPacks))
       } else {
         pendingRecipeRef.current = recipe
         selectBlueprint(recipe.blueprintId)
       }
     } else {
-      setControlValues((prev) => applyReuseSizeAndPrompts(prev, recipe))
+      setControlValues((prev) => applyReuseAllSettings(prev, recipe))
+      setLoraStack(lorasFromRecipe(recipe, loraPacks))
     }
 
     notifySuccess(
@@ -1738,16 +1807,18 @@ export function AppShell() {
               )
             })}
           </nav>
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            className="shrink-0 rounded-full"
-            aria-label="Settings"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <SettingsIcon />
-          </Button>
+          <WithTooltip label="Settings">
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              className="shrink-0 rounded-full"
+              aria-label="Settings"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <SettingsIcon />
+            </Button>
+          </WithTooltip>
         </header>
       </div>
 
@@ -1984,35 +2055,38 @@ export function AppShell() {
                               {ASPECT_RATIOS.map((aspect) => {
                                 const selected = aspect.id === aspectId
                                 return (
-                                  <button
+                                  <WithTooltip
                                     key={aspect.id}
-                                    type="button"
-                                    title={aspect.name}
-                                    onClick={() =>
-                                      applySize(aspect.id, sideLength)
-                                    }
-                                    className={cn(
-                                      "flex flex-col items-center gap-1.5 rounded-lg border px-1 py-2 transition-colors",
-                                      selected
-                                        ? "border-primary/50 bg-primary/10 text-foreground"
-                                        : "border-transparent bg-muted/35 text-muted-foreground hover:bg-muted/55 hover:text-foreground"
-                                    )}
+                                    label={aspect.name}
                                   >
-                                    <span className="flex h-4 items-center justify-center">
-                                      <span
-                                        className={cn(
-                                          "rounded-[1.5px] border",
-                                          selected
-                                            ? "border-primary bg-primary/20"
-                                            : "border-current/50 bg-transparent"
-                                        )}
-                                        style={aspectFrameStyle(aspect)}
-                                      />
-                                    </span>
-                                    <span className="text-[10px] font-medium tracking-tight">
-                                      {aspect.label}
-                                    </span>
-                                  </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        applySize(aspect.id, sideLength)
+                                      }
+                                      className={cn(
+                                        "flex flex-col items-center gap-1.5 rounded-lg border px-1 py-2 transition-colors",
+                                        selected
+                                          ? "border-primary/50 bg-primary/10 text-foreground"
+                                          : "border-transparent bg-muted/35 text-muted-foreground hover:bg-muted/55 hover:text-foreground"
+                                      )}
+                                    >
+                                      <span className="flex h-4 items-center justify-center">
+                                        <span
+                                          className={cn(
+                                            "rounded-[1.5px] border",
+                                            selected
+                                              ? "border-primary bg-primary/20"
+                                              : "border-current/50 bg-transparent"
+                                          )}
+                                          style={aspectFrameStyle(aspect)}
+                                        />
+                                      </span>
+                                      <span className="text-[10px] font-medium tracking-tight">
+                                        {aspect.label}
+                                      </span>
+                                    </button>
+                                  </WithTooltip>
                                 )
                               })}
                             </div>
@@ -2113,7 +2187,7 @@ export function AppShell() {
               icon={<SlidersHorizontalIcon className="size-3.5 opacity-90" />}
               onClick={() => setAdvancedOpen((open) => !open)}
               aria-label={advancedOpen ? "Close advanced" : "Open advanced"}
-              title={advancedOpen ? "Close advanced" : "Open advanced"}
+              tooltip={advancedOpen ? "Close advanced" : "Open advanced"}
             >
               {advancedOpen ? (
                 <ChevronLeftIcon className="size-4 opacity-70" />
@@ -2140,6 +2214,13 @@ export function AppShell() {
                     c.id !== "cfg" &&
                     c.id !== "cfg_scale"
                 )
+                const latestGallerySeed = (() => {
+                  const recipe = tabGallery[0]
+                    ? parseGalleryRecipe(tabGallery[0])
+                    : null
+                  const seed = Number(recipe?.values.seed)
+                  return Number.isFinite(seed) ? seed : null
+                })()
 
                 function renderNumberControl(
                   control: (typeof advancedControls)[number],
@@ -2165,10 +2246,30 @@ export function AppShell() {
                           : control.label || control.id}
                       </span>
                       <div className="flex items-center gap-1.5">
+                        {isSeed ? (
+                          <WithTooltip label="Set to 0 (random each generate)">
+                            <Button
+                              type="button"
+                              size="icon-sm"
+                              variant="outline"
+                              className="size-8 shrink-0"
+                              aria-label="Random seed"
+                              onClick={() =>
+                                setControlValues((prev) => ({
+                                  ...prev,
+                                  seed: 0,
+                                }))
+                              }
+                            >
+                              <DicesIcon className="size-3.5" />
+                            </Button>
+                          </WithTooltip>
+                        ) : null}
                         <NumberField
                           size="sm"
                           className="min-w-0 flex-1 gap-0"
                           value={Number.isFinite(value) ? value : 0}
+                          format={isSeed ? { useGrouping: false } : undefined}
                           onValueChange={(v) =>
                             setControlValues((prev) => ({
                               ...prev,
@@ -2186,24 +2287,89 @@ export function AppShell() {
                           </NumberFieldGroup>
                         </NumberField>
                         {isSeed ? (
-                          <Button
-                            type="button"
-                            size="icon-sm"
-                            variant="outline"
-                            className="size-8 shrink-0"
-                            title="Set to 0 (random each generate)"
-                            onClick={() =>
-                              setControlValues((prev) => ({
-                                ...prev,
-                                seed: 0,
-                              }))
-                            }
-                          >
-                            <DicesIcon className="size-3.5" />
-                          </Button>
+                          <WithTooltip label="Use seed from last gallery image">
+                            <Button
+                              type="button"
+                              size="icon-sm"
+                              variant="outline"
+                              className="size-8 shrink-0"
+                              aria-label="Use seed from last gallery image"
+                              disabled={latestGallerySeed == null}
+                              onClick={() => {
+                                if (latestGallerySeed == null) {
+                                  notifyInfo(
+                                    "No seed",
+                                    "Generate an image first.",
+                                    "seed"
+                                  )
+                                  return
+                                }
+                                setControlValues((prev) => ({
+                                  ...prev,
+                                  seed: latestGallerySeed,
+                                }))
+                                notifySuccess(
+                                  "Seed loaded",
+                                  String(latestGallerySeed)
+                                )
+                              }}
+                            >
+                              <HistoryIcon className="size-3.5" />
+                            </Button>
+                          </WithTooltip>
                         ) : null}
                       </div>
                     </label>
+                  )
+                }
+
+                function renderSliderControl(
+                  control: (typeof advancedControls)[number],
+                  opts: { min: number; max: number; step: number }
+                ) {
+                  const raw = Number(
+                    controlValues[control.id] ?? control.default ?? opts.min
+                  )
+                  const value = Number.isFinite(raw)
+                    ? Math.min(opts.max, Math.max(opts.min, raw))
+                    : opts.min
+                  const label = control.label || control.id
+                  const display =
+                    opts.step < 1
+                      ? String(Number(value.toFixed(1)))
+                      : String(Math.round(value))
+                  return (
+                    <div
+                      key={control.id}
+                      className="flex w-full flex-col gap-1.5"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] text-muted-foreground">
+                          {label}
+                        </span>
+                        <span className="font-mono text-xs text-foreground tabular-nums">
+                          {display}
+                        </span>
+                      </div>
+                      <Slider
+                        className="w-full min-w-0 [&_[data-slot=slider-control]]:min-h-4 [&_[data-slot=slider-control]]:min-w-0! [&_[data-slot=slider-control]]:items-center"
+                        aria-label={label}
+                        min={opts.min}
+                        max={opts.max}
+                        step={opts.step}
+                        value={[value]}
+                        onValueChange={(nextValue) => {
+                          const next = Array.isArray(nextValue)
+                            ? nextValue[0]
+                            : nextValue
+                          if (typeof next !== "number") return
+                          setControlValues((prev) => ({
+                            ...prev,
+                            [control.id]: next,
+                          }))
+                        }}
+                      />
+                    </div>
                   )
                 }
 
@@ -2215,7 +2381,7 @@ export function AppShell() {
                           <FrameTitle>Sampling</FrameTitle>
                         </FrameHeader>
                         <FramePanel className="bg-card p-3">
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-col gap-3">
                             {seedControl
                               ? renderNumberControl(seedControl, {
                                   stretch: true,
@@ -2223,10 +2389,18 @@ export function AppShell() {
                                 })
                               : null}
                             {stepsControl
-                              ? renderNumberControl(stepsControl)
+                              ? renderSliderControl(stepsControl, {
+                                  min: 1,
+                                  max: 50,
+                                  step: 1,
+                                })
                               : null}
                             {cfgControl
-                              ? renderNumberControl(cfgControl)
+                              ? renderSliderControl(cfgControl, {
+                                  min: 1,
+                                  max: 20,
+                                  step: 0.5,
+                                })
                               : null}
                           </div>
                         </FramePanel>
@@ -2319,7 +2493,7 @@ export function AppShell() {
               icon={<ImagesIcon className="size-3.5 opacity-90" />}
               onClick={() => setGalleryOpen((open) => !open)}
               aria-label={galleryOpen ? "Close gallery" : "Open gallery"}
-              title={galleryOpen ? "Close gallery" : "Open gallery"}
+              tooltip={galleryOpen ? "Close gallery" : "Open gallery"}
             >
               {galleryOpen ? (
                 <ChevronRightIcon className="size-4 opacity-70" />
@@ -2335,7 +2509,8 @@ export function AppShell() {
               selectedId={selectedGalleryId}
               onSelect={setSelectedGalleryId}
               onDelete={handleDeleteGalleryItem}
-              onReuse={handleReuseGalleryItem}
+              onReusePrompt={handleReuseGalleryPrompt}
+              onReuseSettings={handleReuseGallerySettings}
             />
           </>
         ) : null}

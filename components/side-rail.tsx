@@ -2,6 +2,7 @@
 
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from "react"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { WithTooltip } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
 export const SIDE_RAIL_BG = "bg-popover"
@@ -88,6 +89,7 @@ type SideRailHandleProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   offset: string
   icon: ReactNode
   count?: number
+  tooltip?: string
 }
 
 export function SideRailHandle({
@@ -96,6 +98,7 @@ export function SideRailHandle({
   offset,
   icon,
   count,
+  tooltip,
   className,
   style,
   children,
@@ -107,29 +110,31 @@ export function SideRailHandle({
       : { right: open ? offset : 0, ...style }
 
   return (
-    <button
-      type="button"
-      className={cn(
-        "absolute top-1/2 z-30 flex h-20 w-9 -translate-y-1/2 flex-col items-center justify-center gap-1.5 border border-border bg-card py-2.5 text-muted-foreground shadow-xl transition-[left,right,colors] duration-300 hover:bg-muted hover:text-foreground",
-        side === "left"
-          ? open
-            ? "rounded-l-none rounded-r-xl border-l-0"
-            : "rounded-r-xl border-l-0"
-          : open
-            ? "rounded-l-xl rounded-r-none border-r-0"
-            : "rounded-l-xl border-r-0",
-        className
-      )}
-      style={edgeStyle}
-      {...props}
-    >
-      {icon}
-      {children}
-      {count != null ? (
-        <span className="font-mono text-[10px] font-medium text-primary tabular-nums">
-          {count}
-        </span>
-      ) : null}
-    </button>
+    <WithTooltip label={tooltip} side={side === "left" ? "right" : "left"}>
+      <button
+        type="button"
+        className={cn(
+          "absolute top-1/2 z-30 flex h-20 w-9 -translate-y-1/2 flex-col items-center justify-center gap-1.5 border border-border bg-card py-2.5 text-muted-foreground shadow-xl transition-[left,right,colors] duration-300 hover:bg-muted hover:text-foreground",
+          side === "left"
+            ? open
+              ? "rounded-l-none rounded-r-xl border-l-0"
+              : "rounded-r-xl border-l-0"
+            : open
+              ? "rounded-l-xl rounded-r-none border-r-0"
+              : "rounded-l-xl border-r-0",
+          className
+        )}
+        style={edgeStyle}
+        {...props}
+      >
+        {icon}
+        {children}
+        {count != null ? (
+          <span className="font-mono text-[10px] font-medium text-primary tabular-nums">
+            {count}
+          </span>
+        ) : null}
+      </button>
+    </WithTooltip>
   )
 }

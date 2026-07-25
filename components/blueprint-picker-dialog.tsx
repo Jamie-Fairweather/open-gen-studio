@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
+import { WithTooltip } from "@/components/ui/tooltip"
 import { gallerySrc, type Blueprint } from "@/lib/host"
 import { cn } from "@/lib/utils"
 
@@ -301,24 +302,26 @@ function BlueprintCard({
             </Badge>
           ) : null}
           {bp.requiresHfToken ? (
-            <Badge
-              variant="warning"
-              className="rounded-md text-[10px] backdrop-blur-sm"
-              title="Requires a Hugging Face token in Settings"
-            >
-              <KeyRoundIcon className="size-3" />
-              HF token
-            </Badge>
+            <WithTooltip label="Requires a Hugging Face token in Settings">
+              <Badge
+                variant="warning"
+                className="rounded-md text-[10px] backdrop-blur-sm"
+              >
+                <KeyRoundIcon className="size-3" />
+                HF token
+              </Badge>
+            </WithTooltip>
           ) : null}
           {bp.requiresCivitaiToken ? (
-            <Badge
-              variant="warning"
-              className="rounded-md text-[10px] backdrop-blur-sm"
-              title="Requires a CivitAI API key in Settings"
-            >
-              <KeyRoundIcon className="size-3" />
-              CivitAI
-            </Badge>
+            <WithTooltip label="Requires a CivitAI API key in Settings">
+              <Badge
+                variant="warning"
+                className="rounded-md text-[10px] backdrop-blur-sm"
+              >
+                <KeyRoundIcon className="size-3" />
+                CivitAI
+              </Badge>
+            </WithTooltip>
           ) : null}
         </div>
       </button>
@@ -368,49 +371,49 @@ function BlueprintCard({
             )}
           </Button>
           {onEdit ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={onEdit}
-              title="Edit in Creator"
-            >
-              <PencilIcon />
-              Edit
-            </Button>
+            <WithTooltip label="Edit in Creator">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onEdit}
+              >
+                <PencilIcon />
+                Edit
+              </Button>
+            </WithTooltip>
           ) : null}
           {installing ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled
-              title="Downloading models"
-            >
-              <Spinner className="size-3.5" />
-              Downloading
-            </Button>
+            <WithTooltip label="Downloading models">
+              <Button type="button" size="sm" variant="outline" disabled>
+                <Spinner className="size-3.5" />
+                Downloading
+              </Button>
+            </WithTooltip>
           ) : queued ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled
-              title="Queued in Downloads"
-            >
-              Queued
-            </Button>
+            <WithTooltip label="Queued in Downloads">
+              <Button type="button" size="sm" variant="outline" disabled>
+                Queued
+              </Button>
+            </WithTooltip>
           ) : (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={onInstall}
-              title={installed ? "Re-check models" : "Download models"}
+            <WithTooltip
+              label={installed ? "Re-check models" : "Download models"}
             >
-              <DownloadIcon />
-              {installed ? "Check" : bp.modelsReady > 0 ? "Resume" : "Install"}
-            </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onInstall}
+              >
+                <DownloadIcon />
+                {installed
+                  ? "Check"
+                  : bp.modelsReady > 0
+                    ? "Resume"
+                    : "Install"}
+              </Button>
+            </WithTooltip>
           )}
         </div>
       </div>

@@ -64,4 +64,25 @@ export function TooltipPopup({
   )
 }
 
+/** Wrap a single control (usually a Button) with a coss tooltip. */
+export function WithTooltip({
+  label,
+  side = "top",
+  children,
+}: {
+  label?: React.ReactNode
+  side?: TooltipPrimitive.Positioner.Props["side"]
+  children: React.ReactElement
+}): React.ReactElement {
+  if (label == null || label === false || label === "") {
+    return children
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger render={children} />
+      <TooltipPopup side={side}>{label}</TooltipPopup>
+    </Tooltip>
+  )
+}
+
 export { TooltipPrimitive, TooltipPopup as TooltipContent }

@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { WithTooltip } from "@/components/ui/tooltip"
 import {
   COMFY_SAMPLER_ITEMS,
   COMFY_SCHEDULER_ITEMS,
@@ -726,21 +727,24 @@ export function RecipeBlueprintForm({
                 </label>
                 <label className="flex flex-col gap-1">
                   <span className={fieldLabel}>Id</span>
-                  <Input
-                    value={id}
-                    onChange={(e) => {
-                      setIdTouched(true)
-                      setIdManual(e.target.value)
-                    }}
-                    placeholder="my-realism-pack"
-                    className="font-mono text-xs"
-                    disabled={editing || loadingEdit}
-                    title={
+                  <WithTooltip
+                    label={
                       editing
-                        ? "Id is fixed while editing — save as a new recipe to change it"
+                        ? "Id is fixed while editing. Save as a new recipe to change it."
                         : undefined
                     }
-                  />
+                  >
+                    <Input
+                      value={id}
+                      onChange={(e) => {
+                        setIdTouched(true)
+                        setIdManual(e.target.value)
+                      }}
+                      placeholder="my-realism-pack"
+                      className="font-mono text-xs"
+                      disabled={editing || loadingEdit}
+                    />
+                  </WithTooltip>
                 </label>
                 <div className="flex flex-col gap-1">
                   <span className={fieldLabel}>Architecture</span>
@@ -800,12 +804,11 @@ export function RecipeBlueprintForm({
                             <span className="text-destructive"> *</span>
                           ) : null}
                         </p>
-                        <span
-                          className="font-mono text-[10px] text-muted-foreground/70"
-                          title={`Comfy folder: ${slot.path}/`}
-                        >
-                          {slot.path}/
-                        </span>
+                        <WithTooltip label={`Comfy folder: ${slot.path}/`}>
+                          <span className="font-mono text-[10px] text-muted-foreground/70">
+                            {slot.path}/
+                          </span>
+                        </WithTooltip>
                       </div>
                       <div className="grid gap-1.5 sm:grid-cols-[minmax(0,1fr)_minmax(7.5rem,11rem)]">
                         <Input
@@ -819,15 +822,16 @@ export function RecipeBlueprintForm({
                           required={slot.required}
                           aria-label={`${slot.label} download URL`}
                         />
-                        <Input
-                          value={row.filename}
-                          readOnly
-                          tabIndex={-1}
-                          placeholder="filename.safetensors"
-                          className="border-transparent bg-transparent font-mono text-xs text-muted-foreground shadow-none read-only:opacity-100"
-                          aria-label={`${slot.label} filename`}
-                          title={row.filename || "Filled from URL"}
-                        />
+                        <WithTooltip label={row.filename || "Filled from URL"}>
+                          <Input
+                            value={row.filename}
+                            readOnly
+                            tabIndex={-1}
+                            placeholder="filename.safetensors"
+                            className="border-transparent bg-transparent font-mono text-xs text-muted-foreground shadow-none read-only:opacity-100"
+                            aria-label={`${slot.label} filename`}
+                          />
+                        </WithTooltip>
                       </div>
                     </div>
                   )

@@ -7,9 +7,11 @@ import {
   ImagesIcon,
   SlidersHorizontalIcon,
 } from "lucide-react"
+import { useState } from "react"
 import { AdvancedControls } from "@/components/advanced-controls"
 import { AdvancedPanel } from "@/components/advanced-panel"
 import { GalleryPanel } from "@/components/gallery-panel"
+import { ImageLightbox } from "@/components/image-lightbox"
 import { PromptBar } from "@/components/prompt-bar"
 import { SideRailHandle } from "@/components/side-rail"
 import { StageImage } from "@/components/stage-image"
@@ -29,6 +31,10 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
   const showAdvancedRail = s.showAdvancedRail
   const showGalleryRail = s.showGalleryRail
   const pendingSrc = s.pendingPreviewSrc
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const stageSrc =
+    s.livePreviewSrc ??
+    (s.previewItem ? s.gallerySrc(s.previewItem.path) : null)
 
   return (
     <>
@@ -47,6 +53,7 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
                   src={s.livePreviewSrc}
                   width={s.stageDims.width}
                   height={s.stageDims.height}
+                  onOpen={() => setLightboxOpen(true)}
                 />
               ) : null}
               {pendingSrc ? (
@@ -66,6 +73,7 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
                 src={s.gallerySrc(s.previewItem.path)}
                 width={s.stageDims.width}
                 height={s.stageDims.height}
+                onOpen={() => setLightboxOpen(true)}
               />
             </div>
           ) : (
@@ -186,6 +194,15 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
             onReuseSettings={s.handleReuseGallerySettings}
           />
         </>
+      ) : null}
+
+      {stageSrc ? (
+        <ImageLightbox
+          key={stageSrc}
+          open={lightboxOpen}
+          onOpenChange={setLightboxOpen}
+          src={stageSrc}
+        />
       ) : null}
     </>
   )

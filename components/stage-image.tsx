@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type CSSProperties } from "react"
+import { useState, type CSSProperties, type KeyboardEvent } from "react"
 import { cn } from "@/lib/utils"
 
 /**
@@ -24,6 +24,7 @@ export function StageImage({
   className,
   onLoad,
   overlay,
+  onOpen,
 }: {
   src: string
   width: number
@@ -32,6 +33,8 @@ export function StageImage({
   onLoad?: () => void
   /** Hidden preload layer for the next preview frame. */
   overlay?: boolean
+  /** Opens fullscreen inspect when the stage image is activated. */
+  onOpen?: () => void
 }) {
   // Prefer decoded pixels over control/recipe size — wrong stage aspect letterboxes
   // with object-contain and makes wide images look sharp-cornered.
@@ -43,11 +46,31 @@ export function StageImage({
   }
   const frameW = natural?.w ?? width
   const frameH = natural?.h ?? height
+  const interactive = Boolean(onOpen) && !overlay
 
   const frame = (
     <div
-      className={cn("rounded-3xl drop-shadow-lg", !overlay && className)}
+      className={cn(
+        "rounded-3xl drop-shadow-lg",
+        interactive &&
+          "cursor-zoom-in transition-[filter,transform] duration-200 outline-none hover:brightness-105 focus-visible:ring-[3px] focus-visible:ring-ring/40 active:scale-[0.992]",
+        !overlay && className
+      )}
       style={stageFrameStyle(frameW, frameH)}
+      {...(interactive
+        ? {
+            role: "button" as const,
+            tabIndex: 0,
+            "aria-label": "Open fullscreen image",
+            onClick: () => onOpen?.(),
+            onKeyDown: (e: KeyboardEvent) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                onOpen?.()
+              }
+            },
+          }
+        : {})}
     >
       <div className="size-full overflow-hidden rounded-3xl">
         {/* eslint-disable-next-line @next/next/no-img-element */}

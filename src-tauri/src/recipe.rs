@@ -2,8 +2,28 @@
 //! See docs/PLAN-RECIPE-BLUEPRINTS.md.
 
 use crate::blueprints::{BlueprintControl, ManifestFile, ModelEntry};
+use crate::upscale;
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
+
+/// Wiring for optional shared upscale / Ultimate SD Upscale after VAEDecode.
+struct UpscaleWiring {
+    /// Node + input that already holds the sampling MODEL (post-LoRA).
+    model_from: (&'static str, &'static str),
+    positive: (&'static str, u64),
+    negative: (&'static str, u64),
+    vae: (&'static str, u64),
+    decode_id: &'static str,
+    save_id: &'static str,
+    /// Flux.2-style custom sampling → `UltimateSDUpscaleGuider`.
+    guider: Option<GuiderWiring>,
+}
+
+struct GuiderWiring {
+    guider: (&'static str, u64),
+    sampler: (&'static str, u64),
+    sigmas: (&'static str, u64),
+}
 
 /// Compile a Comfy API workflow from a recipe + live User Mode values.
 pub fn compile(
@@ -330,6 +350,294 @@ fn finish_with_loras(
     Ok(graph)
 }
 
+fn next_node_id(graph: &Map<String, Value>, start: u64) -> u64 {
+    let mut next_id = start;
+    while graph.contains_key(&next_id.to_string()) {
+        next_id += 1;
+    }
+    next_id
+}
+
+fn link_from_input(
+    graph: &Map<String, Value>,
+    node_id: &str,
+    input: &str,
+) -> Result<(String, u64), String> {
+    let node = graph
+        .get(node_id)
+        .ok_or_else(|| format!("missing node {node_id} for upscale wiring"))?;
+    let arr = node
+        .get("inputs")
+        .and_then(|i| i.get(input))
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| format!("node {node_id} missing link input '{input}'"))?;
+    let id = arr
+        .first()
+        .and_then(|v| {
+            v.as_str()
+                .map(|s| s.to_string())
+                .or_else(|| v.as_i64().map(|n| n.to_string()))
+                .or_else(|| v.as_u64().map(|n| n.to_string()))
+        })
+        .ok_or_else(|| format!("node {node_id}.{input} is not a node link"))?;
+    let slot = arr
+        .get(1)
+        .and_then(|v| v.as_u64().or_else(|| v.as_i64().map(|n| n as u64)))
+        .unwrap_or(0);
+    Ok((id, slot))
+}
+
+fn usdu_denoise(arch: &str) -> f64 {
+    // Keep structure: turbo/distilled models rewrite hard above ~0.2.
+    match arch {
+        "z-image" | "krea2" => 0.15,
+        "flux" | "flux2" => 0.2,
+        _ => 0.25,
+    }
+}
+
+/// Default USDU enlarge when the UI does not send `usduScale` — prefer 2×.
+fn usdu_upscale_by_default() -> f64 {
+    2.0
+}
+
+fn usdu_steps(arch: &str, recipe_steps: i64) -> i64 {
+    let cap = match arch {
+        "z-image" | "krea2" => 8,
+        _ => 12,
+    };
+    recipe_steps.clamp(1, cap)
+}
+
+/// Append shared SR and optional Ultimate SD Upscale after decode; rewire SaveImage.
+fn finish_with_upscale(
+    mut graph: Value,
+    values: &HashMap<String, Value>,
+    manifest: &ManifestFile,
+    wiring: UpscaleWiring,
+) -> Result<Value, String> {
+    let Some(opts) = upscale::parse_upscale_opts(values) else {
+        return Ok(graph);
+    };
+
+    let obj = graph
+        .as_object_mut()
+        .ok_or_else(|| "compile graph is not an object".to_string())?;
+
+    let image_link = json!([wiring.decode_id, 0]);
+    let up_id = next_node_id(obj, 200);
+    let up_key = up_id.to_string();
+
+    if opts.kind == upscale::UpscaleKind::Supir {
+        let sdxl = opts
+            .sdxl_filename
+            .clone()
+            .unwrap_or_else(|| upscale::SUPIR_SDXL_FILENAME.to_string());
+        // lightning/numpy seed_everything only accepts 0..=u32::MAX.
+        let seed = i64_val(values, "seed", 0).rem_euclid(1 << 32);
+        let prompt = str_val(values, "prompt", "high quality, detailed");
+        let a_prompt = if prompt.is_empty() {
+            "high quality, detailed".into()
+        } else {
+            format!("{prompt}, high quality, detailed")
+        };
+        // SUPIR scale_by is a pre-resize; keep modest (2×) — full 4× is very VRAM-heavy.
+        let scale_by = (opts.scale as f64).clamp(1.0, 2.0);
+        obj.insert(
+            up_key.clone(),
+            json!({
+                "class_type": "SUPIR_Upscale",
+                "inputs": {
+                    "supir_model": opts.filename,
+                    "sdxl_model": sdxl,
+                    "image": image_link,
+                    "seed": seed,
+                    "resize_method": "lanczos",
+                    "scale_by": scale_by,
+                    "steps": 20,
+                    "restoration_scale": -1.0,
+                    "cfg_scale": 4.0,
+                    "a_prompt": a_prompt,
+                    "n_prompt": "bad quality, blurry, messy",
+                    "s_churn": 5,
+                    "s_noise": 1.003,
+                    "control_scale": 1.0,
+                    "cfg_scale_start": 4.0,
+                    "control_scale_start": 0.0,
+                    "color_fix_type": "Wavelet",
+                    "keep_model_loaded": false,
+                    "use_tiled_vae": true,
+                    "encoder_tile_size_pixels": 512,
+                    "decoder_tile_size_latent": 64,
+                    "diffusion_dtype": "auto",
+                    "encoder_dtype": "auto",
+                    "batch_size": 1,
+                    "use_tiled_sampling": false,
+                    "fp8_unet": true,
+                    "fp8_vae": false,
+                    "sampler": "RestoreEDMSampler"
+                }
+            }),
+        );
+    } else {
+        let loader_id = up_id;
+        let process_id = loader_id + 1;
+        let loader_key = loader_id.to_string();
+        let process_key = process_id.to_string();
+
+        obj.insert(
+            loader_key.clone(),
+            json!({
+                "class_type": "UpscaleModelLoader",
+                "inputs": { "model_name": opts.filename }
+            }),
+        );
+
+        if opts.usdu {
+            let seed = i64_val(values, "seed", 0);
+            let recipe_steps = i64_val(values, "steps", default_steps(manifest)).max(1);
+            let steps = opts
+                .usdu_steps
+                .unwrap_or_else(|| usdu_steps(manifest.arch.as_str(), recipe_steps));
+            let cfg = if matches!(manifest.arch.as_str(), "flux" | "flux2") {
+                1.0
+            } else {
+                f64_val(values, "cfg", default_cfg(manifest) as f64)
+            };
+            let upscale_by = opts
+                .usdu_scale
+                .map(|s| if s >= 4 { 4.0 } else { 2.0 })
+                .unwrap_or_else(usdu_upscale_by_default);
+            let denoise = opts
+                .usdu_denoise
+                .unwrap_or_else(|| usdu_denoise(manifest.arch.as_str()));
+            let sampler = sampler_name(manifest);
+            let scheduler = scheduler_name(manifest);
+
+            if let Some(g) = wiring.guider {
+                obj.insert(
+                    process_key.clone(),
+                    json!({
+                        "class_type": "UltimateSDUpscaleGuider",
+                        "inputs": {
+                            "image": image_link,
+                            "guider": [g.guider.0, g.guider.1],
+                            "sampler": [g.sampler.0, g.sampler.1],
+                            "sigmas": [g.sigmas.0, g.sigmas.1],
+                            "vae": [wiring.vae.0, wiring.vae.1],
+                            "upscale_by": upscale_by,
+                            "seed": seed,
+                            "upscale_model": [loader_key, 0],
+                            "mode_type": "Linear",
+                            "tile_width": 512,
+                            "tile_height": 512,
+                            "mask_blur": 8,
+                            "tile_padding": 32,
+                            "seam_fix_mode": "None",
+                            "seam_fix_denoise": 0.0,
+                            "seam_fix_width": 64,
+                            "seam_fix_mask_blur": 8,
+                            "seam_fix_padding": 16,
+                            "force_uniform_tiles": true,
+                            "tiled_decode": false,
+                            "batch_size": 1
+                        }
+                    }),
+                );
+            } else {
+                let model = link_from_input(obj, wiring.model_from.0, wiring.model_from.1)?;
+                obj.insert(
+                    process_key.clone(),
+                    json!({
+                        "class_type": "UltimateSDUpscale",
+                        "inputs": {
+                            "image": image_link,
+                            "model": [model.0, model.1],
+                            "positive": [wiring.positive.0, wiring.positive.1],
+                            "negative": [wiring.negative.0, wiring.negative.1],
+                            "vae": [wiring.vae.0, wiring.vae.1],
+                            "upscale_by": upscale_by,
+                            "seed": seed,
+                            "steps": steps,
+                            "cfg": cfg,
+                            "sampler_name": sampler,
+                            "scheduler": scheduler,
+                            "denoise": denoise,
+                            "upscale_model": [loader_key, 0],
+                            "mode_type": "Linear",
+                            "tile_width": 512,
+                            "tile_height": 512,
+                            "mask_blur": 8,
+                            "tile_padding": 32,
+                            "seam_fix_mode": "None",
+                            "seam_fix_denoise": 0.0,
+                            "seam_fix_width": 64,
+                            "seam_fix_mask_blur": 8,
+                            "seam_fix_padding": 16,
+                            "force_uniform_tiles": true,
+                            "tiled_decode": false,
+                            "batch_size": 1
+                        }
+                    }),
+                );
+            }
+        } else {
+            obj.insert(
+                process_key.clone(),
+                json!({
+                    "class_type": "ImageUpscaleWithModel",
+                    "inputs": {
+                        "upscale_model": [loader_key, 0],
+                        "image": image_link
+                    }
+                }),
+            );
+        }
+        // Point SaveImage at the process node (loader is process_id - 1).
+        let save = obj
+            .get_mut(wiring.save_id)
+            .ok_or_else(|| format!("missing SaveImage node {}", wiring.save_id))?;
+        let inputs = save
+            .get_mut("inputs")
+            .and_then(|v| v.as_object_mut())
+            .ok_or_else(|| format!("SaveImage {} missing inputs", wiring.save_id))?;
+        inputs.insert("images".into(), json!([process_key, 0]));
+        return Ok(graph);
+    }
+
+    let save = obj
+        .get_mut(wiring.save_id)
+        .ok_or_else(|| format!("missing SaveImage node {}", wiring.save_id))?;
+    let inputs = save
+        .get_mut("inputs")
+        .and_then(|v| v.as_object_mut())
+        .ok_or_else(|| format!("SaveImage {} missing inputs", wiring.save_id))?;
+    inputs.insert("images".into(), json!([up_key, 0]));
+
+    Ok(graph)
+}
+
+fn finish_recipe(
+    graph: Value,
+    values: &HashMap<String, Value>,
+    manifest: &ManifestFile,
+    model_src: (&str, u64),
+    clip_src: (&str, u64),
+    model_consumers: &[(&str, &str)],
+    clip_consumers: &[(&str, &str)],
+    wiring: UpscaleWiring,
+) -> Result<Value, String> {
+    let graph = finish_with_loras(
+        graph,
+        values,
+        model_src,
+        clip_src,
+        model_consumers,
+        clip_consumers,
+    )?;
+    finish_with_upscale(graph, values, manifest, wiring)
+}
+
 /// Krea 2: UNET + CLIP(krea2) + VAE + EmptyLatentImage + KSampler (no sampling wrapper).
 /// Negative is ConditioningZeroOut (no text negative). Official turbo template defaults.
 fn compile_krea2(
@@ -360,7 +668,7 @@ fn compile_krea2(
         .and_then(|v| v.as_str())
         .unwrap_or("default");
 
-    finish_with_loras(
+    finish_recipe(
         json!({
             "1": {
                 "class_type": "UNETLoader",
@@ -431,10 +739,20 @@ fn compile_krea2(
             }
         }),
         values,
+        manifest,
         ("1", 0),
         ("2", 0),
         &[("7", "model")],
         &[("4", "clip")],
+        UpscaleWiring {
+            model_from: ("7", "model"),
+            positive: ("4", 0),
+            negative: ("5", 0),
+            vae: ("3", 0),
+            decode_id: "8",
+            save_id: "9",
+            guider: None,
+        },
     )
 }
 
@@ -544,13 +862,23 @@ fn compile_z_image(
             }
         }
     });
-    finish_with_loras(
+    finish_recipe(
         graph,
         values,
+        manifest,
         ("1", 0),
         ("2", 0),
         &[("7", "model")],
         &[("4", "clip")],
+        UpscaleWiring {
+            model_from: ("8", "model"),
+            positive: ("4", 0),
+            negative: ("5", 0),
+            vae: ("3", 0),
+            decode_id: "9",
+            save_id: "10",
+            guider: None,
+        },
     )
 }
 
@@ -595,7 +923,7 @@ fn compile_flux(
         .and_then(|v| v.as_f64())
         .unwrap_or(0.5);
 
-    finish_with_loras(
+    finish_recipe(
         json!({
             "1": {
                 "class_type": "UNETLoader",
@@ -683,10 +1011,20 @@ fn compile_flux(
             }
         }),
         values,
+        manifest,
         ("1", 0),
         ("2", 0),
         &[("8", "model")],
         &[("4", "clip")],
+        UpscaleWiring {
+            model_from: ("9", "model"),
+            positive: ("5", 0),
+            negative: ("6", 0),
+            vae: ("3", 0),
+            decode_id: "10",
+            save_id: "11",
+            guider: None,
+        },
     )
 }
 
@@ -724,7 +1062,7 @@ fn compile_flux2(
         .and_then(|v| v.as_str())
         .unwrap_or("default");
 
-    finish_with_loras(
+    finish_recipe(
         json!({
             "1": {
                 "class_type": "UNETLoader",
@@ -816,10 +1154,24 @@ fn compile_flux2(
             }
         }),
         values,
+        manifest,
         ("1", 0),
         ("2", 0),
         &[("8", "model")],
         &[("4", "clip")],
+        UpscaleWiring {
+            model_from: ("8", "model"),
+            positive: ("5", 0),
+            negative: ("5", 0),
+            vae: ("3", 0),
+            decode_id: "12",
+            save_id: "13",
+            guider: Some(GuiderWiring {
+                guider: ("8", 0),
+                sampler: ("9", 0),
+                sigmas: ("10", 0),
+            }),
+        },
     )
 }
 
@@ -915,13 +1267,30 @@ fn compile_checkpoint(
             .map(|i| i.insert("vae".into(), json!(["8", 0])));
     }
 
-    finish_with_loras(
+    // VAE may be checkpoint slot 2 or optional VAELoader "8".
+    let vae_link: (&'static str, u64) = if model_by_role(&manifest.models, "vae").is_ok() {
+        ("8", 0)
+    } else {
+        ("1", 2)
+    };
+
+    finish_recipe(
         graph,
         values,
+        manifest,
         ("1", 0),
         ("1", 1),
         &[("5", "model")],
         &[("2", "clip"), ("3", "clip")],
+        UpscaleWiring {
+            model_from: ("5", "model"),
+            positive: ("2", 0),
+            negative: ("3", 0),
+            vae: vae_link,
+            decode_id: "6",
+            save_id: "7",
+            guider: None,
+        },
     )
 }
 
@@ -1129,5 +1498,216 @@ mod tests {
         let g = compile(&m, &values).unwrap();
         assert_eq!(g["1"]["class_type"], "CheckpointLoaderSimple");
         assert_eq!(g["3"]["inputs"]["text"], "blurry");
+    }
+
+    #[test]
+    fn compiles_krea2_with_sr_upscale() {
+        let m = manifest_from(json!({
+            "id": "krea2-turbo",
+            "name": "Krea 2",
+            "category": "image",
+            "runtime": "comfyui",
+            "flowType": "txt2img",
+            "arch": "krea2",
+            "models": [
+                { "filename": "unet.safetensors", "path": "diffusion_models", "role": "unet" },
+                { "filename": "te.safetensors", "path": "text_encoders", "role": "text_encoder" },
+                { "filename": "vae.safetensors", "path": "vae", "role": "vae" }
+            ]
+        }));
+        let mut values = HashMap::new();
+        values.insert("prompt".into(), json!("test"));
+        values.insert(
+            "upscale".into(),
+            json!({
+                "modelId": "4x-ultrasharp",
+                "filename": "4x-UltraSharp.pth",
+                "scale": 4,
+                "usdu": false
+            }),
+        );
+        let g = compile(&m, &values).unwrap();
+        assert_eq!(g["200"]["class_type"], "UpscaleModelLoader");
+        assert_eq!(g["200"]["inputs"]["model_name"], "4x-UltraSharp.pth");
+        assert_eq!(g["201"]["class_type"], "ImageUpscaleWithModel");
+        assert_eq!(g["201"]["inputs"]["image"], json!(["8", 0]));
+        assert_eq!(g["9"]["inputs"]["images"], json!(["201", 0]));
+    }
+
+    #[test]
+    fn compiles_sdxl_with_usdu() {
+        let m = manifest_from(json!({
+            "id": "sdxl-test",
+            "name": "SDXL",
+            "category": "image",
+            "runtime": "comfyui",
+            "flowType": "txt2img",
+            "arch": "sdxl",
+            "sampler": "euler",
+            "scheduler": "normal",
+            "capabilities": { "negative": true },
+            "models": [
+                { "filename": "sdxl.safetensors", "path": "checkpoints", "role": "checkpoint" }
+            ]
+        }));
+        let mut values = HashMap::new();
+        values.insert("prompt".into(), json!("portrait"));
+        values.insert("cfg".into(), json!(7));
+        values.insert("steps".into(), json!(20));
+        values.insert("seed".into(), json!(1));
+        values.insert(
+            "upscale".into(),
+            json!({
+                "modelId": "realesrgan-x2plus",
+                "filename": "RealESRGAN_x2plus.pth",
+                "scale": 2,
+                "usdu": true
+            }),
+        );
+        let g = compile(&m, &values).unwrap();
+        assert_eq!(g["200"]["class_type"], "UpscaleModelLoader");
+        assert_eq!(g["201"]["class_type"], "UltimateSDUpscale");
+        assert_eq!(g["201"]["inputs"]["upscale_by"], 2.0);
+        assert_eq!(g["201"]["inputs"]["denoise"], 0.25);
+        assert_eq!(g["7"]["inputs"]["images"], json!(["201", 0]));
+    }
+
+    #[test]
+    fn usdu_defaults_to_2x_and_low_denoise_on_krea2() {
+        let m = manifest_from(json!({
+            "id": "krea2-turbo",
+            "name": "Krea 2",
+            "category": "image",
+            "runtime": "comfyui",
+            "flowType": "txt2img",
+            "arch": "krea2",
+            "models": [
+                { "filename": "unet.safetensors", "path": "diffusion_models", "role": "unet" },
+                { "filename": "te.safetensors", "path": "text_encoders", "role": "text_encoder" },
+                { "filename": "vae.safetensors", "path": "vae", "role": "vae" }
+            ]
+        }));
+        let mut values = HashMap::new();
+        values.insert("prompt".into(), json!("test"));
+        values.insert("steps".into(), json!(8));
+        values.insert(
+            "upscale".into(),
+            json!({
+                "filename": "4x-UltraSharp.pth",
+                "scale": 4,
+                "usdu": true
+            }),
+        );
+        let g = compile(&m, &values).unwrap();
+        assert_eq!(g["201"]["class_type"], "UltimateSDUpscale");
+        assert_eq!(g["201"]["inputs"]["upscale_by"], 2.0);
+        assert_eq!(g["201"]["inputs"]["denoise"], 0.15);
+        assert_eq!(g["201"]["inputs"]["steps"], 8);
+    }
+
+    #[test]
+    fn usdu_honors_explicit_scale_steps_denoise() {
+        let m = manifest_from(json!({
+            "id": "krea2-turbo",
+            "name": "Krea 2",
+            "category": "image",
+            "runtime": "comfyui",
+            "flowType": "txt2img",
+            "arch": "krea2",
+            "models": [
+                { "filename": "unet.safetensors", "path": "diffusion_models", "role": "unet" },
+                { "filename": "te.safetensors", "path": "text_encoders", "role": "text_encoder" },
+                { "filename": "vae.safetensors", "path": "vae", "role": "vae" }
+            ]
+        }));
+        let mut values = HashMap::new();
+        values.insert("prompt".into(), json!("test"));
+        values.insert(
+            "upscale".into(),
+            json!({
+                "filename": "4x-UltraSharp.pth",
+                "scale": 4,
+                "usdu": true,
+                "usduScale": 4,
+                "usduSteps": 6,
+                "usduDenoise": 0.35
+            }),
+        );
+        let g = compile(&m, &values).unwrap();
+        assert_eq!(g["201"]["inputs"]["upscale_by"], 4.0);
+        assert_eq!(g["201"]["inputs"]["steps"], 6);
+        assert_eq!(g["201"]["inputs"]["denoise"], 0.35);
+    }
+
+    #[test]
+    fn compiles_krea2_with_supir() {
+        let m = manifest_from(json!({
+            "id": "krea2-turbo",
+            "name": "Krea 2",
+            "category": "image",
+            "runtime": "comfyui",
+            "flowType": "txt2img",
+            "arch": "krea2",
+            "models": [
+                { "filename": "unet.safetensors", "path": "diffusion_models", "role": "unet" },
+                { "filename": "te.safetensors", "path": "text_encoders", "role": "text_encoder" },
+                { "filename": "vae.safetensors", "path": "vae", "role": "vae" }
+            ]
+        }));
+        let mut values = HashMap::new();
+        values.insert("prompt".into(), json!("portrait"));
+        // Above numpy/lightning u32 max — must wrap for SUPIR.
+        values.insert("seed".into(), json!(4_745_625_442_457_469i64));
+        values.insert(
+            "upscale".into(),
+            json!({
+                "modelId": "supir-v0q",
+                "filename": "SUPIR-v0Q_fp16.safetensors",
+                "scale": 2,
+                "kind": "supir",
+                "usdu": false,
+                "sdxlFilename": "sd_xl_base_1.0.safetensors"
+            }),
+        );
+        let g = compile(&m, &values).unwrap();
+        assert_eq!(g["200"]["class_type"], "SUPIR_Upscale");
+        assert_eq!(g["200"]["inputs"]["supir_model"], "SUPIR-v0Q_fp16.safetensors");
+        assert_eq!(g["200"]["inputs"]["sdxl_model"], "sd_xl_base_1.0.safetensors");
+        assert_eq!(g["200"]["inputs"]["scale_by"], 2.0);
+        assert_eq!(g["200"]["inputs"]["seed"], 112_990_077);
+        assert_eq!(g["9"]["inputs"]["images"], json!(["200", 0]));
+    }
+
+    #[test]
+    fn compiles_flux2_usdu_uses_guider_node() {
+        let m = manifest_from(json!({
+            "id": "flux2-dev",
+            "name": "Flux.2 Dev",
+            "category": "image",
+            "runtime": "comfyui",
+            "flowType": "txt2img",
+            "arch": "flux2",
+            "sampler": "euler",
+            "models": [
+                { "filename": "flux2.safetensors", "path": "diffusion_models", "role": "unet" },
+                { "filename": "clip.safetensors", "path": "text_encoders", "role": "clip" },
+                { "filename": "vae.safetensors", "path": "vae", "role": "vae" }
+            ]
+        }));
+        let mut values = HashMap::new();
+        values.insert("prompt".into(), json!("fox"));
+        values.insert(
+            "upscale".into(),
+            json!({
+                "filename": "4x-UltraSharp.pth",
+                "scale": 4,
+                "usdu": true
+            }),
+        );
+        let g = compile(&m, &values).unwrap();
+        assert_eq!(g["201"]["class_type"], "UltimateSDUpscaleGuider");
+        assert_eq!(g["201"]["inputs"]["guider"], json!(["8", 0]));
+        assert_eq!(g["201"]["inputs"]["upscale_by"], 2.0);
+        assert_eq!(g["13"]["inputs"]["images"], json!(["201", 0]));
     }
 }

@@ -429,6 +429,64 @@ fn gallery_day_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(gallery_dir(app)?.join(day))
 }
 
+/// Sidecar JPEG for the gallery grid — keeps the rail from decoding full 2K–4K PNGs.
+const GALLERY_THUMB_MAX: u32 = 384;
+
+fn gallery_thumbnail_path(image_path: &Path) -> PathBuf {
+    let stem = image_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("image");
+    image_path.with_file_name(format!("{stem}.thumb.jpg"))
+}
+
+/// Write a small JPEG next to `image_path`. Returns the thumbnail path.
+pub fn write_gallery_thumbnail(image_path: &Path) -> Result<PathBuf, String> {
+    if !image_path.is_file() {
+        return Err(format!("gallery image missing: {}", image_path.display()));
+    }
+    let dest = gallery_thumbnail_path(image_path);
+    if dest.is_file() {
+        return Ok(dest);
+    }
+    let img = image::open(image_path).map_err(|e| format!("open gallery image: {e}"))?;
+    let thumb = img.thumbnail(GALLERY_THUMB_MAX, GALLERY_THUMB_MAX);
+    thumb
+        .save_with_format(&dest, image::ImageFormat::Jpeg)
+        .map_err(|e| format!("write gallery thumbnail: {e}"))?;
+    Ok(dest)
+}
+
+/// Ensure each item has a usable on-disk thumbnail.
+/// Returns updated items plus `(id, thumb_path)` pairs that should be persisted.
+pub fn ensure_gallery_thumbnails(
+    items: Vec<GalleryItem>,
+) -> (Vec<GalleryItem>, Vec<(String, String)>) {
+    let mut out = Vec::with_capacity(items.len());
+    let mut updates = Vec::new();
+    for mut item in items {
+        let thumb_ok = item
+            .thumbnail_path
+            .as_deref()
+            .map(|p| Path::new(p).is_file())
+            .unwrap_or(false);
+        if !thumb_ok {
+            match write_gallery_thumbnail(Path::new(&item.path)) {
+                Ok(thumb) => {
+                    let path = thumb.display().to_string();
+                    updates.push((item.id.clone(), path.clone()));
+                    item.thumbnail_path = Some(path);
+                }
+                Err(e) => {
+                    log::warn!("gallery thumbnail skipped for {}: {e}", item.id);
+                }
+            }
+        }
+        out.push(item);
+    }
+    (out, updates)
+}
+
 /// Comfy-style name: `{prefix}_{NNNNN}_.ext` with a day-folder counter.
 /// (Deleting Comfy's output makes it reuse `00001_`, so we own the sequence.)
 fn next_gallery_dest(dir: &Path, prefix: &str, ext: &str) -> PathBuf {
@@ -575,6 +633,41 @@ pub fn run_generate(
         {
             return Err("This blueprint does not support LoRAs".into());
         }
+        if values.get("upscale").is_some() {
+            let usdu = values
+                .get("upscale")
+                .and_then(|v| v.get("usdu"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let model_id = values
+                .get("upscale")
+                .and_then(|v| v.get("modelId"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let is_supir = model_id.starts_with("supir-");
+            if is_supir {
+                let _ = app.emit(
+                    "jobs://progress",
+                    json!({
+                        "jobId": job.id,
+                        "stage": "upscale",
+                        "message": "Ensuring SUPIR…",
+                    }),
+                );
+                crate::upscale::ensure_supir_custom_node(app)?;
+            } else if usdu {
+                let _ = app.emit(
+                    "jobs://progress",
+                    json!({
+                        "jobId": job.id,
+                        "stage": "upscale",
+                        "message": "Ensuring Ultimate SD Upscale…",
+                    }),
+                );
+                crate::upscale::ensure_usdu_custom_node(app)?;
+            }
+            crate::upscale::resolve_for_generate(app, &mut values)?;
+        }
         let workflow = crate::recipe::compile(&manifest, &values)?;
         (manifest, workflow)
     };
@@ -676,6 +769,7 @@ pub fn run_generate(
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
+        let upscale_meta = values.get("upscale").cloned().unwrap_or(json!(null));
         let meta = json!({
             "version": 1,
             "blueprintId": blueprint_id,
@@ -685,13 +779,23 @@ pub fn run_generate(
             "prompt": prompt,
             "promptId": prompt_id,
             "filename": image.filename,
+            "upscaleModel": upscale_meta.get("modelId").cloned().unwrap_or(json!(null)),
+            "usduEnabled": upscale_meta.get("usdu").cloned().unwrap_or(json!(false)),
             // Full control map used for this generate (prompt, seed, size, steps, …).
             "values": values,
         })
         .to_string();
+        let thumb_path = write_gallery_thumbnail(&dest)
+            .ok()
+            .map(|p| p.display().to_string());
         let item = {
             let db = db.lock().map_err(|e| e.to_string())?;
-            db.add_gallery_item(Some(&job.id), &dest.display().to_string(), None, &meta)?
+            db.add_gallery_item(
+                Some(&job.id),
+                &dest.display().to_string(),
+                thumb_path.as_deref(),
+                &meta,
+            )?
         };
         let _ = app.emit("gallery://updated", &item);
         items.push(item);

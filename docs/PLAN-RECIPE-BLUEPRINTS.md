@@ -2,7 +2,7 @@
 
 > Status: **in progress** (2026-07-22)  
 > Relates to: [`PLAN.md`](./PLAN.md) — revises Creator Mode and what a Blueprint stores for image generation.  
-> Implemented: `recipe.rs` compilers (`z-image`, `krea2`, `flux`, `flux2`, `sdxl`/`sd15`); generate is **recipe-only**; UI controls synthesized from arch/capabilities; Creator recipe form; Official `z-image-turbo` / `krea2-turbo` recipes; **multi-arch LoRA library** (`loras/official` + user packs, User Mode stack, `LoraLoader` compile).
+> Implemented: `recipe.rs` compilers (`z-image`, `krea2`, `flux`, `flux2`, `sdxl`/`sd15`); generate is **recipe-only**; UI controls synthesized from arch/capabilities; Creator recipe form; Official `z-image-turbo` / `krea2-turbo` recipes; **multi-arch LoRA library** (`loras/official` + user packs, User Mode stack, `LoraLoader` compile); **shared upscale refine** (Official SR including Nomos + optional USDU + SUPIR generative, Advanced → Refine).
 
 ## Summary
 
@@ -53,15 +53,17 @@ Official / My blueprints stay installable packages on disk; only the **payload s
 
 Reuse the existing control `group` idea. Target groups:
 
-| Group          | Controls                            | Notes                                                 |
-| -------------- | ----------------------------------- | ----------------------------------------------------- |
-| **prompt**     | Positive; negative (when capable)   | Negative visibility is dynamic (see below)            |
-| **basic**      | Image count, width, height          | Aspect presets can stay as UX sugar over width/height |
-| **core**       | Seed, steps, CFG                    | Seed `0` = random (already)                           |
-| **refine**     | Upscale / detailer toggles + params | Later; only if `capabilities.upscale`                 |
-| **controlnet** | Enable + model + strength + image   | Later; only if `capabilities.controlnet`              |
+| Group          | Controls                             | Notes                                                                                                           |
+| -------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| **prompt**     | Positive; negative (when capable)    | Negative visibility is dynamic (see below)                                                                      |
+| **basic**      | Image count, width, height           | Aspect presets can stay as UX sugar over width/height                                                           |
+| **core**       | Seed, steps, CFG                     | Seed `0` = random (already)                                                                                     |
+| **refine**     | Upscale model + optional USDU toggle | Shared library (like LoRAs)—**not** per-blueprint; see [`RESEARCH-AI-UPSCALING.md`](./RESEARCH-AI-UPSCALING.md) |
+| **controlnet** | Enable + model + strength + image    | Later; only if `capabilities.controlnet`                                                                        |
 
 LoRAs are a **shared library** (not blueprint `models[]`): Official + user multi-arch packs under `loras/`, files in `models/loras/`. User Mode picks a stack when `capabilities.loras` is true; the compiler filters by blueprint `arch`.
+
+Upscale is the same pattern: shared SR weights in `models/upscale_models/` (UltraSharp, RealESRGAN, Nomos family), optional USDU custom node once, and optional SUPIR (`checkpoints/` + kijai node + companion SDXL). User Mode refine controls apply to **all image blueprints**. Never package upscalers in blueprint `models[]`. Compilers append SR / USDU / SUPIR after decode; USDU wiring is arch-specific, the asset library is not.
 
 Settings that a recipe does not support are hidden, not shown disabled for every pack.
 
@@ -85,8 +87,7 @@ Illustrative manifest (names can evolve; keep camelCase JSON consistent with tod
   "capabilities": {
     "negative": false,
     "loras": true,
-    "controlnet": false,
-    "upscale": false
+    "controlnet": false
   },
   "defaults": {
     "steps": 8,
@@ -128,7 +129,7 @@ Preferred model roles the compiler understands:
 - `vae`
 - `text_encoder` (repeatable)
 - ~~`lora` in blueprint models~~ — use LoRA library packs instead (user-picked at generate)
-- later: `controlnet`, `upscale`
+- later: `controlnet` (upscale = shared library, not a blueprint model role)
 
 `path` still maps to the shared models library folders. `url` remains optional when the file is already local.
 
@@ -284,7 +285,7 @@ No change to “models already on disk ⇒ skip download.”
 ### Phase D — Optional blocks
 
 - LoRA stack in UI + compiler ✅ (library packs, arch-filtered, Official cinematic-shot / age-slider / lenovo-ultrareal)
-- Upscale refine group
+- Upscale refine group ✅ (shared SR + Nomos + optional USDU + SUPIR; not per-blueprint — see [`RESEARCH-AI-UPSCALING.md`](./RESEARCH-AI-UPSCALING.md))
 - ControlNet group
 
 ### Phase E — (Optional) Advanced custom workflows
@@ -298,7 +299,7 @@ No change to “models already on disk ⇒ skip download.”
 - A user can install a recipe Blueprint on a clean machine and generate **without** opening Comfy or installing random node packs (beyond what the recipe lists).
 - Creator can publish a shareable pack in minutes by filling model slots — no node binding UI.
 - Negative prompt appears only when it can matter.
-- Adding ControlNet/upscale later does not require rewriting existing recipes (capabilities default false).
+- Adding ControlNet later does not require rewriting existing recipes (capabilities default false). Upscale is shared like LoRAs—no per-recipe capability or model slot.
 
 ---
 

@@ -11,6 +11,7 @@ use crate::generate;
 use crate::gpu::{self, GpuInfo};
 use crate::loras::{self, LoraPack, SaveUserLoraArgs};
 use crate::providers::{self, ResolvedModelUrl};
+use crate::upscale::{self, UpscaleModelInfo};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -28,8 +29,8 @@ pub struct AppState {
     pub blueprint_install_busy: Mutex<Option<String>>,
     /// Active LoRA install key `"id:arch"`, if any.
     pub lora_install_busy: Mutex<Option<String>>,
-    /// Waiting LoRA installs `(id, arch)` — drained one-at-a-time.
-    pub lora_install_queue: Mutex<Vec<(String, String)>>,
+    /// Active upscale install id (or `"usdu"` / `"supir"`), if any.
+    pub upscale_install_busy: Mutex<Option<String>>,
     /// Job ids the user asked to cancel.
     pub cancelled_jobs: Mutex<HashSet<String>>,
 }
@@ -109,8 +110,19 @@ pub fn update_job_status(
 
 #[tauri::command]
 pub fn list_gallery(state: State<'_, AppState>) -> Result<Vec<GalleryItem>, String> {
-    let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.list_gallery()
+    let items = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        db.list_gallery()?
+    };
+    // Backfill missing thumbs without holding the DB lock (decode can be slow once).
+    let (items, updates) = generate::ensure_gallery_thumbnails(items);
+    if !updates.is_empty() {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        for (id, path) in updates {
+            let _ = db.set_gallery_thumbnail(&id, &path);
+        }
+    }
+    Ok(items)
 }
 
 #[tauri::command]
@@ -145,6 +157,23 @@ pub fn delete_gallery_item(
         let path = PathBuf::from(&item.path);
         if path.is_file() {
             let _ = fs::remove_file(&path);
+        }
+        if let Some(thumb) = item.thumbnail_path.as_deref() {
+            let thumb = PathBuf::from(thumb);
+            if thumb.is_file() {
+                let _ = fs::remove_file(&thumb);
+            }
+        } else {
+            // Sidecar naming used before thumbnail_path was stored.
+            let sidecar = path.with_file_name(format!(
+                "{}.thumb.jpg",
+                path.file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("image")
+            ));
+            if sidecar.is_file() {
+                let _ = fs::remove_file(&sidecar);
+            }
         }
         // Remove empty day folder (YYYY-MM-DD) or legacy job folder (gallery/<job_id>/).
         if let Some(parent) = path.parent() {
@@ -826,8 +855,6 @@ pub fn install_official_blueprint(
             let _ = app_bg.emit("blueprints://sizes", &list);
         }
         let _ = app_bg.emit("blueprints://updated", &blueprint_id);
-        // LoRAs may have been queued while the blueprint was downloading.
-        pump_lora_install_queue(&app_bg, &state);
     });
 
     Ok(())
@@ -849,8 +876,7 @@ pub fn get_lora(app: AppHandle, id: String) -> Result<LoraPack, String> {
     loras::get_lora(&app, &id)
 }
 
-/// Download one arch variant for a LoRA pack (background).
-/// Multiple requests are queued and run one-at-a-time (shared downloader).
+/// Download one arch variant for a LoRA pack (background). Queueing is owned by the UI.
 #[tauri::command]
 pub fn install_lora_variant(
     app: AppHandle,
@@ -858,90 +884,16 @@ pub fn install_lora_variant(
     id: String,
     arch: String,
 ) -> Result<(), String> {
-    enqueue_lora_install(&app, &state, id, arch)
-}
-
-fn lora_job_key(id: &str, arch: &str) -> String {
-    format!("{id}:{arch}")
-}
-
-fn enqueue_lora_install(
-    app: &AppHandle,
-    state: &AppState,
-    id: String,
-    arch: String,
-) -> Result<(), String> {
-    let key = lora_job_key(&id, &arch);
-    {
-        let busy = state
-            .lora_install_busy
-            .lock()
-            .map_err(|e| e.to_string())?;
-        let mut queue = state
-            .lora_install_queue
-            .lock()
-            .map_err(|e| e.to_string())?;
-        if busy.as_ref() == Some(&key)
-            || queue.iter().any(|(i, a)| i == &id && a == &arch)
-        {
-            return Ok(());
-        }
-        if busy.is_some() {
-            queue.push((id.clone(), arch.clone()));
-            let _ = app.emit(
-                "loras://progress",
-                serde_json::json!({
-                    "loraId": id,
-                    "arch": arch,
-                    "stage": "queued",
-                    "message": format!("Queued {id} ({arch})"),
-                }),
-            );
-            return Ok(());
-        }
-    }
-    start_lora_install_thread(app, state, id, arch)
-}
-
-fn start_lora_install_thread(
-    app: &AppHandle,
-    state: &AppState,
-    id: String,
-    arch: String,
-) -> Result<(), String> {
-    // Don't race the blueprint downloader (shared cancel + progress).
-    {
-        let bp_busy = state
-            .blueprint_install_busy
-            .lock()
-            .map_err(|e| e.to_string())?;
-        if bp_busy.is_some() {
-            let mut queue = state
-                .lora_install_queue
-                .lock()
-                .map_err(|e| e.to_string())?;
-            if !queue.iter().any(|(i, a)| i == &id && a == &arch) {
-                queue.push((id.clone(), arch.clone()));
-            }
-            let _ = app.emit(
-                "loras://progress",
-                serde_json::json!({
-                    "loraId": id,
-                    "arch": arch,
-                    "stage": "queued",
-                    "message": format!("Queued {id} ({arch}) — waiting for blueprint install"),
-                }),
-            );
-            return Ok(());
-        }
-    }
-
+    let key = format!("{id}:{arch}");
     {
         let mut busy = state
             .lora_install_busy
             .lock()
             .map_err(|e| e.to_string())?;
-        *busy = Some(lora_job_key(&id, &arch));
+        if let Some(current) = busy.as_ref() {
+            return Err(format!("Already installing LoRA: {current}"));
+        }
+        *busy = Some(key);
     }
     download::clear_cancel();
 
@@ -972,32 +924,9 @@ fn start_lora_install_thread(
         }
         download::clear_cancel();
         let _ = app_bg.emit("loras://updated", &lora_id);
-        pump_lora_install_queue(&app_bg, &state);
     });
 
     Ok(())
-}
-
-fn pump_lora_install_queue(app: &AppHandle, state: &AppState) {
-    let next = {
-        let Ok(mut queue) = state.lora_install_queue.lock() else {
-            return;
-        };
-        if queue.is_empty() {
-            return;
-        }
-        // Wait until blueprint install finishes before starting LoRAs.
-        if let Ok(bp) = state.blueprint_install_busy.lock() {
-            if bp.is_some() {
-                return;
-            }
-        }
-        Some(queue.remove(0))
-    };
-    let Some((id, arch)) = next else {
-        return;
-    };
-    let _ = start_lora_install_thread(app, state, id, arch);
 }
 
 #[tauri::command]
@@ -1008,6 +937,118 @@ pub fn save_user_lora(app: AppHandle, args: SaveUserLoraArgs) -> Result<LoraPack
 #[tauri::command]
 pub fn delete_user_lora(app: AppHandle, id: String) -> Result<(), String> {
     loras::delete_user_lora(&app, &id)
+}
+
+#[tauri::command]
+pub fn list_upscalers(app: AppHandle) -> Result<Vec<UpscaleModelInfo>, String> {
+    upscale::list_upscalers(&app)
+}
+
+#[tauri::command]
+pub fn usdu_node_ready(app: AppHandle) -> Result<bool, String> {
+    Ok(upscale::usdu_installed(&app))
+}
+
+#[tauri::command]
+pub fn supir_node_ready(app: AppHandle) -> Result<bool, String> {
+    Ok(upscale::supir_installed(&app))
+}
+
+/// Download one Official SR/SUPIR weight (background). Queueing is owned by the UI.
+#[tauri::command]
+pub fn install_upscaler(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    start_upscale_install(app, state, id)
+}
+
+/// Clone Ultimate SD Upscale custom node if missing (background as `"usdu"`).
+#[tauri::command]
+pub fn ensure_usdu_node(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    if upscale::usdu_installed(&app) {
+        let _ = app.emit(
+            "upscale://progress",
+            serde_json::json!({
+                "modelId": "usdu",
+                "stage": "done",
+                "message": "Ultimate SD Upscale already installed",
+            }),
+        );
+        return Ok(());
+    }
+    start_upscale_install(app, state, "usdu".into())
+}
+
+/// Clone SUPIR custom node + pip deps if missing (background as `"supir"`).
+#[tauri::command]
+pub fn ensure_supir_node(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    if upscale::supir_installed(&app) {
+        let _ = app.emit(
+            "upscale://progress",
+            serde_json::json!({
+                "modelId": "supir",
+                "stage": "done",
+                "message": "SUPIR already installed",
+            }),
+        );
+        return Ok(());
+    }
+    start_upscale_install(app, state, "supir".into())
+}
+
+fn start_upscale_install(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    {
+        let mut busy = state
+            .upscale_install_busy
+            .lock()
+            .map_err(|e| e.to_string())?;
+        if let Some(current) = busy.as_ref() {
+            return Err(format!("Already installing upscale: {current}"));
+        }
+        *busy = Some(id.clone());
+    }
+    download::clear_cancel();
+
+    let app_bg = app.clone();
+    let job_id = id;
+    std::thread::spawn(move || {
+        let result = if job_id == "usdu" {
+            upscale::ensure_usdu_custom_node(&app_bg)
+        } else if job_id == "supir" {
+            upscale::ensure_supir_custom_node(&app_bg)
+        } else {
+            upscale::install_upscaler(&app_bg, &job_id)
+        };
+        let state = app_bg.state::<AppState>();
+        if let Err(err) = &result {
+            let stage = if err.as_str() == "cancelled" {
+                "cancelled"
+            } else {
+                "error"
+            };
+            let _ = app_bg.emit(
+                "upscale://progress",
+                serde_json::json!({
+                    "modelId": job_id,
+                    "stage": stage,
+                    "message": err,
+                }),
+            );
+        }
+        if let Ok(mut busy) = state.upscale_install_busy.lock() {
+            *busy = None;
+        }
+        download::clear_cancel();
+        let _ = app_bg.emit("upscale://updated", &job_id);
+    });
+
+    Ok(())
 }
 
 #[tauri::command]

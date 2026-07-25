@@ -140,8 +140,11 @@ export function StudioChrome({ children }: { children: ReactNode }) {
         open={s.modelsOpen}
         onOpenChange={s.setModelsOpen}
         preferArch={s.activeDetail?.arch ?? null}
-        onLoraInstallStarted={(id, arch, filename) => {
-          s.trackLoraInstall(id, arch, filename, s.loraInstallingKey == null)
+        onInstallLora={(id, arch) => {
+          void s.beginLoraInstall(id, arch)
+        }}
+        onInstallUpscaler={(id) => {
+          void s.beginUpscaleInstall(id)
         }}
       />
 

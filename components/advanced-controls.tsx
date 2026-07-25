@@ -3,6 +3,7 @@
 import { DicesIcon, HistoryIcon } from "lucide-react"
 import type { Dispatch, SetStateAction } from "react"
 import { LoraStack } from "@/components/lora-stack"
+import { RefineControls } from "@/components/refine-controls"
 import { Button } from "@/components/ui/button"
 import {
   Frame,
@@ -17,7 +18,12 @@ import {
 } from "@/components/ui/number-field"
 import { Slider } from "@/components/ui/slider"
 import { WithTooltip } from "@/components/ui/tooltip"
-import type { BlueprintControl, LoraPack, LoraStackEntry } from "@/lib/host"
+import type {
+  BlueprintControl,
+  LoraPack,
+  LoraStackEntry,
+  UpscaleModelInfo,
+} from "@/lib/host"
 import { notifyInfo, notifySuccess } from "@/lib/notify"
 import { cn } from "@/lib/utils"
 
@@ -36,6 +42,26 @@ type AdvancedControlsProps = {
   onOpenLoraLibrary: () => void
   onInstallLoraVariant: (id: string, arch: string) => void
   showInstallHint: boolean
+  showRefine: boolean
+  upscaleEnabled: boolean
+  onUpscaleEnabledChange: (enabled: boolean) => void
+  upscaleModelId: string
+  onUpscaleModelIdChange: (id: string) => void
+  usduEnabled: boolean
+  onUsduEnabledChange: (enabled: boolean) => void
+  usduScale: 2 | 4
+  onUsduScaleChange: (scale: 2 | 4) => void
+  usduSteps: number
+  onUsduStepsChange: (steps: number) => void
+  usduDenoise: number
+  onUsduDenoiseChange: (denoise: number) => void
+  upscaleModels: UpscaleModelInfo[]
+  usduReady: boolean
+  upscaleInstallingId: string | null
+  onInstallUpscaler: (id: string) => void
+  onEnsureUsdu: () => void
+  refineWidth?: number
+  refineHeight?: number
 }
 
 export function AdvancedControls({
@@ -53,6 +79,26 @@ export function AdvancedControls({
   onOpenLoraLibrary,
   onInstallLoraVariant,
   showInstallHint,
+  showRefine,
+  upscaleEnabled,
+  onUpscaleEnabledChange,
+  upscaleModelId,
+  onUpscaleModelIdChange,
+  usduEnabled,
+  onUsduEnabledChange,
+  usduScale,
+  onUsduScaleChange,
+  usduSteps,
+  onUsduStepsChange,
+  usduDenoise,
+  onUsduDenoiseChange,
+  upscaleModels,
+  usduReady,
+  upscaleInstallingId,
+  onInstallUpscaler,
+  onEnsureUsdu,
+  refineWidth,
+  refineHeight,
 }: AdvancedControlsProps) {
   const seedControl = controls.find((c) => c.id === "seed")
   const stepsControl = controls.find((c) => c.id === "steps")
@@ -267,6 +313,32 @@ export function AdvancedControls({
         </Frame>
       ) : null}
 
+      {showRefine ? (
+        <RefineControls
+          enabled={upscaleEnabled}
+          onEnabledChange={onUpscaleEnabledChange}
+          modelId={upscaleModelId}
+          onModelIdChange={onUpscaleModelIdChange}
+          usduEnabled={usduEnabled}
+          onUsduEnabledChange={onUsduEnabledChange}
+          usduScale={usduScale}
+          onUsduScaleChange={onUsduScaleChange}
+          usduSteps={usduSteps}
+          onUsduStepsChange={onUsduStepsChange}
+          usduDenoise={usduDenoise}
+          onUsduDenoiseChange={onUsduDenoiseChange}
+          models={upscaleModels}
+          usduReady={usduReady}
+          installingId={upscaleInstallingId}
+          onInstallModel={onInstallUpscaler}
+          onEnsureUsdu={onEnsureUsdu}
+          width={refineWidth}
+          height={refineHeight}
+          disabled={generating}
+          arch={activeArch}
+        />
+      ) : null}
+
       {supportsLoras && activeArch ? (
         <LoraStack
           arch={activeArch}
@@ -280,7 +352,7 @@ export function AdvancedControls({
         />
       ) : null}
 
-      {controls.length === 0 && !supportsLoras ? (
+      {controls.length === 0 && !supportsLoras && !showRefine ? (
         <p className="text-xs text-muted-foreground">
           No advanced controls for this blueprint.
         </p>

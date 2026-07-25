@@ -9,6 +9,7 @@ mod gpu;
 mod loras;
 mod providers;
 mod recipe;
+mod upscale;
 
 use comfy::ProcessState;
 use commands::AppState;
@@ -60,7 +61,7 @@ pub fn run() {
                 comfy_install_busy: Mutex::new(false),
                 blueprint_install_busy: Mutex::new(None),
                 lora_install_busy: Mutex::new(None),
-                lora_install_queue: Mutex::new(Vec::new()),
+                upscale_install_busy: Mutex::new(None),
                 cancelled_jobs: Mutex::new(Default::default()),
             });
 
@@ -125,6 +126,12 @@ pub fn run() {
             commands::install_lora_variant,
             commands::save_user_lora,
             commands::delete_user_lora,
+            commands::list_upscalers,
+            commands::install_upscaler,
+            commands::ensure_usdu_node,
+            commands::usdu_node_ready,
+            commands::ensure_supir_node,
+            commands::supir_node_ready,
             commands::list_model_files,
             commands::open_models_dir,
             commands::get_official_blueprint,

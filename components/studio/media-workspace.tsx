@@ -159,6 +159,36 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
               showInstallHint={Boolean(
                 s.selected && !s.isInstalled(s.selected)
               )}
+              showRefine={s.studioTab === "image"}
+              upscaleEnabled={s.upscaleEnabled}
+              onUpscaleEnabledChange={s.setUpscaleEnabled}
+              upscaleModelId={s.upscaleModelId}
+              onUpscaleModelIdChange={(id) => {
+                s.setUpscaleModelId(id)
+                const next = s.upscaleModels.find((m) => m.id === id)
+                if (next?.kind === "supir") s.setUsduEnabled(false)
+              }}
+              usduEnabled={s.usduEnabled}
+              onUsduEnabledChange={s.setUsduEnabled}
+              usduScale={s.usduScale}
+              onUsduScaleChange={s.setUsduScale}
+              usduSteps={s.usduSteps}
+              onUsduStepsChange={s.setUsduSteps}
+              usduDenoise={s.usduDenoise}
+              onUsduDenoiseChange={s.setUsduDenoise}
+              upscaleModels={s.upscaleModels}
+              usduReady={s.usduReady}
+              upscaleInstallingId={s.upscaleInstallingId}
+              onInstallUpscaler={(id) => {
+                void s.beginUpscaleInstall(id)
+              }}
+              onEnsureUsdu={() => {
+                void s.beginUsduInstall()
+              }}
+              refineWidth={Number(s.controlValues.width) || s.stageDims.width}
+              refineHeight={
+                Number(s.controlValues.height) || s.stageDims.height
+              }
             />
           </AdvancedPanel>
         </>

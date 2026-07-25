@@ -29,3 +29,4 @@ url = "2"
 sha2 = "0.10"
 sevenz-rust2 = "0.21"
 tungstenite = { version = "0.26", default-features = false, features = ["handshake"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }

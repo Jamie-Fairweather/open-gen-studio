@@ -531,6 +531,87 @@ export function onLoraProgress(
   return listen<LoraProgress>("loras://progress", (e) => handler(e.payload))
 }
 
+export type UpscaleKind = "sr" | "supir"
+
+export type UpscaleModelInfo = {
+  id: string
+  name: string
+  description: string
+  filename: string
+  url: string
+  scale: number
+  kind: UpscaleKind
+  ready: boolean
+}
+
+/** Generate refine payload — host resolves modelId → filename. */
+export type UpscaleGenerateValue = {
+  modelId: string
+  usdu: boolean
+  filename?: string
+  scale?: number
+  kind?: UpscaleKind
+  /** USDU enlarge factor — 2 or 4. */
+  usduScale?: 2 | 4
+  usduSteps?: number
+  usduDenoise?: number
+}
+
+export function defaultUsduSteps(arch?: string | null): number {
+  return arch === "krea2" || arch === "z-image" ? 8 : 12
+}
+
+export function defaultUsduDenoise(arch?: string | null): number {
+  if (arch === "krea2" || arch === "z-image") return 0.15
+  if (arch === "flux" || arch === "flux2") return 0.2
+  return 0.25
+}
+
+export type UpscaleProgress = {
+  modelId: string
+  stage: string
+  message: string
+  filename?: string
+}
+
+export async function listUpscalers(): Promise<UpscaleModelInfo[]> {
+  return invoke("list_upscalers")
+}
+
+export async function installUpscaler(id: string): Promise<void> {
+  return invoke("install_upscaler", { id })
+}
+
+export async function ensureUsduNode(): Promise<void> {
+  return invoke("ensure_usdu_node")
+}
+
+export async function usduNodeReady(): Promise<boolean> {
+  return invoke("usdu_node_ready")
+}
+
+export async function ensureSupirNode(): Promise<void> {
+  return invoke("ensure_supir_node")
+}
+
+export async function supirNodeReady(): Promise<boolean> {
+  return invoke("supir_node_ready")
+}
+
+export function onUpscalersUpdated(
+  handler: (id: string) => void
+): Promise<UnlistenFn> {
+  return listen<string>("upscale://updated", (e) => handler(e.payload))
+}
+
+export function onUpscaleProgress(
+  handler: (progress: UpscaleProgress) => void
+): Promise<UnlistenFn> {
+  return listen<UpscaleProgress>("upscale://progress", (e) =>
+    handler(e.payload)
+  )
+}
+
 export type ModelFileEntry = {
   relativePath: string
   bytes: number

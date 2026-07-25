@@ -5,6 +5,9 @@ import type {
   LoraStackEntry,
   StudioTab,
 } from "@/lib/host"
+import { defaultUsduDenoise, defaultUsduSteps } from "@/lib/host"
+
+const DEFAULT_UPSCALE_MODEL_ID = "4x-ultrasharp"
 
 export function isInstalled(bp: Blueprint): boolean {
   return bp.modelCount === 0 || bp.modelsReady >= bp.modelCount
@@ -21,17 +24,71 @@ export function pickDefaultBlueprintId(
   return installed?.id ?? forTab[0]?.id ?? null
 }
 
-/** Full gallery reuse: every stored control except prompt/loras (those are separate state). */
+/** Full gallery reuse: every stored control except prompt/loras/upscale (those are separate state). */
 export function applyReuseAllSettings(
   base: Record<string, unknown>,
   recipe: GalleryRecipe
 ): Record<string, unknown> {
   const next = { ...base }
   for (const [key, value] of Object.entries(recipe.values)) {
-    if (key === "prompt" || key === "loras") continue
+    if (key === "prompt" || key === "loras" || key === "upscale") continue
     next[key] = value
   }
   return next
+}
+
+/** Refine / USDU settings stored on gallery items as `values.upscale`. */
+export type ReusedUpscaleSettings = {
+  enabled: boolean
+  modelId: string
+  usduEnabled: boolean
+  usduScale: 2 | 4
+  usduSteps: number
+  usduDenoise: number
+}
+
+export function upscaleFromRecipe(
+  recipe: GalleryRecipe,
+  arch?: string | null
+): ReusedUpscaleSettings {
+  const raw = recipe.values.upscale
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {
+      enabled: false,
+      modelId: DEFAULT_UPSCALE_MODEL_ID,
+      usduEnabled: false,
+      usduScale: 2,
+      usduSteps: defaultUsduSteps(arch),
+      usduDenoise: defaultUsduDenoise(arch),
+    }
+  }
+  const row = raw as {
+    modelId?: unknown
+    usdu?: unknown
+    usduScale?: unknown
+    usduSteps?: unknown
+    usduDenoise?: unknown
+  }
+  const modelId =
+    typeof row.modelId === "string" && row.modelId
+      ? row.modelId
+      : DEFAULT_UPSCALE_MODEL_ID
+  const usduEnabled = row.usdu === true
+  const usduScale = row.usduScale === 4 ? 4 : 2
+  const stepsRaw = Number(row.usduSteps)
+  const denoiseRaw = Number(row.usduDenoise)
+  return {
+    enabled: true,
+    modelId,
+    usduEnabled,
+    usduScale,
+    usduSteps: Number.isFinite(stepsRaw)
+      ? Math.min(40, Math.max(1, Math.round(stepsRaw)))
+      : defaultUsduSteps(arch),
+    usduDenoise: Number.isFinite(denoiseRaw)
+      ? Math.min(0.75, Math.max(0.05, denoiseRaw))
+      : defaultUsduDenoise(arch),
+  }
 }
 
 export function lorasFromRecipe(

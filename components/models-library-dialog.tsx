@@ -16,16 +16,19 @@ import {
 import { Input } from "@/components/ui/input"
 import {
   deleteUserLora,
-  installLoraVariant,
   listLoras,
   listModelFiles,
+  listUpscalers,
   onLoraProgress,
   onLorasUpdated,
+  onUpscaleProgress,
+  onUpscalersUpdated,
   openModelsDir,
   resolveModelUrl,
   saveUserLora,
   type LoraPack,
   type ModelFileEntry,
+  type UpscaleModelInfo,
 } from "@/lib/host"
 import { formatBytes } from "@/lib/format"
 import { notifyError, notifySuccess } from "@/lib/notify"
@@ -45,19 +48,25 @@ type ModelsLibraryDialogProps = {
   onOpenChange: (open: boolean) => void
   /** When set, Install buttons target this arch first. */
   preferArch?: string | null
-  onLoraInstallStarted?: (id: string, arch: string, filename: string) => void
+  /** Global download queue — LoRA install. */
+  onInstallLora?: (id: string, arch: string) => void
+  /** Global download queue — upscale model install. */
+  onInstallUpscaler?: (id: string) => void
 }
 
 function ModelsLibraryBody({
   preferArch,
-  onLoraInstallStarted,
+  onInstallLora,
+  onInstallUpscaler,
 }: {
   preferArch?: string | null
-  onLoraInstallStarted?: (id: string, arch: string, filename: string) => void
+  onInstallLora?: (id: string, arch: string) => void
+  onInstallUpscaler?: (id: string) => void
 }) {
-  const [tab, setTab] = useState<"loras" | "files">("loras")
+  const [tab, setTab] = useState<"loras" | "upscale" | "files">("loras")
   const [files, setFiles] = useState<ModelFileEntry[] | null>(null)
   const [packs, setPacks] = useState<LoraPack[] | null>(null)
+  const [upscalers, setUpscalers] = useState<UpscaleModelInfo[] | null>(null)
   const [busyKeys, setBusyKeys] = useState<string[]>([])
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState("")
@@ -73,6 +82,12 @@ function ModelsLibraryBody({
         notifyError(e instanceof Error ? e.message : String(e), "LoRAs")
         setPacks([])
       })
+    void listUpscalers()
+      .then(setUpscalers)
+      .catch((e) => {
+        notifyError(e instanceof Error ? e.message : String(e), "Upscale")
+        setUpscalers([])
+      })
     void listModelFiles()
       .then(setFiles)
       .catch((e) => {
@@ -85,6 +100,8 @@ function ModelsLibraryBody({
     refresh()
     let unlistenUpdated: (() => void) | undefined
     let unlistenProgress: (() => void) | undefined
+    let unlistenUpscaleUpdated: (() => void) | undefined
+    let unlistenUpscaleProgress: (() => void) | undefined
     void onLorasUpdated(() => refresh()).then((u) => {
       unlistenUpdated = u
     })
@@ -103,29 +120,43 @@ function ModelsLibraryBody({
     }).then((u) => {
       unlistenProgress = u
     })
+    void onUpscalersUpdated(() => refresh()).then((u) => {
+      unlistenUpscaleUpdated = u
+    })
+    void onUpscaleProgress((p) => {
+      const key = `upscale:${p.modelId}`
+      if (
+        p.stage === "done" ||
+        p.stage === "error" ||
+        p.stage === "cancelled"
+      ) {
+        setBusyKeys((prev) => prev.filter((k) => k !== key))
+        refresh()
+      } else if (p.stage === "queued" || p.stage === "download") {
+        setBusyKeys((prev) => (prev.includes(key) ? prev : [...prev, key]))
+      }
+    }).then((u) => {
+      unlistenUpscaleProgress = u
+    })
     return () => {
       unlistenUpdated?.()
       unlistenProgress?.()
+      unlistenUpscaleUpdated?.()
+      unlistenUpscaleProgress?.()
     }
   }, [refresh])
 
   const list = files ?? []
   const totalBytes = list.reduce((sum, f) => sum + f.bytes, 0)
   const loraList = packs ?? []
+  const upscaleList = upscalers ?? []
 
-  async function handleInstall(pack: LoraPack, arch: string) {
+  function handleInstall(pack: LoraPack, arch: string) {
     const variant = pack.variants.find((v) => v.arch === arch)
     if (!variant) return
     const key = `${pack.id}:${arch}`
     setBusyKeys((prev) => (prev.includes(key) ? prev : [...prev, key]))
-    onLoraInstallStarted?.(pack.id, arch, variant.filename)
-    try {
-      await installLoraVariant(pack.id, arch)
-      // Queued or started — stay busy until progress clears this key.
-    } catch (e) {
-      notifyError(e instanceof Error ? e.message : String(e), "LoRA install")
-      setBusyKeys((prev) => prev.filter((k) => k !== key))
-    }
+    onInstallLora?.(pack.id, arch)
   }
 
   async function handleSaveUser() {
@@ -175,7 +206,7 @@ function ModelsLibraryBody({
       <DialogHeader>
         <DialogTitle>Models library</DialogTitle>
         <DialogDescription>
-          Shared weights and LoRA packs
+          Shared weights, LoRAs, and upscalers
           {files && files.length > 0
             ? ` · ${files.length} files · ${formatBytes(totalBytes)}`
             : null}
@@ -194,6 +225,18 @@ function ModelsLibraryBody({
             onClick={() => setTab("loras")}
           >
             LoRAs
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+              tab === "upscale"
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+            onClick={() => setTab("upscale")}
+          >
+            Upscale
           </button>
           <button
             type="button"
@@ -353,6 +396,66 @@ function ModelsLibraryBody({
               </Button>
             )}
           </div>
+        ) : tab === "upscale" ? (
+          <div className="space-y-3">
+            {upscalers == null ? (
+              <p className="text-sm text-muted-foreground">Loading…</p>
+            ) : upscaleList.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No Official upscalers listed.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {upscaleList.map((model) => {
+                  const key = `upscale:${model.id}`
+                  const busy = busyKeys.includes(key)
+                  return (
+                    <li
+                      key={model.id}
+                      className="flex items-start justify-between gap-3 rounded-xl border border-border/50 bg-card/40 px-3 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">
+                          {model.name}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          Official · {model.kind === "supir" ? "SUPIR" : "SR"} ·{" "}
+                          {model.scale}× · {model.filename}
+                        </p>
+                        {model.description ? (
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            {model.description}
+                          </p>
+                        ) : null}
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={model.ready ? "secondary" : "outline"}
+                        className="shrink-0 rounded-full before:hidden"
+                        disabled={model.ready || busy}
+                        onClick={() => {
+                          setBusyKeys((prev) =>
+                            prev.includes(key) ? prev : [...prev, key]
+                          )
+                          onInstallUpscaler?.(model.id)
+                        }}
+                      >
+                        {!model.ready ? (
+                          <DownloadIcon className="size-3.5" />
+                        ) : null}
+                        {model.ready ? "Ready" : busy ? "…" : "Install"}
+                      </Button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+            <p className="text-[11px] text-muted-foreground">
+              Used from Advanced → Refine on any image blueprint. Ultimate SD
+              Upscale is a separate custom node installed from Refine.
+            </p>
+          </div>
         ) : files == null ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : list.length === 0 ? (
@@ -406,7 +509,8 @@ export function ModelsLibraryDialog({
   open,
   onOpenChange,
   preferArch,
-  onLoraInstallStarted,
+  onInstallLora,
+  onInstallUpscaler,
 }: ModelsLibraryDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -414,7 +518,8 @@ export function ModelsLibraryDialog({
         {open ? (
           <ModelsLibraryBody
             preferArch={preferArch}
-            onLoraInstallStarted={onLoraInstallStarted}
+            onInstallLora={onInstallLora}
+            onInstallUpscaler={onInstallUpscaler}
           />
         ) : null}
       </DialogPopup>

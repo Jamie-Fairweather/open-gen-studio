@@ -39,9 +39,14 @@ import {
   isTauri,
   listGallery,
   listBlueprints,
+  ensureSupirNode,
+  ensureUsduNode,
+  installUpscaler,
+  supirNodeReady,
   listLoras,
   listRuntimes,
   listSettings,
+  listUpscalers,
   setSetting,
   onBlueprintProbe,
   onBlueprintProgress,
@@ -50,6 +55,8 @@ import {
   onDownloadProgress,
   onLoraProgress,
   onLorasUpdated,
+  onUpscaleProgress,
+  onUpscalersUpdated,
   onGalleryDeleted,
   onGalleryUpdated,
   onJobProgress,
@@ -59,21 +66,26 @@ import {
   parseGalleryRecipe,
   startComfyui,
   stopComfyui,
+  usduNodeReady,
   type BlueprintDetail,
   type GalleryItem,
   type GalleryRecipe,
   type LoraPack,
   type LoraStackEntry,
+  type UpscaleModelInfo,
   type GpuInfo,
   type Blueprint,
   type RuntimeInstall,
   type StudioTab,
 } from "@/lib/host"
+
+const DEFAULT_UPSCALE_MODEL_ID = "4x-ultrasharp"
 import {
   applyReuseAllSettings,
   isInstalled,
   lorasFromRecipe,
   pickDefaultBlueprintId,
+  upscaleFromRecipe,
 } from "@/lib/blueprint-helpers"
 import { formatBytes, formatDuration } from "@/lib/format"
 import {
@@ -120,12 +132,23 @@ export type StudioContextValue = {
   setLoraStack: Dispatch<SetStateAction<LoraStackEntry[]>>
   loraInstallingKey: string | null
   beginLoraInstall: (id: string, arch: string) => Promise<void>
-  trackLoraInstall: (
-    id: string,
-    arch: string,
-    filename: string,
-    active: boolean
-  ) => void
+  upscaleEnabled: boolean
+  setUpscaleEnabled: Dispatch<SetStateAction<boolean>>
+  upscaleModelId: string
+  setUpscaleModelId: Dispatch<SetStateAction<string>>
+  usduEnabled: boolean
+  setUsduEnabled: Dispatch<SetStateAction<boolean>>
+  usduScale: 2 | 4
+  setUsduScale: Dispatch<SetStateAction<2 | 4>>
+  usduSteps: number
+  setUsduSteps: Dispatch<SetStateAction<number>>
+  usduDenoise: number
+  setUsduDenoise: Dispatch<SetStateAction<number>>
+  upscaleModels: UpscaleModelInfo[]
+  usduReady: boolean
+  upscaleInstallingId: string | null
+  beginUpscaleInstall: (id: string) => Promise<void>
+  beginUsduInstall: () => Promise<void>
   hfToken: string
   setHfToken: Dispatch<SetStateAction<string>>
   hfTokenDirty: boolean
@@ -264,6 +287,17 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [loraPickerOpen, setLoraPickerOpen] = useState(false)
   const [loraPacks, setLoraPacks] = useState<LoraPack[]>([])
   const loraPacksRef = useRef<LoraPack[]>([])
+  const [upscaleEnabled, setUpscaleEnabled] = useState(false)
+  const [upscaleModelId, setUpscaleModelId] = useState(DEFAULT_UPSCALE_MODEL_ID)
+  const [usduEnabled, setUsduEnabled] = useState(false)
+  const [usduScale, setUsduScale] = useState<2 | 4>(2)
+  const [usduSteps, setUsduSteps] = useState(8)
+  const [usduDenoise, setUsduDenoise] = useState(0.15)
+  const [upscaleModels, setUpscaleModels] = useState<UpscaleModelInfo[]>([])
+  const [usduReady, setUsduReady] = useState(false)
+  const [upscaleInstallingId, setUpscaleInstallingId] = useState<string | null>(
+    null
+  )
   const [loraStack, setLoraStack] = useState<LoraStackEntry[]>([])
   const [loraInstallingKey, setLoraInstallingKey] = useState<string | null>(
     null
@@ -291,14 +325,15 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [comfyHealthy, setComfyHealthy] = useState(false)
   const [installingId, setInstallingId] = useState<string | null>(null)
   const installingIdRef = useRef<string | null>(null)
-  /** Blueprint ids waiting after the active install. */
+  /** Global install queue keys: blueprint id | `lora:id:arch` | `upscale:id`. */
   const [installQueue, setInstallQueue] = useState<string[]>([])
   const installQueueRef = useRef<string[]>([])
   const pumpInstallQueueRef = useRef<() => void>(() => {})
-  /** Missing models per blueprint (for per-file Downloads queue). */
+  /** Pending file rows per install job key (Downloads active + waiting). */
   const [pendingByBlueprint, setPendingByBlueprint] = useState<
     Record<string, DownloadModelItem[]>
   >({})
+  const pendingByBlueprintRef = useRef(pendingByBlueprint)
   /** Completed-model bytes for the in-flight blueprint install (overall progress). */
   const installByteOffsetRef = useRef(0)
   const installByteTotalRef = useRef<number | null>(null)
@@ -422,6 +457,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
   const supportsLoras = Boolean(activeDetail?.capabilities?.loras)
   const activeArch = activeDetail?.arch ?? null
+
   const activeLoraStack = useMemo(() => {
     if (!activeArch) return [] as LoraStackEntry[]
     return loraStack.filter((entry) =>
@@ -527,6 +563,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     let unlistenGalleryDeleted: (() => void) | undefined
     let unlistenLorasUpdated: (() => void) | undefined
     let unlistenLoraProgress: (() => void) | undefined
+    let unlistenUpscalersUpdated: (() => void) | undefined
+    let unlistenUpscaleProgress: (() => void) | undefined
 
     /** Rolling window for download speed — longer span = smoother ETA. */
     const SPEED_WINDOW_MS = 10_000
@@ -548,16 +586,27 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           )
         })
 
-        const [gpuInfo, rts, status, bps, items, settings, loras] =
-          await Promise.all([
-            detectGpu(),
-            listRuntimes(),
-            comfyuiStatus(),
-            listBlueprints(),
-            listGallery(),
-            listSettings(),
-            listLoras(),
-          ])
+        const [
+          gpuInfo,
+          rts,
+          status,
+          bps,
+          items,
+          settings,
+          loras,
+          upscalers,
+          usdu,
+        ] = await Promise.all([
+          detectGpu(),
+          listRuntimes(),
+          comfyuiStatus(),
+          listBlueprints(),
+          listGallery(),
+          listSettings(),
+          listLoras(),
+          listUpscalers().catch(() => [] as UpscaleModelInfo[]),
+          usduNodeReady().catch(() => false),
+        ])
         preferredBlueprintIdRef.current =
           settings[SETTING_SELECTED_BLUEPRINT]?.trim() || null
         setGpu(gpuInfo)
@@ -565,6 +614,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         setBlueprints(bps)
         setBlueprintsLoaded(true)
         setLoraPacks(loras)
+        setUpscaleModels(upscalers)
+        setUsduReady(usdu)
         setGallery(items)
         setComfyHealthy(status.healthy)
         setSelectedId((prev) =>
@@ -942,25 +993,105 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       unlistenLorasUpdated = u
     })
 
-    void onLoraProgress((p) => {
-      const key = `lora:${p.loraId}:${p.arch}`
-      if (p.stage === "queued") {
-        setPendingByBlueprint((prev) => {
-          if (prev[key]?.length) return prev
-          return {
-            ...prev,
-            [key]: [
-              {
-                blueprintId: key,
-                blueprintName: `${p.loraId} · ${p.arch}`,
-                filename: p.filename || p.loraId,
-                path: "loras",
-              },
-            ],
-          }
+    void onUpscalersUpdated(() => {
+      void listUpscalers()
+        .then(setUpscaleModels)
+        .catch(() => {})
+      void usduNodeReady()
+        .then(setUsduReady)
+        .catch(() => {})
+    }).then((u) => {
+      unlistenUpscalersUpdated = u
+    })
+
+    void onUpscaleProgress((p) => {
+      // Ignore legacy Rust "queued" — UI owns the global queue.
+      if (p.stage === "queued") return
+      const key = `upscale:${p.modelId}`
+      if (p.stage === "download") {
+        setUpscaleInstallingId(p.modelId)
+        installingIdRef.current = key
+        setInstallingId(key)
+        setInstallProgress({
+          blueprintId: key,
+          stage: "download",
+          message: p.message,
+          modelIndex: 1,
+          modelTotal: 1,
+          filename: p.filename ?? null,
+          downloaded: 0,
+          total: null,
+          bytesPerSec: 0,
         })
         return
       }
+      if (
+        p.stage === "done" ||
+        p.stage === "error" ||
+        p.stage === "cancelled"
+      ) {
+        const name =
+          pendingByBlueprintRef.current[key]?.[0]?.blueprintName ?? p.modelId
+        setPendingByBlueprint((prev) => {
+          if (!(key in prev)) return prev
+          const next = { ...prev }
+          delete next[key]
+          return next
+        })
+        if (installingIdRef.current === key) {
+          setUpscaleInstallingId(null)
+          installingIdRef.current = null
+          setInstallingId(null)
+          setInstallProgress(null)
+        } else {
+          setUpscaleInstallingId((cur) => (cur === p.modelId ? null : cur))
+        }
+        const status =
+          p.stage === "done"
+            ? ("done" as const)
+            : p.stage === "cancelled"
+              ? ("cancelled" as const)
+              : ("error" as const)
+        setDownloadHistory((prev) =>
+          [
+            {
+              blueprintId: key,
+              name,
+              status,
+              message: p.message,
+              at: Date.now(),
+            },
+            ...prev,
+          ].slice(0, 12)
+        )
+        if (p.stage === "error") {
+          notifyError(p.message, "Upscale install failed")
+        } else if (p.stage === "done") {
+          notifySuccess(
+            p.modelId === "usdu"
+              ? "Ultimate SD Upscale ready"
+              : p.modelId === "supir"
+                ? "SUPIR node ready — restart Comfy if it was running"
+                : p.modelId.startsWith("supir-")
+                  ? "SUPIR weights ready"
+                  : "Upscale model ready"
+          )
+        }
+        void listUpscalers()
+          .then(setUpscaleModels)
+          .catch(() => {})
+        void usduNodeReady()
+          .then(setUsduReady)
+          .catch(() => {})
+        pumpInstallQueueRef.current()
+      }
+    }).then((u) => {
+      unlistenUpscaleProgress = u
+    })
+
+    void onLoraProgress((p) => {
+      if (p.stage === "queued") return
+      const key = `lora:${p.loraId}:${p.arch}`
       if (p.stage === "download") {
         setLoraInstallingKey(`${p.loraId}:${p.arch}`)
         installingIdRef.current = key
@@ -983,6 +1114,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         p.stage === "error" ||
         p.stage === "cancelled"
       ) {
+        const name =
+          pendingByBlueprintRef.current[key]?.[0]?.blueprintName ??
+          `${p.loraId} · ${p.arch}`
         setPendingByBlueprint((prev) => {
           if (!(key in prev)) return prev
           const next = { ...prev }
@@ -995,12 +1129,33 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           setInstallingId(null)
           setInstallProgress(null)
         }
+        const status =
+          p.stage === "done"
+            ? ("done" as const)
+            : p.stage === "cancelled"
+              ? ("cancelled" as const)
+              : ("error" as const)
+        setDownloadHistory((prev) =>
+          [
+            {
+              blueprintId: key,
+              name,
+              status,
+              message: p.message,
+              at: Date.now(),
+            },
+            ...prev,
+          ].slice(0, 12)
+        )
         if (p.stage === "error") {
           notifyError(p.message, "LoRA install failed")
+        } else if (p.stage === "done") {
+          notifySuccess("LoRA ready", name)
         }
         void listLoras()
           .then(setLoraPacks)
           .catch(() => {})
+        pumpInstallQueueRef.current()
       }
     }).then((u) => {
       unlistenLoraProgress = u
@@ -1020,6 +1175,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       unlistenGalleryDeleted?.()
       unlistenLorasUpdated?.()
       unlistenLoraProgress?.()
+      unlistenUpscalersUpdated?.()
+      unlistenUpscaleProgress?.()
     }
   }, [desktop])
 
@@ -1042,6 +1199,13 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         let values = recipe ? applyReuseAllSettings(next, recipe) : next
         if (recipe) {
           setLoraStack(lorasFromRecipe(recipe, loraPacksRef.current))
+          const up = upscaleFromRecipe(recipe, d.arch)
+          setUpscaleEnabled(up.enabled)
+          setUpscaleModelId(up.modelId)
+          setUsduEnabled(up.usduEnabled)
+          setUsduScale(up.usduScale)
+          setUsduSteps(up.usduSteps)
+          setUsduDenoise(up.usduDenoise)
         }
         const hasW = d.controls.some((c) => c.id === "width")
         const hasH = d.controls.some((c) => c.id === "height")
@@ -1263,6 +1427,10 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   }, [loraPacks])
 
   useEffect(() => {
+    pendingByBlueprintRef.current = pendingByBlueprint
+  }, [pendingByBlueprint])
+
+  useEffect(() => {
     aspectIdRef.current = aspectId
   }, [aspectId])
 
@@ -1278,6 +1446,22 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       const rest = installQueueRef.current.slice(1)
       installQueueRef.current = rest
       setInstallQueue(rest)
+      if (next.startsWith("lora:")) {
+        const restKey = next.slice("lora:".length)
+        const colon = restKey.lastIndexOf(":")
+        if (colon <= 0) {
+          pumpInstallQueueRef.current()
+          return
+        }
+        const id = restKey.slice(0, colon)
+        const arch = restKey.slice(colon + 1)
+        void startLoraInstall(id, arch)
+        return
+      }
+      if (next.startsWith("upscale:")) {
+        void startUpscaleInstall(next.slice("upscale:".length))
+        return
+      }
       void startBlueprintInstall(next)
     }
   })
@@ -1375,65 +1559,226 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     await requestBlueprintInstall(id)
   }
 
-  function trackLoraInstall(
-    id: string,
-    arch: string,
-    filename: string,
-    active: boolean
-  ) {
-    const pack = loraPacks.find((p) => p.id === id)
+  function seedLoraPending(id: string, arch: string) {
+    const pack = loraPacksRef.current.find((p) => p.id === id)
+    const filename = pack?.variants.find((v) => v.arch === arch)?.filename ?? id
     const key = `lora:${id}:${arch}`
-    const item = {
+    const item: DownloadModelItem = {
       blueprintId: key,
       blueprintName: `${pack?.name ?? id} · ${arch}`,
       filename,
       path: "loras",
     }
-    setPendingByBlueprint((prev) => ({
-      ...prev,
-      [key]: [item],
-    }))
-    if (active) {
-      setLoraInstallingKey(`${id}:${arch}`)
-      installingIdRef.current = key
-      setInstallingId(key)
-      setInstallProgress({
-        blueprintId: key,
-        stage: "download",
-        message: `Downloading ${filename}`,
-        modelIndex: 1,
-        modelTotal: 1,
-        filename,
-        downloaded: 0,
-        total: null,
-        bytesPerSec: 0,
-      })
-    }
+    setPendingByBlueprint((prev) => ({ ...prev, [key]: [item] }))
+    return { key, filename, name: item.blueprintName }
   }
 
-  async function beginLoraInstall(id: string, arch: string) {
-    const pack = loraPacks.find((p) => p.id === id)
-    const filename = pack?.variants.find((v) => v.arch === arch)?.filename ?? id
-    const alreadyActive = loraInstallingKey != null
-    trackLoraInstall(id, arch, filename, !alreadyActive)
+  function seedUpscalePending(id: string) {
+    const key = `upscale:${id}`
+    const model = upscaleModels.find((m) => m.id === id)
+    const name =
+      id === "usdu"
+        ? "Ultimate SD Upscale"
+        : id === "supir"
+          ? "SUPIR node"
+          : (model?.name ?? id)
+    const filename =
+      id === "usdu" || id === "supir" ? id : (model?.filename ?? id)
+    const item: DownloadModelItem = {
+      blueprintId: key,
+      blueprintName: name,
+      filename,
+      path: model?.kind === "supir" ? "checkpoints" : "upscale_models",
+    }
+    setPendingByBlueprint((prev) => ({ ...prev, [key]: [item] }))
+    return { key, filename, name }
+  }
+
+  function enqueueInstallJob(key: string) {
+    if (installingIdRef.current === key) return
+    if (installQueueRef.current.includes(key)) return
+    const next = [...installQueueRef.current, key]
+    installQueueRef.current = next
+    setInstallQueue(next)
+  }
+
+  async function startLoraInstall(id: string, arch: string) {
+    const { key, filename, name } = seedLoraPending(id, arch)
+    installingIdRef.current = key
+    setInstallingId(key)
+    setLoraInstallingKey(`${id}:${arch}`)
+    setInstallProgress({
+      blueprintId: key,
+      stage: "start",
+      message: `Starting ${name}…`,
+      modelIndex: 1,
+      modelTotal: 1,
+      filename,
+      downloaded: 0,
+      total: null,
+      bytesPerSec: 0,
+    })
     try {
       await installLoraVariant(id, arch)
     } catch (e) {
-      const key = `lora:${id}:${arch}`
+      const message = e instanceof Error ? e.message : String(e)
+      installingIdRef.current = null
+      setInstallingId(null)
+      setLoraInstallingKey(null)
+      setInstallProgress(null)
+      if (message.startsWith("Already installing LoRA:")) {
+        enqueueInstallJob(key)
+        return
+      }
       setPendingByBlueprint((prev) => {
         if (!(key in prev)) return prev
         const next = { ...prev }
         delete next[key]
         return next
       })
-      if (installingIdRef.current === key) {
-        setLoraInstallingKey(null)
-        installingIdRef.current = null
-        setInstallingId(null)
-        setInstallProgress(null)
-      }
-      notifyError(e instanceof Error ? e.message : String(e), "LoRA install")
+      setDownloadHistory((prev) =>
+        [
+          {
+            blueprintId: key,
+            name,
+            status: "error" as const,
+            message,
+            at: Date.now(),
+          },
+          ...prev,
+        ].slice(0, 12)
+      )
+      notifyError(message, "LoRA install failed")
+      pumpInstallQueueRef.current()
     }
+  }
+
+  async function finishUpscaleJobLocally(
+    key: string,
+    name: string,
+    message: string
+  ) {
+    setPendingByBlueprint((prev) => {
+      if (!(key in prev)) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+    if (installingIdRef.current === key) {
+      setUpscaleInstallingId(null)
+      installingIdRef.current = null
+      setInstallingId(null)
+      setInstallProgress(null)
+    }
+    setDownloadHistory((prev) =>
+      [
+        {
+          blueprintId: key,
+          name,
+          status: "done" as const,
+          message,
+          at: Date.now(),
+        },
+        ...prev,
+      ].slice(0, 12)
+    )
+    notifySuccess(message)
+    void listUpscalers()
+      .then(setUpscaleModels)
+      .catch(() => {})
+    void usduNodeReady()
+      .then(setUsduReady)
+      .catch(() => {})
+    pumpInstallQueueRef.current()
+  }
+
+  async function startUpscaleInstall(id: string) {
+    const { key, filename, name } = seedUpscalePending(id)
+    installingIdRef.current = key
+    setInstallingId(key)
+    setUpscaleInstallingId(id)
+    setInstallProgress({
+      blueprintId: key,
+      stage: "start",
+      message: `Starting ${name}…`,
+      modelIndex: 1,
+      modelTotal: 1,
+      filename,
+      downloaded: 0,
+      total: null,
+      bytesPerSec: 0,
+    })
+    try {
+      if (id === "usdu") {
+        if (await usduNodeReady()) {
+          await finishUpscaleJobLocally(key, name, "Ultimate SD Upscale ready")
+          return
+        }
+        await ensureUsduNode()
+      } else if (id === "supir") {
+        if (await supirNodeReady()) {
+          await finishUpscaleJobLocally(key, name, "SUPIR already installed")
+          return
+        }
+        await ensureSupirNode()
+      } else await installUpscaler(id)
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      installingIdRef.current = null
+      setInstallingId(null)
+      setUpscaleInstallingId(null)
+      setInstallProgress(null)
+      if (message.startsWith("Already installing upscale:")) {
+        enqueueInstallJob(key)
+        return
+      }
+      setPendingByBlueprint((prev) => {
+        if (!(key in prev)) return prev
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
+      setDownloadHistory((prev) =>
+        [
+          {
+            blueprintId: key,
+            name,
+            status: "error" as const,
+            message,
+            at: Date.now(),
+          },
+          ...prev,
+        ].slice(0, 12)
+      )
+      notifyError(message, "Upscale install failed")
+      pumpInstallQueueRef.current()
+    }
+  }
+
+  async function beginLoraInstall(id: string, arch: string) {
+    const { key } = seedLoraPending(id, arch)
+    if (installingIdRef.current === key) return
+    if (installQueueRef.current.includes(key)) return
+    if (installingIdRef.current) {
+      enqueueInstallJob(key)
+      return
+    }
+    await startLoraInstall(id, arch)
+  }
+
+  async function beginUpscaleInstall(id: string) {
+    const { key } = seedUpscalePending(id)
+    if (installingIdRef.current === key) return
+    if (installQueueRef.current.includes(key)) return
+    if (installingIdRef.current) {
+      enqueueInstallJob(key)
+      return
+    }
+    await startUpscaleInstall(id)
+  }
+
+  async function beginUsduInstall() {
+    await beginUpscaleInstall("usdu")
   }
 
   async function handleHfTokenDialogConfirm(token: string) {
@@ -1525,11 +1870,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     }))
   }
 
-  function selectBlueprint(id: string) {
+  const selectBlueprint = useCallback((id: string) => {
     setSelectedId(id)
     preferredBlueprintIdRef.current = id
     void setSetting(SETTING_SELECTED_BLUEPRINT, id).catch(() => {})
-  }
+  }, [])
 
   async function handleGenerate() {
     if (!blueprintsLoaded) {
@@ -1577,6 +1922,21 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       } else {
         delete values.loras
       }
+      if (studioTab === "image" && upscaleEnabled) {
+        values.upscale = {
+          modelId: upscaleModelId || DEFAULT_UPSCALE_MODEL_ID,
+          usdu: usduEnabled,
+          ...(usduEnabled
+            ? {
+                usduScale,
+                usduSteps,
+                usduDenoise,
+              }
+            : {}),
+        }
+      } else {
+        delete values.upscale
+      }
       const job = await generateImage(selected.id, values)
       setActiveJobId(job.id)
     } catch (e) {
@@ -1598,7 +1958,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function handleDeleteGalleryItem(id: string) {
+  const handleDeleteGalleryItem = useCallback(async (id: string) => {
     try {
       await deleteGalleryItem(id)
       notifySuccess("Image deleted")
@@ -1606,9 +1966,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       notifyError(e instanceof Error ? e.message : String(e), "Delete failed")
       throw e
     }
-  }
+  }, [])
 
-  function handleReuseGalleryPrompt(item: GalleryItem) {
+  const handleReuseGalleryPrompt = useCallback((item: GalleryItem) => {
     const recipe = parseGalleryRecipe(item)
     if (!recipe?.prompt) {
       notifyInfo("No prompt", "This image has no reusable prompt.", "reuse")
@@ -1617,57 +1977,87 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     setSelectedGalleryId(item.id)
     setPrompt(recipe.prompt)
     notifySuccess("Prompt loaded", "From gallery image")
-  }
+  }, [])
 
-  function handleReuseGallerySettings(item: GalleryItem) {
-    const recipe = parseGalleryRecipe(item)
-    if (!recipe) {
-      notifyInfo("No settings", "This image has no reusable settings.", "reuse")
-      return
-    }
+  const applyUpscaleFromRecipe = useCallback(
+    (recipe: GalleryRecipe, arch?: string | null) => {
+      const up = upscaleFromRecipe(recipe, arch)
+      setUpscaleEnabled(up.enabled)
+      setUpscaleModelId(up.modelId)
+      setUsduEnabled(up.usduEnabled)
+      setUsduScale(up.usduScale)
+      setUsduSteps(up.usduSteps)
+      setUsduDenoise(up.usduDenoise)
+    },
+    []
+  )
 
-    navigateTab(recipe.category)
-    setSelectedGalleryId(item.id)
-
-    if (recipe.prompt) {
-      setPrompt(recipe.prompt)
-    }
-
-    const width = Number(recipe.values.width)
-    const height = Number(recipe.values.height)
-    if (Number.isFinite(width) && Number.isFinite(height)) {
-      const synced = syncSizeControls(width, height)
-      setAspectId(synced.aspectId)
-      setSideLength(synced.sideLength)
-    }
-
-    if (recipe.blueprintId) {
-      if (
-        recipe.blueprintId === activeSelectedId &&
-        activeDetail?.id === recipe.blueprintId
-      ) {
-        const defaults: Record<string, unknown> = {}
-        for (const c of activeDetail.controls) {
-          if (c.default !== undefined) defaults[c.id] = c.default
-        }
-        setControlValues(applyReuseAllSettings(defaults, recipe))
-        setLoraStack(lorasFromRecipe(recipe, loraPacks))
-      } else {
-        pendingRecipeRef.current = recipe
-        selectBlueprint(recipe.blueprintId)
+  const handleReuseGallerySettings = useCallback(
+    (item: GalleryItem) => {
+      const recipe = parseGalleryRecipe(item)
+      if (!recipe) {
+        notifyInfo(
+          "No settings",
+          "This image has no reusable settings.",
+          "reuse"
+        )
+        return
       }
-    } else {
-      setControlValues((prev) => applyReuseAllSettings(prev, recipe))
-      setLoraStack(lorasFromRecipe(recipe, loraPacks))
-    }
 
-    notifySuccess(
-      "Settings loaded",
-      recipe.blueprintName
-        ? `From ${recipe.blueprintName}`
-        : "From gallery image"
-    )
-  }
+      navigateTab(recipe.category)
+      setSelectedGalleryId(item.id)
+
+      if (recipe.prompt) {
+        setPrompt(recipe.prompt)
+      }
+
+      const width = Number(recipe.values.width)
+      const height = Number(recipe.values.height)
+      if (Number.isFinite(width) && Number.isFinite(height)) {
+        const synced = syncSizeControls(width, height)
+        setAspectId(synced.aspectId)
+        setSideLength(synced.sideLength)
+      }
+
+      if (recipe.blueprintId) {
+        if (
+          recipe.blueprintId === activeSelectedId &&
+          activeDetail?.id === recipe.blueprintId
+        ) {
+          const defaults: Record<string, unknown> = {}
+          for (const c of activeDetail.controls) {
+            if (c.default !== undefined) defaults[c.id] = c.default
+          }
+          setControlValues(applyReuseAllSettings(defaults, recipe))
+          setLoraStack(lorasFromRecipe(recipe, loraPacks))
+          applyUpscaleFromRecipe(recipe, activeDetail.arch)
+        } else {
+          pendingRecipeRef.current = recipe
+          selectBlueprint(recipe.blueprintId)
+        }
+      } else {
+        setControlValues((prev) => applyReuseAllSettings(prev, recipe))
+        setLoraStack(lorasFromRecipe(recipe, loraPacks))
+        applyUpscaleFromRecipe(recipe, activeArch)
+      }
+
+      notifySuccess(
+        "Settings loaded",
+        recipe.blueprintName
+          ? `From ${recipe.blueprintName}`
+          : "From gallery image"
+      )
+    },
+    [
+      activeArch,
+      activeDetail,
+      activeSelectedId,
+      applyUpscaleFromRecipe,
+      loraPacks,
+      navigateTab,
+      selectBlueprint,
+    ]
+  )
 
   function refreshBlueprints() {
     void listBlueprints()
@@ -1717,7 +2107,23 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     setLoraStack,
     loraInstallingKey,
     beginLoraInstall,
-    trackLoraInstall,
+    upscaleEnabled,
+    setUpscaleEnabled,
+    upscaleModelId,
+    setUpscaleModelId,
+    usduEnabled,
+    setUsduEnabled,
+    usduScale,
+    setUsduScale,
+    usduSteps,
+    setUsduSteps,
+    usduDenoise,
+    setUsduDenoise,
+    upscaleModels,
+    usduReady,
+    upscaleInstallingId,
+    beginUpscaleInstall,
+    beginUsduInstall,
     hfToken,
     setHfToken,
     hfTokenDirty,

@@ -333,6 +333,16 @@ impl Db {
         Ok(item)
     }
 
+    pub fn set_gallery_thumbnail(&self, id: &str, thumbnail_path: &str) -> Result<(), String> {
+        self.conn
+            .execute(
+                "UPDATE gallery_items SET thumbnail_path = ?1 WHERE id = ?2",
+                params![thumbnail_path, id],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     pub fn list_runtimes(&self) -> Result<Vec<RuntimeInstall>, String> {
         let mut stmt = self
             .conn

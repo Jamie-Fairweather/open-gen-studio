@@ -54,19 +54,21 @@ No `workflow.api.json`. No `controls[]`. At generate time the app compiles a Com
 
 ### Supported `arch` (v1)
 
-| `arch`          | Loaders                                                                              | Negative                                    |
-| --------------- | ------------------------------------------------------------------------------------ | ------------------------------------------- |
-| `z-image`       | UNET + text encoder + VAE (+ AuraFlow)                                               | no                                          |
-| `krea2`         | UNET + text encoder (`CLIPLoader` type `krea2`) + VAE + EmptyLatentImage             | no                                          |
-| `flux`          | UNET + DualCLIP (`t5` + `clip_l`) + VAE (+ FluxGuidance / ModelSamplingFlux)         | no (use Guidance)                           |
-| `flux2`         | UNET + CLIP (`clip`) + VAE (+ FluxGuidance / EmptyFlux2LatentImage / Flux2Scheduler) | no (use Guidance)                           |
-| `sdxl` / `sd15` | Checkpoint (+ optional VAE)                                                          | when `capabilities.negative` and CFG &gt; 1 |
+| `arch`          | Loaders                                                                                                              | Negative                                    |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `z-image`       | UNET + text encoder + VAE (+ AuraFlow)                                                                               | no                                          |
+| `krea2`         | UNET + text encoder (`CLIPLoader` type `krea2`) + VAE + EmptyLatentImage                                             | no                                          |
+| `flux`          | UNET + DualCLIP (`t5` + `clip_l`) + VAE (+ FluxGuidance / ModelSamplingFlux)                                         | no (use Guidance)                           |
+| `flux2`         | UNET + CLIP (`clip`) + VAE (+ FluxGuidance / EmptyFlux2LatentImage / Flux2Scheduler)                                 | no (use Guidance)                           |
+| `ideogram4`     | Dual UNET (`unet` + `unet_uncond`) + CLIP (`ideogram4`) + VAE (+ CFGOverride / DualModelGuider / Ideogram4Scheduler) | no                                          |
+| `sdxl` / `sd15` | Checkpoint (+ optional VAE)                                                                                          | when `capabilities.negative` and CFG &gt; 1 |
 
 ### Model `role`
 
 | Role            | Typical `path`                     |
 | --------------- | ---------------------------------- |
 | `unet`          | `diffusion_models`                 |
+| `unet_uncond`   | `diffusion_models` (Ideogram 4)    |
 | `text_encoder`  | `text_encoders`                    |
 | `t5` / `clip_l` | `text_encoders` (Flux.1 DualCLIP)  |
 | `clip`          | `text_encoders` (Flux.2 single TE) |

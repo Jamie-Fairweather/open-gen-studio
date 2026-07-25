@@ -90,8 +90,9 @@ export function RefineControls({
     arch === "krea2" ||
     arch === "z-image" ||
     arch === "flux" ||
-    arch === "flux2"
-  const guiderUsdu = arch === "flux2"
+    arch === "flux2" ||
+    arch === "ideogram4"
+  const guiderUsdu = arch === "flux2" || arch === "ideogram4"
   const modelBusy = selected ? installingId === selected.id : false
   const usduBusy = installingId === "usdu"
   const selectItems = useMemo(
@@ -334,8 +335,8 @@ export function RefineControls({
                       </>
                     ) : (
                       <p className="text-[10px] text-muted-foreground">
-                        Flux.2 USDU uses the recipe sampler — steps and denoise
-                        are not applied separately.
+                        This arch’s USDU reuses the recipe sampler (Advanced →
+                        Steps). Separate USDU steps/denoise are not available.
                       </p>
                     )}
                   </div>

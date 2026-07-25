@@ -1,0 +1,57 @@
+{
+  "id": "ideogram4",
+  "name": "Ideogram 4",
+  "category": "image",
+  "description": "Ideogram 4.0 open weights — strong text rendering and layout control. Uses dual diffusion models + Qwen3-VL. Needs recent ComfyUI with Ideogram4Scheduler / DualModelGuider. ~16GB+ VRAM for FP8.",
+  "runtime": "comfyui",
+  "minimumVramGb": 16,
+  "flowType": "txt2img",
+  "arch": "ideogram4",
+  "sampler": "euler",
+  "scheduler": "simple",
+  "capabilities": {
+    "negative": false,
+    "loras": true,
+    "controlnet": false,
+    "upscale": false
+  },
+  "defaults": {
+    "width": 1024,
+    "height": 1024,
+    "steps": 20,
+    "cfg": 7,
+    "seed": 0,
+    "weightDtype": "default",
+    "mu": 0.0,
+    "std": 1.75,
+    "cfgOverride": 3.0,
+    "cfgOverrideStart": 0.7,
+    "cfgOverrideEnd": 1.0
+  },
+  "models": [
+    {
+      "role": "unet",
+      "filename": "ideogram4_fp8_scaled.safetensors",
+      "path": "diffusion_models",
+      "url": "https://huggingface.co/Comfy-Org/Ideogram-4/resolve/main/diffusion_models/ideogram4_fp8_scaled.safetensors"
+    },
+    {
+      "role": "unet_uncond",
+      "filename": "ideogram4_unconditional_fp8_scaled.safetensors",
+      "path": "diffusion_models",
+      "url": "https://huggingface.co/Comfy-Org/Ideogram-4/resolve/main/diffusion_models/ideogram4_unconditional_fp8_scaled.safetensors"
+    },
+    {
+      "role": "text_encoder",
+      "filename": "qwen3vl_8b_fp8_scaled.safetensors",
+      "path": "text_encoders",
+      "url": "https://huggingface.co/Comfy-Org/Ideogram-4/resolve/main/text_encoders/qwen3vl_8b_fp8_scaled.safetensors"
+    },
+    {
+      "role": "vae",
+      "filename": "flux2-vae.safetensors",
+      "path": "vae",
+      "url": "https://huggingface.co/Comfy-Org/Ideogram-4/resolve/main/vae/flux2-vae.safetensors"
+    }
+  ]
+}

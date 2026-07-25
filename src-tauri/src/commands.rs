@@ -232,31 +232,34 @@ pub fn list_runtimes(state: State<'_, AppState>) -> Result<Vec<RuntimeInstall>, 
 }
 
 /// Returns immediately with status=installing; heavy work runs on a background thread.
+/// Always force-reinstalls the **pinned** portable (Settings → Reinstall).
 #[tauri::command]
 pub fn install_comfyui(app: AppHandle, state: State<'_, AppState>) -> Result<RuntimeInstall, String> {
-    enqueue_comfy_install(&app, &state)
+    enqueue_comfy_install(&app, &state, true)
 }
 
 pub fn comfy_needs_install(state: &AppState) -> Result<bool, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
     match db.get_runtime_by_engine(comfy::ENGINE)? {
         Some(r) => {
+            let path = Path::new(&r.install_path);
             let path_ok = !r.install_path.is_empty()
-                && Path::new(&r.install_path).join("ComfyUI").is_dir()
-                && Path::new(&r.install_path)
-                    .join("python_embeded")
-                    .join("python.exe")
-                    .is_file();
+                && path.join("ComfyUI").is_dir()
+                && path.join("python_embeded").join("python.exe").is_file();
+            let pin_ok = path_ok && comfy::portable_pin_matches(path);
             // "installing" after a crash means a stalled job — retry.
-            Ok(!path_ok || r.status == "error" || r.status == "installing")
+            // Pin mismatch → migrate to the version this app release requires.
+            Ok(!path_ok || !pin_ok || r.status == "error" || r.status == "installing")
         }
         None => Ok(true),
     }
 }
 
+/// `force` = wipe/reinstall even when already on the pin (user Reinstall).
 pub fn enqueue_comfy_install(
     app: &AppHandle,
     state: &AppState,
+    force: bool,
 ) -> Result<RuntimeInstall, String> {
     {
         let mut busy = state.comfy_install_busy.lock().map_err(|e| e.to_string())?;
@@ -286,7 +289,7 @@ pub fn enqueue_comfy_install(
         let row = RuntimeInstall {
             id: uuid::Uuid::new_v4().to_string(),
             engine: comfy::ENGINE.into(),
-            version: "portable-latest".into(),
+            version: comfy::pinned_version().into(),
             install_path: String::new(),
             port: Some(comfy::DEFAULT_PORT as i64),
             status: "installing".into(),
@@ -305,7 +308,7 @@ pub fn enqueue_comfy_install(
     let app_bg = app.clone();
     let job = installing.clone();
     std::thread::spawn(move || {
-        let result = comfy::install_portable(&app_bg, Some(&job));
+        let result = comfy::install_portable(&app_bg, Some(&job), force);
         let state = app_bg.state::<AppState>();
         match result {
             Ok(runtime) => {
@@ -318,7 +321,10 @@ pub fn enqueue_comfy_install(
                     comfy::RuntimeProgress {
                         engine: comfy::ENGINE.into(),
                         stage: "done".into(),
-                        message: "ComfyUI portable installed".into(),
+                        message: format!(
+                            "ComfyUI {} ready",
+                            comfy::pinned_version()
+                        ),
                     },
                 );
             }
@@ -964,16 +970,16 @@ pub fn install_upscaler(
     start_upscale_install(app, state, id)
 }
 
-/// Clone Ultimate SD Upscale custom node if missing (background as `"usdu"`).
+/// Ensure Ultimate SD Upscale is at the app-pinned commit (background as `"usdu"`).
 #[tauri::command]
 pub fn ensure_usdu_node(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    if upscale::usdu_installed(&app) {
+    if upscale::usdu_at_pin(&app) {
         let _ = app.emit(
             "upscale://progress",
             serde_json::json!({
                 "modelId": "usdu",
                 "stage": "done",
-                "message": "Ultimate SD Upscale already installed",
+                "message": "Ultimate SD Upscale already at pinned version",
             }),
         );
         return Ok(());
@@ -981,21 +987,34 @@ pub fn ensure_usdu_node(app: AppHandle, state: State<'_, AppState>) -> Result<()
     start_upscale_install(app, state, "usdu".into())
 }
 
-/// Clone SUPIR custom node + pip deps if missing (background as `"supir"`).
+/// Ensure SUPIR custom node is at the app-pinned commit + deps (background as `"supir"`).
 #[tauri::command]
 pub fn ensure_supir_node(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    if upscale::supir_installed(&app) {
+    if upscale::supir_at_pin(&app) {
         let _ = app.emit(
             "upscale://progress",
             serde_json::json!({
                 "modelId": "supir",
                 "stage": "done",
-                "message": "SUPIR already installed",
+                "message": "SUPIR already at pinned version",
             }),
         );
         return Ok(());
     }
     start_upscale_install(app, state, "supir".into())
+}
+
+/// Expected vs installed pins for ComfyUI + managed custom nodes (Settings).
+#[tauri::command]
+pub fn runtime_pins_status(app: AppHandle, state: State<'_, AppState>) -> Result<crate::pins::RuntimePinsStatus, String> {
+    let runtime = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        db.get_runtime_by_engine(comfy::ENGINE)?
+    };
+    Ok(crate::pins::RuntimePinsStatus {
+        comfy: comfy::comfy_pin_status(&app, runtime.as_ref()),
+        nodes: upscale::managed_nodes_pin_status(&app),
+    })
 }
 
 fn start_upscale_install(

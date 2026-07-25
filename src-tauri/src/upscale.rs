@@ -3,6 +3,7 @@
 
 use crate::comfy;
 use crate::download;
+use crate::pins::{self, NodePin, MANAGED_NODES};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -12,9 +13,7 @@ use std::process::{Command, Stdio};
 use tauri::{AppHandle, Emitter};
 
 pub const USDU_NODE_NAME: &str = "ComfyUI_UltimateSDUpscale";
-pub const USDU_NODE_URL: &str = "https://github.com/ssitu/ComfyUI_UltimateSDUpscale.git";
 pub const SUPIR_NODE_NAME: &str = "ComfyUI-SUPIR";
-pub const SUPIR_NODE_URL: &str = "https://github.com/kijai/ComfyUI-SUPIR.git";
 pub const DEFAULT_UPSCALE_ID: &str = "4x-ultrasharp";
 
 /// SDXL checkpoint SUPIR merges with (shared companion, not blueprint-owned).
@@ -317,17 +316,95 @@ pub fn supir_installed(app: &AppHandle) -> bool {
         .unwrap_or(false)
 }
 
-/// Clone Ultimate SD Upscale into the portable `custom_nodes/` if missing.
-pub fn ensure_usdu_custom_node(app: &AppHandle) -> Result<(), String> {
-    ensure_git_custom_node(app, USDU_NODE_NAME, USDU_NODE_URL, "usdu")
+/// True when USDU folder exists and HEAD matches the app pin.
+pub fn usdu_at_pin(app: &AppHandle) -> bool {
+    pins::node_pin("usdu")
+        .map(|p| node_at_pin(app, p))
+        .unwrap_or(false)
 }
 
-/// Clone kijai ComfyUI-SUPIR and install Python requirements if missing.
+pub fn supir_at_pin(app: &AppHandle) -> bool {
+    pins::node_pin("supir")
+        .map(|p| node_at_pin(app, p))
+        .unwrap_or(false)
+}
+
+fn node_at_pin(app: &AppHandle, pin: &NodePin) -> bool {
+    let Ok(dir) = custom_nodes_dir(app) else {
+        return false;
+    };
+    let dest = dir.join(pin.folder);
+    if !dest.is_dir() {
+        return false;
+    }
+    git_head_sha(&dest)
+        .map(|h| h.starts_with(pin.commit) || pin.commit.starts_with(&h) || h == pin.commit)
+        .unwrap_or(false)
+}
+
+fn git_head_sha(repo: &Path) -> Result<String, String> {
+    let out = Command::new("git")
+        .current_dir(repo)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .map_err(|e| format!("git rev-parse failed: {e}"))?;
+    if !out.status.success() {
+        return Err("git rev-parse failed".into());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// Ensure every managed custom node is checked out at its pinned SHA.
+pub fn ensure_managed_nodes(app: &AppHandle) -> Result<(), String> {
+    for pin in MANAGED_NODES {
+        ensure_pinned_custom_node(app, pin)?;
+        if pin.id == "supir" {
+            patch_supir_import_hack(app)?;
+            install_supir_python_deps(app)?;
+        }
+    }
+    Ok(())
+}
+
+/// Clone / checkout Ultimate SD Upscale at the pinned commit.
+pub fn ensure_usdu_custom_node(app: &AppHandle) -> Result<(), String> {
+    let pin = pins::node_pin("usdu").ok_or("USDU pin missing")?;
+    ensure_pinned_custom_node(app, pin)
+}
+
+/// Clone / checkout kijai ComfyUI-SUPIR at the pinned commit + deps.
 pub fn ensure_supir_custom_node(app: &AppHandle) -> Result<(), String> {
-    ensure_git_custom_node(app, SUPIR_NODE_NAME, SUPIR_NODE_URL, "supir")?;
+    let pin = pins::node_pin("supir").ok_or("SUPIR pin missing")?;
+    ensure_pinned_custom_node(app, pin)?;
     patch_supir_import_hack(app)?;
     install_supir_python_deps(app)?;
     Ok(())
+}
+
+pub fn managed_nodes_pin_status(app: &AppHandle) -> Vec<pins::PinStatus> {
+    MANAGED_NODES
+        .iter()
+        .map(|pin| {
+            let installed = custom_nodes_dir(app)
+                .ok()
+                .and_then(|d| {
+                    let dest = d.join(pin.folder);
+                    if dest.is_dir() {
+                        git_head_sha(&dest).ok()
+                    } else {
+                        None
+                    }
+                })
+                .map(|h| pins::short_sha(&h).to_string());
+            let matches = node_at_pin(app, pin);
+            pins::PinStatus {
+                id: pin.id.into(),
+                expected: pins::short_sha(pin.commit).into(),
+                installed,
+                matches,
+            }
+        })
+        .collect()
 }
 
 /// kijai SUPIR resolves relative yaml targets via `import_module(..., package=folder_name)`,
@@ -398,46 +475,104 @@ fn patch_supir_import_hack(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-fn ensure_git_custom_node(
-    app: &AppHandle,
-    name: &str,
-    url: &str,
-    progress_id: &str,
-) -> Result<(), String> {
+/// Clone (if needed) and check out the pinned commit for a managed custom node.
+fn ensure_pinned_custom_node(app: &AppHandle, pin: &NodePin) -> Result<(), String> {
     let custom_dir = custom_nodes_dir(app)?;
-    let dest = custom_dir.join(name);
-    if dest.is_dir() {
+    fs::create_dir_all(&custom_dir).map_err(|e| e.to_string())?;
+    let dest = custom_dir.join(pin.folder);
+    let short = pins::short_sha(pin.commit);
+
+    if node_at_pin(app, pin) {
         return Ok(());
     }
 
     let _ = app.emit(
         "upscale://progress",
         json!({
-            "modelId": progress_id,
+            "modelId": pin.id,
             "stage": "download",
-            "message": format!("Installing {name} custom node…"),
+            "message": format!(
+                "Updating {} to pin {short} (required by this app version)…",
+                pin.folder
+            ),
         }),
     );
 
-    let status = Command::new("git")
-        .args(["clone", "--depth", "1", url])
-        .arg(&dest)
+    if !dest.is_dir() {
+        let status = Command::new("git")
+            .args(["clone", "--no-checkout", pin.repo])
+            .arg(&dest)
+            .status()
+            .map_err(|e| {
+                format!(
+                    "git clone failed for {} (is git installed?): {e}",
+                    pin.folder
+                )
+            })?;
+        if !status.success() {
+            let _ = fs::remove_dir_all(&dest);
+            return Err(format!("git clone failed for {} ({})", pin.folder, pin.repo));
+        }
+    }
+
+    let fetch = Command::new("git")
+        .current_dir(&dest)
+        .args(["fetch", "--depth", "1", "origin", pin.commit])
         .status()
-        .map_err(|e| format!("git clone failed for {name} (is git installed?): {e}"))?;
-    if !status.success() {
-        let _ = fs::remove_dir_all(&dest);
-        return Err(format!("git clone failed for {name} ({url})"));
+        .map_err(|e| format!("git fetch failed for {}: {e}", pin.folder))?;
+    if !fetch.success() {
+        // Fallback: deepen / full fetch of the commit.
+        let fetch2 = Command::new("git")
+            .current_dir(&dest)
+            .args(["fetch", "origin", pin.commit])
+            .status()
+            .map_err(|e| format!("git fetch failed for {}: {e}", pin.folder))?;
+        if !fetch2.success() {
+            return Err(format!(
+                "git fetch {}@{short} failed — check network / git",
+                pin.folder
+            ));
+        }
+    }
+
+    let checkout = Command::new("git")
+        .current_dir(&dest)
+        .args(["checkout", "--force", pin.commit])
+        .status()
+        .map_err(|e| format!("git checkout failed for {}: {e}", pin.folder))?;
+    if !checkout.success() {
+        let reset = Command::new("git")
+            .current_dir(&dest)
+            .args(["reset", "--hard", pin.commit])
+            .status()
+            .map_err(|e| format!("git reset failed for {}: {e}", pin.folder))?;
+        if !reset.success() {
+            return Err(format!(
+                "could not check out pinned commit {short} for {}",
+                pin.folder
+            ));
+        }
+    }
+
+    if !node_at_pin(app, pin) {
+        return Err(format!(
+            "{} is not at pinned commit {short} after checkout",
+            pin.folder
+        ));
     }
 
     let _ = app.emit(
         "upscale://progress",
         json!({
-            "modelId": progress_id,
+            "modelId": pin.id,
             "stage": "done",
-            "message": format!("{name} ready"),
+            "message": format!(
+                "{} ready at {short} — restart ComfyUI if it was already running",
+                pin.folder
+            ),
         }),
     );
-    let _ = app.emit("upscale://updated", progress_id);
+    let _ = app.emit("upscale://updated", pin.id);
     Ok(())
 }
 

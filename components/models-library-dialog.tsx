@@ -39,6 +39,7 @@ const ARCH_OPTIONS = [
   "z-image",
   "flux",
   "flux2",
+  "ideogram4",
   "sdxl",
   "sd15",
 ] as const

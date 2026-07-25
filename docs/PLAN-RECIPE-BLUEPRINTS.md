@@ -2,7 +2,7 @@
 
 > Status: **in progress** (2026-07-22)  
 > Relates to: [`PLAN.md`](./PLAN.md) — revises Creator Mode and what a Blueprint stores for image generation.  
-> Implemented: `recipe.rs` compilers (`z-image`, `krea2`, `flux`, `flux2`, `sdxl`/`sd15`); generate is **recipe-only**; UI controls synthesized from arch/capabilities; Creator recipe form; Official `z-image-turbo` / `krea2-turbo` recipes; **multi-arch LoRA library** (`loras/official` + user packs, User Mode stack, `LoraLoader` compile); **shared upscale refine** (Official SR including Nomos + optional USDU + SUPIR generative, Advanced → Refine).
+> Implemented: `recipe.rs` compilers (`z-image`, `krea2`, `flux`, `flux2`, `ideogram4`, `sdxl`/`sd15`); generate is **recipe-only**; UI controls synthesized from arch/capabilities; Creator recipe form; Official `z-image-turbo` / `krea2-turbo` / `ideogram4` recipes; **multi-arch LoRA library** (`loras/official` + user packs, User Mode stack, `LoraLoader` compile); **shared upscale refine** (Official SR including Nomos + optional USDU + SUPIR generative, Advanced → Refine).
 
 ## Summary
 
@@ -183,13 +183,14 @@ Those stay out until we explicitly add an optional block + tested compiler path.
 
 Do **not** build one universal graph. Build one compiler per family:
 
-| `arch`          | Typical loaders                                       | Typical CFG | Negative   |
-| --------------- | ----------------------------------------------------- | ----------- | ---------- |
-| `sd15` / `sdxl` | Checkpoint (+ optional VAE)                           | 5–7         | Yes        |
-| `flux`          | UNET + DualCLIP (T5 + CLIP-L) + VAE                   | ~1          | Usually no |
-| `flux2`         | UNET + CLIP (Mistral/Qwen) + VAE                      | ~1          | Usually no |
-| `z-image`       | UNET + TE + VAE (Z-Image / Lumina-style)              | ~1          | Usually no |
-| `krea2`         | UNET + TE + VAE (CLIP type `krea2`, EmptyLatentImage) | ~1          | no         |
+| `arch`          | Typical loaders                                        | Typical CFG | Negative   |
+| --------------- | ------------------------------------------------------ | ----------- | ---------- |
+| `sd15` / `sdxl` | Checkpoint (+ optional VAE)                            | 5–7         | Yes        |
+| `flux`          | UNET + DualCLIP (T5 + CLIP-L) + VAE                    | ~1          | Usually no |
+| `flux2`         | UNET + CLIP (Mistral/Qwen) + VAE                       | ~1          | Usually no |
+| `ideogram4`     | Dual UNET + CLIP (`ideogram4`) + VAE + DualModelGuider | ~7          | no         |
+| `z-image`       | UNET + TE + VAE (Z-Image / Lumina-style)               | ~1          | Usually no |
+| `krea2`         | UNET + TE + VAE (CLIP type `krea2`, EmptyLatentImage)  | ~1          | no         |
 
 Ship arches when we have a tested graph and an Official recipe.
 
@@ -305,7 +306,7 @@ No change to “models already on disk ⇒ skip download.”
 
 ## Open questions
 
-1. Exact `arch` enum and which two ship first. _(settled for v1: `z-image`, `krea2`, `flux`, `flux2`, `sdxl`, `sd15`)_
+1. Exact `arch` enum and which two ship first. _(settled for v1: `z-image`, `krea2`, `flux`, `flux2`, `ideogram4`, `sdxl`, `sd15`)_
 2. ~~Whether LoRAs are blueprint-owned, user-picked at generate time, or both.~~ → **Library packs** (Official + user), user-picked at generate; multi-arch variants per pack.
 3. Sampler/scheduler lists per arch (expose full Comfy enums vs curated).
 4. Image count / batch: Comfy latent batch vs queued jobs.

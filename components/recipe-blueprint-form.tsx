@@ -36,7 +36,8 @@ import {
 import { notifyError, notifySuccess } from "@/lib/notify"
 import { cn } from "@/lib/utils"
 
-type ArchId = "z-image" | "krea2" | "flux" | "flux2" | "sdxl" | "sd15"
+type ArchId =
+  "z-image" | "krea2" | "flux" | "flux2" | "ideogram4" | "sdxl" | "sd15"
 
 type ModelSlotDef = {
   role: string
@@ -66,6 +67,12 @@ type ArchDef = {
     clipType?: string
     auraShift?: number
     weightDtype?: string
+    /** Ideogram 4 scheduler / DualModelGuider extras (baked into recipe). */
+    mu?: number
+    std?: number
+    cfgOverride?: number
+    cfgOverrideStart?: number
+    cfgOverrideEnd?: number
   }
 }
 
@@ -258,6 +265,65 @@ const ARCHES: ArchDef[] = [
       seed: 0,
       guidance: 3.5,
       weightDtype: "default",
+    },
+  },
+  {
+    id: "ideogram4",
+    label: "Ideogram 4",
+    slots: [
+      {
+        role: "unet",
+        path: "diffusion_models",
+        label: "Diffusion model",
+        required: true,
+        defaultUrl:
+          "https://huggingface.co/Comfy-Org/Ideogram-4/resolve/main/diffusion_models/ideogram4_fp8_scaled.safetensors",
+      },
+      {
+        role: "unet_uncond",
+        path: "diffusion_models",
+        label: "Unconditional diffusion model",
+        required: true,
+        defaultUrl:
+          "https://huggingface.co/Comfy-Org/Ideogram-4/resolve/main/diffusion_models/ideogram4_unconditional_fp8_scaled.safetensors",
+      },
+      {
+        role: "text_encoder",
+        path: "text_encoders",
+        label: "Text encoder",
+        required: true,
+        defaultUrl:
+          "https://huggingface.co/Comfy-Org/Ideogram-4/resolve/main/text_encoders/qwen3vl_8b_fp8_scaled.safetensors",
+      },
+      {
+        role: "vae",
+        path: "vae",
+        label: "VAE",
+        required: true,
+        defaultUrl:
+          "https://huggingface.co/Comfy-Org/Ideogram-4/resolve/main/vae/flux2-vae.safetensors",
+      },
+    ],
+    sampler: "euler",
+    scheduler: "simple",
+    capabilities: {
+      negative: false,
+      loras: true,
+      controlnet: false,
+      upscale: false,
+    },
+    defaults: {
+      width: 1024,
+      height: 1024,
+      steps: 20,
+      cfg: 7,
+      seed: 0,
+      weightDtype: "default",
+      mu: 0,
+      std: 1.75,
+      cfgOverride: 3,
+      cfgOverrideStart: 0.7,
+      cfgOverrideEnd: 1,
     },
   },
   {
@@ -647,6 +713,17 @@ export function RecipeBlueprintForm({
     if (arch.defaults.weightDtype) {
       defaults.weightDtype = arch.defaults.weightDtype
     }
+    if (arch.defaults.mu != null) defaults.mu = arch.defaults.mu
+    if (arch.defaults.std != null) defaults.std = arch.defaults.std
+    if (arch.defaults.cfgOverride != null) {
+      defaults.cfgOverride = arch.defaults.cfgOverride
+    }
+    if (arch.defaults.cfgOverrideStart != null) {
+      defaults.cfgOverrideStart = arch.defaults.cfgOverrideStart
+    }
+    if (arch.defaults.cfgOverrideEnd != null) {
+      defaults.cfgOverrideEnd = arch.defaults.cfgOverrideEnd
+    }
 
     setBusy(true)
     try {
@@ -843,7 +920,7 @@ export function RecipeBlueprintForm({
               <h2 className={sectionTitle}>Generate defaults</h2>
               <div
                 className={
-                  archId === "flux2"
+                  archId === "flux2" || archId === "ideogram4"
                     ? "grid gap-2.5"
                     : "grid gap-2.5 sm:grid-cols-2"
                 }
@@ -875,6 +952,10 @@ export function RecipeBlueprintForm({
                 {archId === "flux2" ? (
                   <p className="text-[11px] leading-snug text-muted-foreground">
                     Scheduler: Flux2Scheduler (built-in)
+                  </p>
+                ) : archId === "ideogram4" ? (
+                  <p className="text-[11px] leading-snug text-muted-foreground">
+                    Scheduler: Ideogram4Scheduler (built-in)
                   </p>
                 ) : (
                   <div className="flex flex-col gap-1">

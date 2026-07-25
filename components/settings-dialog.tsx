@@ -1,6 +1,7 @@
 "use client"
 
 import { HardDriveIcon } from "lucide-react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -13,7 +14,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { openExternalUrl, type GpuInfo, type RuntimeInstall } from "@/lib/host"
+import {
+  isTauri,
+  openExternalUrl,
+  runtimePinsStatus,
+  type GpuInfo,
+  type RuntimeInstall,
+  type RuntimePinsStatus,
+} from "@/lib/host"
 import { notifyError } from "@/lib/notify"
 
 type SettingsDialogProps = {
@@ -63,6 +71,23 @@ export function SettingsDialog({
   onSaveCivitaiToken,
   gpu,
 }: SettingsDialogProps) {
+  const [pins, setPins] = useState<RuntimePinsStatus | null>(null)
+
+  useEffect(() => {
+    if (!open || !isTauri()) return
+    let cancelled = false
+    void runtimePinsStatus()
+      .then((status) => {
+        if (!cancelled) setPins(status)
+      })
+      .catch(() => {
+        if (!cancelled) setPins(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, comfy?.version, comfy?.status, runtimeBusy])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup className="max-w-lg">
@@ -95,8 +120,23 @@ export function SettingsDialog({
               <p>status: {comfy?.status ?? "—"}</p>
               <p>healthy: {comfyHealthy ? "yes" : "no"}</p>
               <p>port: {comfy?.port ?? "—"}</p>
+              <p>
+                expected: {pins?.comfy.expected ?? "—"}
+                {pins && !pins.comfy.matches ? " · update pending" : ""}
+              </p>
+              <p>installed: {pins?.comfy.installed ?? comfy?.version ?? "—"}</p>
               <p className="truncate">path: {comfy?.installPath || "—"}</p>
+              {pins?.nodes.map((node) => (
+                <p key={node.id}>
+                  {node.id}: {node.installed ?? "—"}
+                  {node.matches ? "" : ` (app expects ${node.expected})`}
+                </p>
+              ))}
             </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Engine and managed nodes are pinned by the app. Reinstall installs
+              the pinned ComfyUI build; node pins apply on first use.
+            </p>
             {runtimeMessage ? (
               <p className="mt-2 text-xs text-muted-foreground">
                 {runtimeMessage}

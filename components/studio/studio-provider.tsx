@@ -18,7 +18,10 @@ import type {
   BlueprintInstallProgress,
   DownloadModelItem,
 } from "@/components/blueprint-picker-dialog"
-import type { DownloadHistoryEntry } from "@/components/downloads-panel"
+import {
+  pushDownloadHistory,
+  type DownloadHistoryEntry,
+} from "@/components/downloads-panel"
 import { SIDE_RAIL_WIDTH } from "@/components/side-rail"
 import { STUDIO_TABS, tabFromPath } from "@/components/studio/studio-tabs"
 import {
@@ -779,16 +782,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         "Blueprint"
       if (id) {
         setDownloadHistory((prev) =>
-          [
-            {
-              blueprintId: id,
-              name,
-              status,
-              message,
-              at: Date.now(),
-            },
-            ...prev,
-          ].slice(0, 12)
+          pushDownloadHistory(prev, { blueprintId: id, name, status, message })
         )
         setPendingByBlueprint((prev) => {
           if (!(id in prev)) return prev
@@ -1053,16 +1047,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
               ? ("cancelled" as const)
               : ("error" as const)
         setDownloadHistory((prev) =>
-          [
-            {
-              blueprintId: key,
-              name,
-              status,
-              message: p.message,
-              at: Date.now(),
-            },
-            ...prev,
-          ].slice(0, 12)
+          pushDownloadHistory(prev, {
+            blueprintId: key,
+            name,
+            status,
+            message: p.message,
+          })
         )
         if (p.stage === "error") {
           notifyError(p.message, "Upscale install failed")
@@ -1136,16 +1126,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
               ? ("cancelled" as const)
               : ("error" as const)
         setDownloadHistory((prev) =>
-          [
-            {
-              blueprintId: key,
-              name,
-              status,
-              message: p.message,
-              at: Date.now(),
-            },
-            ...prev,
-          ].slice(0, 12)
+          pushDownloadHistory(prev, {
+            blueprintId: key,
+            name,
+            status,
+            message: p.message,
+          })
         )
         if (p.stage === "error") {
           notifyError(p.message, "LoRA install failed")
@@ -1398,16 +1384,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       })
       const name = blueprintsRef.current.find((b) => b.id === id)?.name || id
       setDownloadHistory((prev) =>
-        [
-          {
-            blueprintId: id,
-            name,
-            status: "error" as const,
-            message,
-            at: Date.now(),
-          },
-          ...prev,
-        ].slice(0, 12)
+        pushDownloadHistory(prev, {
+          blueprintId: id,
+          name,
+          status: "error",
+          message,
+        })
       )
       notifyError(message, "Blueprint install failed")
       pumpInstallQueueRef.current()
@@ -1637,16 +1619,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         return next
       })
       setDownloadHistory((prev) =>
-        [
-          {
-            blueprintId: key,
-            name,
-            status: "error" as const,
-            message,
-            at: Date.now(),
-          },
-          ...prev,
-        ].slice(0, 12)
+        pushDownloadHistory(prev, {
+          blueprintId: key,
+          name,
+          status: "error",
+          message,
+        })
       )
       notifyError(message, "LoRA install failed")
       pumpInstallQueueRef.current()
@@ -1671,16 +1649,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       setInstallProgress(null)
     }
     setDownloadHistory((prev) =>
-      [
-        {
-          blueprintId: key,
-          name,
-          status: "done" as const,
-          message,
-          at: Date.now(),
-        },
-        ...prev,
-      ].slice(0, 12)
+      pushDownloadHistory(prev, {
+        blueprintId: key,
+        name,
+        status: "done",
+        message,
+      })
     )
     notifySuccess(message)
     void listUpscalers()
@@ -1739,16 +1713,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         return next
       })
       setDownloadHistory((prev) =>
-        [
-          {
-            blueprintId: key,
-            name,
-            status: "error" as const,
-            message,
-            at: Date.now(),
-          },
-          ...prev,
-        ].slice(0, 12)
+        pushDownloadHistory(prev, {
+          blueprintId: key,
+          name,
+          status: "error",
+          message,
+        })
       )
       notifyError(message, "Upscale install failed")
       pumpInstallQueueRef.current()

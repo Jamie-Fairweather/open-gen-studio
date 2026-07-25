@@ -17,6 +17,7 @@ commands.allow = [
   "start_comfyui",
   "stop_comfyui",
   "comfyui_status",
+  "runtime_pins_status",
   "list_official_blueprints",
   "list_blueprints",
   "install_official_blueprint",

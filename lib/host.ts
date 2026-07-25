@@ -140,6 +140,18 @@ export type ComfyStatus = {
   runtime: RuntimeInstall | null
 }
 
+export type PinStatus = {
+  id: string
+  expected: string
+  installed: string | null
+  matches: boolean
+}
+
+export type RuntimePinsStatus = {
+  comfy: PinStatus
+  nodes: PinStatus[]
+}
+
 export type BlueprintSource = "official" | "user"
 
 export type OfficialBlueprint = {
@@ -424,6 +436,11 @@ export async function comfyuiStatus(): Promise<ComfyStatus> {
   return invoke("comfyui_status")
 }
 
+/** Expected vs installed pins for ComfyUI + managed custom nodes. */
+export async function runtimePinsStatus(): Promise<RuntimePinsStatus> {
+  return invoke("runtime_pins_status")
+}
+
 export async function listOfficialBlueprints(): Promise<OfficialBlueprint[]> {
   return listBlueprints()
 }
@@ -563,7 +580,7 @@ export function defaultUsduSteps(arch?: string | null): number {
 
 export function defaultUsduDenoise(arch?: string | null): number {
   if (arch === "krea2" || arch === "z-image") return 0.15
-  if (arch === "flux" || arch === "flux2") return 0.2
+  if (arch === "flux" || arch === "flux2" || arch === "ideogram4") return 0.2
   return 0.25
 }
 

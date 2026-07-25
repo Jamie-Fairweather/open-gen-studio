@@ -241,7 +241,7 @@ pub struct ModelEntry {
     /// Hugging Face gated repo — anonymous download returns 401.
     #[serde(default)]
     pub gated: bool,
-    /// Recipe role: `unet` | `vae` | `text_encoder` | `checkpoint` | …
+    /// Recipe role: `unet` | `unet_uncond` | `vae` | `text_encoder` | `checkpoint` | …
     #[serde(default)]
     pub role: String,
 }

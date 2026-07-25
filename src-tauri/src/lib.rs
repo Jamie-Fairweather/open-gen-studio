@@ -7,6 +7,7 @@ mod download;
 mod generate;
 mod gpu;
 mod loras;
+mod pins;
 mod providers;
 mod recipe;
 mod upscale;
@@ -95,7 +96,7 @@ pub fn run() {
                 let state = handle.state::<AppState>();
                 let needs = commands::comfy_needs_install(&state).unwrap_or(true);
                 if needs {
-                    let _ = commands::enqueue_comfy_install(&handle, &state);
+                    let _ = commands::enqueue_comfy_install(&handle, &state, false);
                 }
             });
 
@@ -117,6 +118,7 @@ pub fn run() {
             commands::start_comfyui,
             commands::stop_comfyui,
             commands::comfyui_status,
+            commands::runtime_pins_status,
             commands::list_official_blueprints,
             commands::list_blueprints,
             commands::install_official_blueprint,

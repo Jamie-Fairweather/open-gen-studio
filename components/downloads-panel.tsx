@@ -23,11 +23,43 @@ import { formatBytes, formatDuration } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 export type DownloadHistoryEntry = {
+  /** Stable React key — `blueprintId`+`at` can collide when events fire in the same ms. */
+  id: string
   blueprintId: string
   name: string
   status: "done" | "error" | "cancelled"
   message: string
   at: number
+}
+
+export function makeDownloadHistoryEntry(
+  entry: Omit<DownloadHistoryEntry, "id" | "at"> & { at?: number }
+): DownloadHistoryEntry {
+  return {
+    id: crypto.randomUUID(),
+    at: entry.at ?? Date.now(),
+    blueprintId: entry.blueprintId,
+    name: entry.name,
+    status: entry.status,
+    message: entry.message,
+  }
+}
+
+/** Prepend a history row; collapse duplicate terminal events for the same id. */
+export function pushDownloadHistory(
+  prev: DownloadHistoryEntry[],
+  entry: Omit<DownloadHistoryEntry, "id" | "at">
+): DownloadHistoryEntry[] {
+  const next = makeDownloadHistoryEntry(entry)
+  if (
+    prev[0] &&
+    prev[0].blueprintId === next.blueprintId &&
+    prev[0].status === next.status &&
+    next.at - prev[0].at < 1000
+  ) {
+    return prev
+  }
+  return [next, ...prev].slice(0, 12)
 }
 
 type DownloadsPanelProps = {
@@ -293,7 +325,7 @@ export function DownloadsPanel({
                 <ul className="divide-y divide-border/50 rounded-2xl border border-border/60 bg-card/40">
                   {history.map((entry) => (
                     <li
-                      key={`${entry.blueprintId}-${entry.at}`}
+                      key={entry.id}
                       className="flex items-center justify-between gap-3 px-4 py-3.5 md:px-5"
                     >
                       <div className="min-w-0">

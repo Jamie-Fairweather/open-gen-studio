@@ -1,0 +1,160 @@
+/** Shared Format × Target helpers for Prompt Tools UI. */
+
+export type PromptFormatId = "general" | "structured" | "graphicDesign" | "json"
+
+export type PromptTargetId =
+  "auto" | "flux" | "stableDiffusion" | "ideogram" | "zImageKrea"
+
+export const PROMPT_FORMATS: {
+  id: PromptFormatId
+  label: string
+}[] = [
+  { id: "general", label: "General" },
+  { id: "structured", label: "Structured" },
+  { id: "graphicDesign", label: "Graphic design" },
+  { id: "json", label: "JSON" },
+]
+
+export const PROMPT_TARGETS: {
+  id: PromptTargetId
+  label: string
+}[] = [
+  { id: "auto", label: "Auto" },
+  { id: "flux", label: "Flux" },
+  { id: "stableDiffusion", label: "Stable Diffusion" },
+  { id: "ideogram", label: "Ideogram" },
+  { id: "zImageKrea", label: "Z-Image / Krea" },
+]
+
+export const ENHANCE_MODES: { id: string; label: string }[] = [
+  { id: "expand", label: "Expand" },
+  { id: "clean", label: "Clean" },
+  { id: "style", label: "Style" },
+  { id: "composition", label: "Composition" },
+  { id: "concrete", label: "More concrete" },
+  { id: "lighting", label: "Lighting / camera" },
+  { id: "tags", label: "Tag-dense" },
+  { id: "short", label: "Keep short" },
+]
+
+/** Preset looks when Mode = Style (encoded as mode `style:<id>`). */
+export const STYLE_LOOKS: { id: string; label: string }[] = [
+  { id: "cinematic", label: "Cinematic" },
+  { id: "anime", label: "Anime" },
+  { id: "product", label: "Product" },
+  { id: "portrait", label: "Portrait" },
+]
+
+export function enhanceModePayload(
+  mode: string,
+  styleLook: string = "cinematic"
+): string {
+  if (mode === "style") return `style:${styleLook || "cinematic"}`
+  return mode
+}
+
+export const STRUCTURED_FIELDS = [
+  "Subject",
+  "Setting",
+  "Style",
+  "Lighting",
+  "Camera",
+  "Mood",
+  "Colors",
+  "Details",
+] as const
+
+export type StructuredFields = Record<
+  (typeof STRUCTURED_FIELDS)[number],
+  string
+>
+
+export function emptyStructuredFields(): StructuredFields {
+  return {
+    Subject: "",
+    Setting: "",
+    Style: "",
+    Lighting: "",
+    Camera: "",
+    Mood: "",
+    Colors: "",
+    Details: "",
+  }
+}
+
+/** Parse labeled sections or JSON into field editors. */
+export function parseStructuredPrompt(text: string): StructuredFields | null {
+  const trimmed = text.trim()
+  if (!trimmed) return null
+
+  if (trimmed.startsWith("{")) {
+    try {
+      const obj = JSON.parse(trimmed) as Record<string, unknown>
+      const fields = emptyStructuredFields()
+      const map: Record<string, keyof StructuredFields> = {
+        subject: "Subject",
+        setting: "Setting",
+        style: "Style",
+        lighting: "Lighting",
+        camera: "Camera",
+        mood: "Mood",
+        colors: "Colors",
+        details: "Details",
+      }
+      let hit = false
+      for (const [k, field] of Object.entries(map)) {
+        const v = obj[k]
+        if (typeof v === "string" && v.trim()) {
+          fields[field] = v.trim()
+          hit = true
+        } else if (Array.isArray(v)) {
+          fields[field] = v.map(String).join(", ")
+          hit = true
+        }
+      }
+      return hit ? fields : null
+    } catch {
+      /* fall through to labeled parse */
+    }
+  }
+
+  const fields = emptyStructuredFields()
+  let hit = false
+  const re =
+    /^(Subject|Setting|Style|Lighting|Camera|Mood|Colors|Details)\s*:\s*(.*)$/gim
+  let m: RegExpExecArray | null
+  while ((m = re.exec(trimmed)) !== null) {
+    const label = STRUCTURED_FIELDS.find(
+      (f) => f.toLowerCase() === m![1].toLowerCase()
+    )
+    if (!label) continue
+    fields[label] = m[2].trim()
+    hit = true
+  }
+  return hit ? fields : null
+}
+
+export function flattenStructuredFields(fields: StructuredFields): string {
+  return STRUCTURED_FIELDS.filter((k) => fields[k].trim())
+    .map((k) => `${k}: ${fields[k].trim()}`)
+    .join("\n")
+}
+
+/** Soft UX hint for unusual Format × Target mixes. */
+export function formatTargetHint(
+  format: PromptFormatId,
+  target: PromptTargetId
+): string | null {
+  void format
+  void target
+  return null
+}
+
+export function targetFromArch(arch?: string | null): PromptTargetId {
+  const a = (arch ?? "").toLowerCase()
+  if (a === "flux" || a === "flux2") return "flux"
+  if (a === "sdxl" || a === "sd15" || a === "sd") return "stableDiffusion"
+  if (a === "ideogram4" || a === "ideogram") return "ideogram"
+  if (a === "z-image" || a === "krea2" || a === "krea") return "zImageKrea"
+  return "auto"
+}

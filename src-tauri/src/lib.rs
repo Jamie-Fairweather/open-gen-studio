@@ -8,6 +8,7 @@ mod generate;
 mod gpu;
 mod loras;
 mod pins;
+mod prompt_tools;
 mod providers;
 mod recipe;
 mod upscale;
@@ -149,6 +150,13 @@ pub fn run() {
             commands::resolve_model_url,
             commands::generate_image,
             commands::cancel_job,
+            commands::free_comfy_vram,
+            commands::list_prompt_tool_weights,
+            commands::ensure_prompt_tools_provider,
+            commands::read_image_embedded_prompt,
+            commands::save_temp_tool_image,
+            commands::run_image_to_prompt,
+            commands::run_prompt_enhance,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

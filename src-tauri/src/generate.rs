@@ -59,6 +59,27 @@ pub fn interrupt(port: u16) -> Result<(), String> {
     Ok(())
 }
 
+/// Ask ComfyUI to unload models and free VRAM (`POST /free`).
+pub fn free_vram(port: u16) -> Result<(), String> {
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let url = format!("http://127.0.0.1:{port}/free");
+    let res = client
+        .post(&url)
+        .json(&json!({
+            "unload_models": true,
+            "free_memory": true,
+        }))
+        .send()
+        .map_err(|e| e.to_string())?;
+    if !res.status().is_success() {
+        return Err(format!("Comfy /free failed: HTTP {}", res.status()));
+    }
+    Ok(())
+}
+
 fn job_cancelled(cancelled: &Mutex<HashSet<String>>, job_id: &str) -> bool {
     cancelled
         .lock()
@@ -138,6 +159,147 @@ fn history_entry(port: u16, prompt_id: &str) -> Result<Option<Value>, String> {
     }
     let history: Value = res.json().map_err(|e| e.to_string())?;
     Ok(history.get(prompt_id).cloned())
+}
+
+/// Collect STRING / text outputs from a finished Comfy history entry (utility jobs).
+pub fn collect_text(entry: &Value) -> Result<String, String> {
+    let Some(outputs) = entry.get("outputs").and_then(|v| v.as_object()) else {
+        return Err("Comfy history has no outputs".into());
+    };
+
+    // Prefer caption-like keys; skip "PROMPT" when a sibling STRING exists (JoyCaption adv).
+    let tier1 = ["captions", "STRING", "string", "text", "output"];
+    let tier2 = ["PROMPT", "selected analyze"];
+
+    let mut tier1_hits: Vec<String> = Vec::new();
+    let mut tier2_hits: Vec<String> = Vec::new();
+    let mut fallback: Vec<String> = Vec::new();
+
+    for (_node_id, node_out) in outputs {
+        let Some(obj) = node_out.as_object() else {
+            continue;
+        };
+        for (key, val) in obj {
+            let texts = strings_from_value(val);
+            if texts.is_empty() {
+                continue;
+            }
+            if tier1.iter().any(|p| key.eq_ignore_ascii_case(p)) {
+                tier1_hits.extend(texts);
+            } else if tier2.iter().any(|p| key.eq_ignore_ascii_case(p)) {
+                tier2_hits.extend(texts);
+            } else if key.eq_ignore_ascii_case("images")
+                || key.eq_ignore_ascii_case("filenames")
+                || key.eq_ignore_ascii_case("folder_path")
+                || key.eq_ignore_ascii_case("batch_size")
+            {
+                continue;
+            } else {
+                fallback.extend(texts);
+            }
+        }
+    }
+
+    let joined = if !tier1_hits.is_empty() {
+        tier1_hits.join("\n")
+    } else if !tier2_hits.is_empty() {
+        tier2_hits.join("\n")
+    } else {
+        fallback.join("\n")
+    };
+    let trimmed = joined.trim().to_string();
+    if trimmed.is_empty() {
+        return Err("Comfy finished but returned no text".into());
+    }
+    Ok(trimmed)
+}
+
+fn strings_from_value(val: &Value) -> Vec<String> {
+    match val {
+        Value::String(s) => normalize_text_string(s),
+        Value::Array(arr) => arr
+            .iter()
+            .flat_map(|v| match v {
+                Value::String(s) => normalize_text_string(s),
+                _ => Vec::new(),
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Unwrap PreviewAny / list-serialized captions (`["tags…"]`) into plain text.
+fn normalize_text_string(s: &str) -> Vec<String> {
+    let t = s.trim();
+    if t.is_empty() {
+        return Vec::new();
+    }
+    if t.starts_with('[') {
+        if let Ok(Value::Array(arr)) = serde_json::from_str::<Value>(t) {
+            let parts: Vec<String> = arr
+                .iter()
+                .filter_map(|v| v.as_str().map(|x| x.trim().to_string()))
+                .filter(|x| !x.is_empty())
+                .collect();
+            if !parts.is_empty() {
+                return vec![parts.join("\n")];
+            }
+        }
+    }
+    vec![t.to_string()]
+}
+
+fn text_from_history_entry(entry: &Value) -> Result<Option<String>, String> {
+    if let Some(status) = entry.get("status") {
+        let completed = status
+            .get("completed")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let status_str = status
+            .get("status_str")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if status_str.eq_ignore_ascii_case("error")
+            || status_str.to_ascii_lowercase().contains("error")
+        {
+            let messages = status.get("messages").cloned().unwrap_or(json!([]));
+            return Err(format!("Comfy job failed: {messages}"));
+        }
+        if completed || status_str.eq_ignore_ascii_case("success") {
+            return Ok(Some(collect_text(entry)?));
+        }
+    }
+    if entry.get("outputs").is_some() {
+        if let Ok(text) = collect_text(entry) {
+            return Ok(Some(text));
+        }
+    }
+    Ok(None)
+}
+
+/// Wait for a text-producing Comfy prompt (history poll; no gallery).
+pub fn wait_for_text(
+    port: u16,
+    prompt_id: &str,
+    timeout: Duration,
+    cancelled: &Mutex<HashSet<String>>,
+    job_id: &str,
+) -> Result<String, String> {
+    let started = std::time::Instant::now();
+    loop {
+        if job_cancelled(cancelled, job_id) {
+            return Err("cancelled".into());
+        }
+        if started.elapsed() > timeout {
+            return Err(format!("timed out waiting for Comfy prompt {prompt_id}"));
+        }
+        if let Some(entry) = history_entry(port, prompt_id)? {
+            if let Some(text) = text_from_history_entry(&entry)? {
+                return Ok(text);
+            }
+        }
+        thread::sleep(Duration::from_millis(800));
+    }
 }
 
 fn outputs_from_history_entry(entry: &Value) -> Result<Option<Vec<ComfyImageRef>>, String> {

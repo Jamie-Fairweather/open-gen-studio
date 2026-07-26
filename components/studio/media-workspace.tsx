@@ -117,6 +117,10 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
           onApplySize={s.applySize}
           onGenerate={() => void s.handleGenerate()}
           onCancel={() => void s.handleCancel()}
+          onOpenImageToPrompt={() => s.openImageToPrompt()}
+          onOpenPromptEnhancer={() =>
+            s.openPromptEnhancer({ prompt: s.prompt })
+          }
         />
       </div>
 
@@ -222,6 +226,9 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
             onDelete={s.handleDeleteGalleryItem}
             onReusePrompt={s.handleReuseGalleryPrompt}
             onReuseSettings={s.handleReuseGallerySettings}
+            onImageToPrompt={(item) =>
+              s.openImageToPrompt({ imagePath: item.path })
+            }
           />
         </>
       ) : null}
@@ -232,6 +239,11 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
           open={lightboxOpen}
           onOpenChange={setLightboxOpen}
           src={stageSrc}
+          onImageToPrompt={
+            s.previewItem
+              ? () => s.openImageToPrompt({ imagePath: s.previewItem!.path })
+              : undefined
+          }
         />
       ) : null}
     </>

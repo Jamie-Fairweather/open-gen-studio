@@ -1,6 +1,11 @@
 "use client"
 
-import { SlidersHorizontalIcon, Trash2Icon, TypeIcon } from "lucide-react"
+import {
+  ImageIcon,
+  SlidersHorizontalIcon,
+  Trash2Icon,
+  TypeIcon,
+} from "lucide-react"
 import { memo, useCallback, useMemo, useState } from "react"
 import {
   SideRail,
@@ -22,6 +27,7 @@ type GalleryPanelProps = {
   onDelete: (id: string) => Promise<void>
   onReusePrompt: (item: GalleryItem) => void
   onReuseSettings: (item: GalleryItem) => void
+  onImageToPrompt?: (item: GalleryItem) => void
 }
 
 type GalleryTileProps = {
@@ -34,6 +40,7 @@ type GalleryTileProps = {
   onDelete: (id: string) => void
   onReusePrompt: (item: GalleryItem) => void
   onReuseSettings: (item: GalleryItem) => void
+  onImageToPrompt?: (item: GalleryItem) => void
 }
 
 const GalleryTile = memo(function GalleryTile({
@@ -46,6 +53,7 @@ const GalleryTile = memo(function GalleryTile({
   onDelete,
   onReusePrompt,
   onReuseSettings,
+  onImageToPrompt,
 }: GalleryTileProps) {
   const src = gallerySrc(item.thumbnailPath || item.path)
 
@@ -81,8 +89,22 @@ const GalleryTile = memo(function GalleryTile({
           className="pointer-events-none absolute inset-0 z-10 rounded-lg border-2 border-primary shadow-[inset_0_0_0_1px_rgba(0,0,0,0.35)]"
         />
       ) : null}
-      {canReusePrompt || canReuseSettings ? (
+      {canReusePrompt || canReuseSettings || onImageToPrompt ? (
         <div className="absolute start-1.5 bottom-1.5 z-20 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+          {onImageToPrompt ? (
+            <WithTooltip label="Image to Prompt">
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="default"
+                className="rounded-md shadow-md"
+                onClick={() => onImageToPrompt(item)}
+                aria-label="Image to Prompt"
+              >
+                <ImageIcon />
+              </Button>
+            </WithTooltip>
+          ) : null}
           {canReusePrompt ? (
             <WithTooltip label="Reuse prompt">
               <Button
@@ -139,6 +161,7 @@ export function GalleryPanel({
   onDelete,
   onReusePrompt,
   onReuseSettings,
+  onImageToPrompt,
 }: GalleryPanelProps) {
   const [deleting, setDeleting] = useState(false)
 
@@ -185,6 +208,7 @@ export function GalleryPanel({
                 onDelete={handleDelete}
                 onReusePrompt={onReusePrompt}
                 onReuseSettings={onReuseSettings}
+                onImageToPrompt={onImageToPrompt}
               />
             ))}
           </div>

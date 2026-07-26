@@ -475,8 +475,14 @@ fn patch_supir_import_hack(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Ensure a managed custom node (by pin id) is at the app-pinned commit.
+pub fn ensure_pinned_node(app: &AppHandle, pin_id: &str) -> Result<(), String> {
+    let pin = pins::node_pin(pin_id).ok_or_else(|| format!("unknown node pin: {pin_id}"))?;
+    ensure_pinned_custom_node(app, pin)
+}
+
 /// Clone (if needed) and check out the pinned commit for a managed custom node.
-fn ensure_pinned_custom_node(app: &AppHandle, pin: &NodePin) -> Result<(), String> {
+pub fn ensure_pinned_custom_node(app: &AppHandle, pin: &NodePin) -> Result<(), String> {
     let custom_dir = custom_nodes_dir(app)?;
     fs::create_dir_all(&custom_dir).map_err(|e| e.to_string())?;
     let dest = custom_dir.join(pin.folder);

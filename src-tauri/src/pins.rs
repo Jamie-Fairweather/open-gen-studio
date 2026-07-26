@@ -41,6 +41,18 @@ pub const MANAGED_NODES: &[NodePin] = &[
         repo: "https://github.com/kijai/ComfyUI-SUPIR.git",
         commit: "99d49e912c905ce1aaf7d15898f550b40fb3e6cc",
     },
+    NodePin {
+        id: "joycaption",
+        folder: "ComfyUI-JoyCaption",
+        repo: "https://github.com/1038lab/ComfyUI-JoyCaption.git",
+        commit: "a0e9f0a17a5deb933fef341e2c7b0131e4f83c8a",
+    },
+    NodePin {
+        id: "llm-session",
+        folder: "ComfyUI-Prompt-Rewriter",
+        repo: "https://github.com/BigStationW/ComfyUI-Prompt-Rewriter.git",
+        commit: "03dee8dad2f9dea74903623715a4859d90ac2b0f",
+    },
 ];
 
 pub fn node_pin(id: &str) -> Option<&'static NodePin> {

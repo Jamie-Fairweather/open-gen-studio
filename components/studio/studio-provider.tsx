@@ -80,6 +80,7 @@ import {
   type Blueprint,
   type RuntimeInstall,
   type StudioTab,
+  type ToolsHandoff,
 } from "@/lib/host"
 
 const DEFAULT_UPSCALE_MODEL_ID = "4x-ultrasharp"
@@ -221,8 +222,15 @@ export type StudioContextValue = {
   studioLabel: string
   showCreator: boolean
   showDownloads: boolean
+  showTools: boolean
   showGalleryRail: boolean
   showAdvancedRail: boolean
+  toolsHandoff: ToolsHandoff | null
+  setToolsHandoff: Dispatch<SetStateAction<ToolsHandoff | null>>
+  /** Read and clear handoff (call once on tool page mount). */
+  consumeToolsHandoff: () => ToolsHandoff | null
+  openImageToPrompt: (handoff?: ToolsHandoff) => void
+  openPromptEnhancer: (handoff?: ToolsHandoff) => void
   stageInsetLeft: string | undefined
   stageInsetRight: string | undefined
   activeModel: DownloadModelItem | null
@@ -317,6 +325,34 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [prompt, setPrompt] = useState("")
+  const [toolsHandoff, setToolsHandoff] = useState<ToolsHandoff | null>(null)
+  const toolsHandoffRef = useRef<ToolsHandoff | null>(null)
+  toolsHandoffRef.current = toolsHandoff
+
+  const consumeToolsHandoff = useCallback((): ToolsHandoff | null => {
+    const current = toolsHandoffRef.current
+    if (current) {
+      setToolsHandoff(null)
+      toolsHandoffRef.current = null
+    }
+    return current
+  }, [])
+
+  const openImageToPrompt = useCallback(
+    (handoff?: ToolsHandoff) => {
+      if (handoff) setToolsHandoff(handoff)
+      router.push("/tools/image-to-prompt")
+    },
+    [router]
+  )
+
+  const openPromptEnhancer = useCallback(
+    (handoff?: ToolsHandoff) => {
+      if (handoff) setToolsHandoff(handoff)
+      router.push("/tools/prompt-enhancer")
+    },
+    [router]
+  )
   const [aspectId, setAspectId] = useState<string>("1:1")
   const [sideLength, setSideLength] = useState(SIDE_LENGTH_DEFAULT)
   const aspectIdRef = useRef(aspectId)
@@ -404,13 +440,24 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   }
 
   const tabBlueprints = useMemo(() => {
-    if (studioTab === "creator") return []
-    if (studioTab === "downloads") return blueprints
+    if (
+      studioTab === "creator" ||
+      studioTab === "downloads" ||
+      studioTab === "tools"
+    ) {
+      return studioTab === "downloads" ? blueprints : []
+    }
     return blueprints.filter((bp) => bp.category.toLowerCase() === studioTab)
   }, [blueprints, studioTab])
 
   const tabGallery = useMemo(() => {
-    if (studioTab === "creator" || studioTab === "downloads") return []
+    if (
+      studioTab === "creator" ||
+      studioTab === "downloads" ||
+      studioTab === "tools"
+    ) {
+      return []
+    }
     return gallery.filter((item) => galleryItemCategory(item) === studioTab)
   }, [gallery, studioTab])
 
@@ -2045,7 +2092,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const canGenerate = studioTab === "image"
   const showCreator = studioTab === "creator"
   const showDownloads = studioTab === "downloads"
-  const showGalleryRail = !showCreator && !showDownloads
+  const showTools = studioTab === "tools"
+  const showGalleryRail = !showCreator && !showDownloads && !showTools
   const showAdvancedRail = showGalleryRail && canGenerate
   const stageInsetLeft =
     showAdvancedRail && advancedOpen ? SIDE_RAIL_WIDTH : undefined
@@ -2163,8 +2211,14 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     studioLabel,
     showCreator,
     showDownloads,
+    showTools,
     showGalleryRail,
     showAdvancedRail,
+    toolsHandoff,
+    setToolsHandoff,
+    consumeToolsHandoff,
+    openImageToPrompt,
+    openPromptEnhancer,
     stageInsetLeft,
     stageInsetRight,
     activeModel,

@@ -1,6 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 
 /** Shared content width for Creator / Downloads style panels. */
@@ -91,12 +92,16 @@ type StudioPanelBodyProps = {
 /** Scrollable body with standard gutters + max-width column. */
 export function StudioPanelBody({ children, className }: StudioPanelBodyProps) {
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className={cn("flex min-h-full flex-col py-4", STUDIO_PANEL_GUTTER)}>
-        <StudioPanelColumn className={cn("flex-1", className)}>
-          {children}
-        </StudioPanelColumn>
-      </div>
+    <div className="relative min-h-0 flex-1">
+      <ScrollArea className="h-full" scrollFade>
+        <div
+          className={cn("flex min-h-full flex-col py-4", STUDIO_PANEL_GUTTER)}
+        >
+          <StudioPanelColumn className={cn("flex-1", className)}>
+            {children}
+          </StudioPanelColumn>
+        </div>
+      </ScrollArea>
     </div>
   )
 }

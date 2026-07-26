@@ -47,5 +47,12 @@ commands.allow = [
   "creator_suggest_packaging",
   "resolve_model_url",
   "generate_image",
-  "cancel_job"
+  "cancel_job",
+  "free_comfy_vram",
+  "list_prompt_tool_weights",
+  "ensure_prompt_tools_provider",
+  "read_image_embedded_prompt",
+  "save_temp_tool_image",
+  "run_image_to_prompt",
+  "run_prompt_enhance"
 ]

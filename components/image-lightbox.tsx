@@ -1,7 +1,13 @@
 "use client"
 
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
-import { MinusIcon, PlusIcon, RotateCcwIcon, XIcon } from "lucide-react"
+import {
+  ImageIcon,
+  MinusIcon,
+  PlusIcon,
+  RotateCcwIcon,
+  XIcon,
+} from "lucide-react"
 import {
   useCallback,
   useEffect,
@@ -24,6 +30,7 @@ type ImageLightboxProps = {
   onOpenChange: (open: boolean) => void
   src: string | null
   alt?: string
+  onImageToPrompt?: () => void
 }
 
 type Size = { w: number; h: number }
@@ -45,6 +52,7 @@ export function ImageLightbox({
   onOpenChange,
   src,
   alt = "Generated image",
+  onImageToPrompt,
 }: ImageLightboxProps) {
   // viewZoom 1 = fitted; pixelZoom = fitScale * viewZoom
   const [viewZoom, setViewZoom] = useState(1)
@@ -328,6 +336,23 @@ export function ImageLightbox({
 
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center p-3 sm:p-5">
             <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-border/60 bg-card/85 p-1 shadow-lg backdrop-blur-md">
+              {onImageToPrompt ? (
+                <WithTooltip label="Image to Prompt">
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    className="size-9 rounded-full"
+                    aria-label="Image to Prompt"
+                    onClick={() => {
+                      onImageToPrompt()
+                      onOpenChange(false)
+                    }}
+                  >
+                    <ImageIcon className="size-4" />
+                  </Button>
+                </WithTooltip>
+              ) : null}
               <WithTooltip label="Zoom out">
                 <Button
                   type="button"

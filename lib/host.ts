@@ -21,7 +21,14 @@ export type GalleryItem = {
 }
 
 export type MediaCategory = "image" | "video" | "audio"
-export type StudioTab = MediaCategory | "creator" | "downloads"
+export type StudioTab = MediaCategory | "creator" | "downloads" | "tools"
+
+/** In-memory handoff into Tools pages (not URL query — prompts can be large). */
+export type ToolsHandoff = {
+  imagePath?: string
+  prompt?: string
+  negative?: string
+}
 
 export type GalleryRecipe = {
   blueprintId: string | null
@@ -302,6 +309,22 @@ export type BlueprintDetail = {
   defaults?: Record<string, unknown>
 }
 
+export type PromptToolResult = {
+  prompt: string
+  negative?: string | null
+  provider: string
+  format: string
+  target: string
+}
+
+export type PromptToolWeightInfo = {
+  id: string
+  name: string
+  description: string
+  ready: boolean
+  provider: string
+}
+
 export type JobProgress = {
   jobId: string
   stage: string
@@ -312,6 +335,10 @@ export type JobProgress = {
   max?: number
   /** Absolute path to latest latent preview JPEG/PNG (rewritten each frame). */
   previewPath?: string
+  /** Prompt-tool final text (legacy field). */
+  text?: string
+  /** Prompt-tool structured result. */
+  result?: PromptToolResult
 }
 
 export function gallerySrc(path: string): string {
@@ -723,6 +750,86 @@ export async function generateImage(
 
 export async function cancelJob(id: string): Promise<Job> {
   return invoke("cancel_job", { id })
+}
+
+export async function freeComfyVram(): Promise<void> {
+  return invoke("free_comfy_vram")
+}
+
+export async function listPromptToolWeights(): Promise<PromptToolWeightInfo[]> {
+  return invoke("list_prompt_tool_weights")
+}
+
+export async function ensurePromptToolsProvider(
+  providerId: string
+): Promise<void> {
+  return invoke("ensure_prompt_tools_provider", { providerId })
+}
+
+export async function readImageEmbeddedPrompt(
+  imagePath: string
+): Promise<string | null> {
+  return invoke("read_image_embedded_prompt", { imagePath })
+}
+
+export async function saveTempToolImage(
+  bytes: number[] | Uint8Array,
+  ext: string
+): Promise<string> {
+  const payload = Array.from(bytes)
+  return invoke("save_temp_tool_image", { bytes: payload, ext })
+}
+
+export async function runImageToPrompt(args: {
+  imagePath: string
+  format: string
+  target: string
+  arch?: string | null
+}): Promise<Job> {
+  return invoke("run_image_to_prompt", {
+    args: {
+      imagePath: args.imagePath,
+      format: args.format,
+      target: args.target,
+      arch: args.arch ?? null,
+    },
+  })
+}
+
+export async function runPromptEnhance(args: {
+  prompt: string
+  target: string
+  arch?: string | null
+  mode?: string | null
+}): Promise<Job> {
+  return invoke("run_prompt_enhance", {
+    args: {
+      prompt: args.prompt,
+      target: args.target,
+      arch: args.arch ?? null,
+      mode: args.mode ?? null,
+    },
+  })
+}
+
+export function onPromptToolsProgress(
+  handler: (progress: {
+    stage: string
+    message: string
+    providerId?: string
+    filename?: string
+  }) => void
+): Promise<UnlistenFn> {
+  return listen("prompt-tools://progress", (e) =>
+    handler(
+      e.payload as {
+        stage: string
+        message: string
+        providerId?: string
+        filename?: string
+      }
+    )
+  )
 }
 
 export function onJobProgress(

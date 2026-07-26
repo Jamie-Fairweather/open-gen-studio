@@ -126,6 +126,7 @@ Simple form generated from a Blueprint’s **UI schema**:
 - Prompt / negative prompt
 - Aspect ratio, seed, etc.
 - Generate → job queue → Gallery
+- **Tools** (Image to Prompt, Prompt Enhancer) — Comfy utility jobs that write back into Image Studio
 
 No graph. No nodes.
 

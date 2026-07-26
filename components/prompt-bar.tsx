@@ -2,9 +2,11 @@
 
 import {
   ChevronDownIcon,
+  ImageIcon,
   LayersIcon,
   RatioIcon,
   SparklesIcon,
+  WandSparklesIcon,
   XIcon,
 } from "lucide-react"
 import { useLayoutEffect, useRef, type CSSProperties } from "react"
@@ -51,6 +53,9 @@ type PromptBarProps = {
   onApplySize: (aspectId: string, sideLength: number) => void
   onGenerate: () => void
   onCancel: () => void
+  /** Empty prompt → Image to Prompt; non-empty → Prompt Enhancer. */
+  onOpenImageToPrompt?: () => void
+  onOpenPromptEnhancer?: () => void
 }
 
 export function PromptBar({
@@ -72,7 +77,10 @@ export function PromptBar({
   onApplySize,
   onGenerate,
   onCancel,
+  onOpenImageToPrompt,
+  onOpenPromptEnhancer,
 }: PromptBarProps) {
+  const promptEmpty = !prompt.trim()
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const aspectMeta =
     ASPECT_RATIOS.find((a) => a.id === aspectId) ?? ASPECT_RATIOS[0]
@@ -301,6 +309,38 @@ export function PromptBar({
           ) : null}
 
           <div className="ms-auto flex items-center gap-2">
+            {promptEmpty && onOpenImageToPrompt ? (
+              <WithTooltip label="Image to Prompt">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="rounded-full"
+                  disabled={generating}
+                  onClick={onOpenImageToPrompt}
+                  aria-label="Image to Prompt"
+                >
+                  <ImageIcon className="size-3.5" />
+                  <span className="hidden sm:inline">From image</span>
+                </Button>
+              </WithTooltip>
+            ) : null}
+            {!promptEmpty && onOpenPromptEnhancer ? (
+              <WithTooltip label="Enhance prompt">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="rounded-full"
+                  disabled={generating}
+                  onClick={onOpenPromptEnhancer}
+                  aria-label="Enhance prompt"
+                >
+                  <WandSparklesIcon className="size-3.5" />
+                  <span className="hidden sm:inline">Enhance</span>
+                </Button>
+              </WithTooltip>
+            ) : null}
             {generating ? (
               <Button
                 type="button"

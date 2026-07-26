@@ -1,11 +1,7 @@
 "use client"
 
-import { DownloadIcon, XIcon } from "lucide-react"
-import { useMemo } from "react"
-import type {
-  BlueprintInstallProgress,
-  DownloadModelItem,
-} from "@/components/blueprint-picker-dialog"
+import { DownloadIcon, PauseIcon, PlayIcon, XIcon } from "lucide-react"
+import type { DownloadJobView, DownloadSnapshot } from "@/lib/host"
 import {
   StudioPanel,
   StudioPanelBody,
@@ -19,64 +15,24 @@ import {
 } from "@/components/ui/progress"
 import { Spinner } from "@/components/ui/spinner"
 import { WithTooltip } from "@/components/ui/tooltip"
-import { formatBytes, formatDuration } from "@/lib/format"
+import { formatBytes } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
-export type DownloadHistoryEntry = {
-  /** Stable React key — `blueprintId`+`at` can collide when events fire in the same ms. */
-  id: string
-  blueprintId: string
-  name: string
-  status: "done" | "error" | "cancelled"
-  message: string
-  at: number
-}
-
-export function makeDownloadHistoryEntry(
-  entry: Omit<DownloadHistoryEntry, "id" | "at"> & { at?: number }
-): DownloadHistoryEntry {
-  return {
-    id: crypto.randomUUID(),
-    at: entry.at ?? Date.now(),
-    blueprintId: entry.blueprintId,
-    name: entry.name,
-    status: entry.status,
-    message: entry.message,
-  }
-}
-
-/** Prepend a history row; collapse duplicate terminal events for the same id. */
-export function pushDownloadHistory(
-  prev: DownloadHistoryEntry[],
-  entry: Omit<DownloadHistoryEntry, "id" | "at">
-): DownloadHistoryEntry[] {
-  const next = makeDownloadHistoryEntry(entry)
-  if (
-    prev[0] &&
-    prev[0].blueprintId === next.blueprintId &&
-    prev[0].status === next.status &&
-    next.at - prev[0].at < 1000
-  ) {
-    return prev
-  }
-  return [next, ...prev].slice(0, 12)
-}
-
 type DownloadsPanelProps = {
-  activeModel: DownloadModelItem | null
-  queuedModels: DownloadModelItem[]
-  progress: BlueprintInstallProgress | null
-  history: DownloadHistoryEntry[]
-  onCancel: () => void
-  /** Remove a waiting blueprint (and all its queued model rows). */
-  onRemoveBlueprint: (blueprintId: string) => void
+  snapshot: DownloadSnapshot
+  onPause: (jobId: string) => void
+  onResume: (jobId: string) => void
+  onCancel: (jobId: string) => void
   onOpenBlueprints?: () => void
 }
 
-function statusLabel(status: DownloadHistoryEntry["status"]): string {
+function statusLabel(status: string): string {
   if (status === "done") return "Ready"
   if (status === "error") return "Failed"
-  return "Cancelled"
+  if (status === "cancelled") return "Cancelled"
+  if (status === "paused") return "Paused"
+  if (status === "running") return "Running"
+  return "Waiting"
 }
 
 function TransferRail({ value, idle }: { value: number; idle?: boolean }) {
@@ -104,49 +60,52 @@ function TransferRail({ value, idle }: { value: number; idle?: boolean }) {
   )
 }
 
+function jobPct(job: DownloadJobView): number | null {
+  if (job.total != null && job.total > 0) {
+    return Math.min(100, Math.round((job.downloaded / job.total) * 100))
+  }
+  const active = job.steps.find(
+    (s) => s.status === "running" || s.status === "paused"
+  )
+  if (active?.bytesTotal && active.bytesTotal > 0) {
+    return Math.min(
+      100,
+      Math.round((active.bytesDone / active.bytesTotal) * 100)
+    )
+  }
+  return null
+}
+
 export function DownloadsPanel({
-  activeModel,
-  queuedModels,
-  progress,
-  history,
+  snapshot,
+  onPause,
+  onResume,
   onCancel,
-  onRemoveBlueprint,
   onOpenBlueprints,
 }: DownloadsPanelProps) {
-  const filePct =
-    progress?.total != null && progress.total > 0
-      ? Math.min(100, Math.round((progress.downloaded / progress.total) * 100))
-      : null
-  const barValue = filePct ?? (activeModel ? 0 : null)
-  const etaSecs =
-    progress &&
-    progress.total != null &&
-    progress.total > progress.downloaded &&
-    progress.bytesPerSec > 8 * 1024
-      ? (progress.total - progress.downloaded) / progress.bytesPerSec
-      : null
-
-  const hasActive = activeModel != null
-  const hasQueued = queuedModels.length > 0
-  const empty = !hasActive && !hasQueued && history.length === 0
-  const pendingCount = (hasActive ? 1 : 0) + queuedModels.length
-  const statusLine = hasActive
-    ? hasQueued
-      ? `Transferring · ${queuedModels.length} waiting`
-      : "Transferring"
-    : hasQueued
-      ? `${queuedModels.length} waiting`
+  const active = snapshot.active
+  const queued = snapshot.queued
+  const history = snapshot.history
+  const empty = !active && queued.length === 0 && history.length === 0
+  const pendingCount = (active ? 1 : 0) + queued.length
+  const statusLine = active
+    ? queued.length > 0
+      ? `${active.status === "paused" ? "Paused" : "Transferring"} · ${queued.length} waiting`
+      : active.status === "paused"
+        ? "Paused"
+        : "Transferring"
+    : queued.length > 0
+      ? `${queued.length} waiting`
       : history.length > 0
         ? `${history.length} recent`
         : "Idle"
 
-  const queuedBlueprintIds = useMemo(() => {
-    const ids: string[] = []
-    for (const item of queuedModels) {
-      if (!ids.includes(item.blueprintId)) ids.push(item.blueprintId)
-    }
-    return ids
-  }, [queuedModels])
+  const pct = active ? jobPct(active) : null
+  const activeStep = active?.steps.find(
+    (s) => s.status === "running" || s.status === "paused"
+  )
+  const bytesDone = activeStep?.bytesDone ?? active?.downloaded ?? 0
+  const bytesTotal = activeStep?.bytesTotal ?? active?.total ?? null
 
   return (
     <StudioPanel>
@@ -192,8 +151,8 @@ export function DownloadsPanel({
                 Nothing in the queue
               </h2>
               <p className="text-sm leading-relaxed text-muted-foreground">
-                Each missing model becomes its own queue item. Already-present
-                files are skipped.
+                Installs persist across restarts. Pause anytime — partial files
+                resume where they left off.
               </p>
               {onOpenBlueprints ? (
                 <Button
@@ -208,52 +167,75 @@ export function DownloadsPanel({
           </div>
         ) : (
           <ul className="flex flex-col gap-3 pb-4">
-            {hasActive && activeModel ? (
+            {active ? (
               <li className="overflow-hidden rounded-2xl border border-primary/30 bg-card/80">
                 <div className="space-y-4 p-4 md:p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate font-mono text-sm font-medium">
-                        {activeModel.filename}
+                        {active.activeLabel ?? active.title}
                       </p>
                       <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Spinner className="size-3.5 text-primary" />
-                        {activeModel.blueprintName}
+                        {active.status === "paused" ? (
+                          <PauseIcon className="size-3.5 text-primary" />
+                        ) : (
+                          <Spinner className="size-3.5 text-primary" />
+                        )}
+                        {active.title}
                         {pendingCount > 1
-                          ? ` · ${pendingCount} models in queue`
+                          ? ` · ${pendingCount} jobs in queue`
                           : null}
                       </p>
                     </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="shrink-0 rounded-full before:hidden"
-                      onClick={onCancel}
-                    >
-                      <XIcon />
-                      Cancel
-                    </Button>
+                    <div className="flex shrink-0 gap-2">
+                      {active.status === "paused" ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="rounded-full before:hidden"
+                          onClick={() => onResume(active.id)}
+                        >
+                          <PlayIcon />
+                          Resume
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="rounded-full before:hidden"
+                          onClick={() => onPause(active.id)}
+                        >
+                          <PauseIcon />
+                          Pause
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full before:hidden"
+                        onClick={() => onCancel(active.id)}
+                      >
+                        <XIcon />
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
-                    <TransferRail value={barValue ?? 0} />
+                    <TransferRail value={pct ?? 0} />
                     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 font-mono text-[11px] text-muted-foreground tabular-nums">
                       <span>
-                        {progress?.total != null
-                          ? `${formatBytes(progress.downloaded)} / ${formatBytes(progress.total)}`
-                          : progress && progress.downloaded > 0
-                            ? formatBytes(progress.downloaded)
+                        {bytesTotal != null
+                          ? `${formatBytes(bytesDone)} / ${formatBytes(bytesTotal)}`
+                          : bytesDone > 0
+                            ? formatBytes(bytesDone)
                             : "Preparing…"}
                       </span>
                       <span className="text-foreground/85">
-                        {filePct != null ? `${filePct}%` : "-"}
-                        {progress && progress.bytesPerSec > 8 * 1024
-                          ? `  ${formatBytes(progress.bytesPerSec)}/s`
-                          : ""}
-                        {etaSecs != null
-                          ? `  ETA ${formatDuration(etaSecs)}`
-                          : ""}
+                        {pct != null ? `${pct}%` : "-"}
                       </span>
                     </div>
                   </div>
@@ -261,58 +243,55 @@ export function DownloadsPanel({
               </li>
             ) : null}
 
-            {hasQueued ? (
+            {queued.length > 0 ? (
               <li className="pt-2">
                 <p className="mb-2 font-mono text-[11px] tracking-wide text-muted-foreground uppercase">
                   Queue
                 </p>
                 <ul className="divide-y divide-border/50 rounded-2xl border border-border/60 bg-card/40">
-                  {queuedModels.map((item) => {
-                    // Only waiting blueprints can be removed; active install uses Cancel.
-                    const showRemove =
-                      item.blueprintId !== activeModel?.blueprintId &&
-                      queuedBlueprintIds.includes(item.blueprintId)
-                    const isFirstOfBlueprint =
-                      queuedModels.find(
-                        (m) => m.blueprintId === item.blueprintId
-                      )?.filename === item.filename
-                    return (
-                      <li
-                        key={`${item.blueprintId}:${item.filename}`}
-                        className="flex items-center justify-between gap-3 px-4 py-3.5 md:px-5"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate font-mono text-sm font-medium">
-                            {item.filename}
-                          </p>
-                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                            {item.blueprintName}
-                            {item.role ? ` · ${item.role}` : ""}
-                          </p>
-                        </div>
-                        {showRemove && isFirstOfBlueprint ? (
-                          <WithTooltip label="Remove this blueprint from the queue">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="shrink-0 rounded-full before:hidden"
-                              onClick={() =>
-                                onRemoveBlueprint(item.blueprintId)
-                              }
-                            >
-                              <XIcon />
-                              Remove
-                            </Button>
-                          </WithTooltip>
-                        ) : (
-                          <span className="shrink-0 text-xs text-muted-foreground">
-                            Waiting
-                          </span>
-                        )}
-                      </li>
-                    )
-                  })}
+                  {queued.map((job) => (
+                    <li
+                      key={job.id}
+                      className="flex items-center justify-between gap-3 px-4 py-3.5 md:px-5"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-mono text-sm font-medium">
+                          {job.title}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {job.steps.length} step
+                          {job.steps.length === 1 ? "" : "s"}
+                          {job.status === "paused" ? " · paused" : ""}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        {job.status === "paused" ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="rounded-full before:hidden"
+                            onClick={() => onResume(job.id)}
+                          >
+                            <PlayIcon />
+                            Resume
+                          </Button>
+                        ) : null}
+                        <WithTooltip label="Remove from queue">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="rounded-full before:hidden"
+                            onClick={() => onCancel(job.id)}
+                          >
+                            <XIcon />
+                            Remove
+                          </Button>
+                        </WithTooltip>
+                      </div>
+                    </li>
+                  ))}
                 </ul>
               </li>
             ) : null}
@@ -323,31 +302,32 @@ export function DownloadsPanel({
                   Recent
                 </p>
                 <ul className="divide-y divide-border/50 rounded-2xl border border-border/60 bg-card/40">
-                  {history.map((entry) => (
+                  {history.map((job) => (
                     <li
-                      key={entry.id}
+                      key={job.id}
                       className="flex items-center justify-between gap-3 px-4 py-3.5 md:px-5"
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">
-                          {entry.name}
+                          {job.title}
                         </p>
-                        <WithTooltip label={entry.message}>
+                        <WithTooltip label={job.error ?? job.status}>
                           <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                            {entry.message}
+                            {job.error ?? statusLabel(job.status)}
                           </p>
                         </WithTooltip>
                       </div>
                       <span
                         className={cn(
                           "shrink-0 text-xs font-medium",
-                          entry.status === "done" && "text-primary",
-                          entry.status === "error" && "text-destructive",
-                          entry.status === "cancelled" &&
+                          job.status === "done" && "text-primary",
+                          job.status === "error" && "text-destructive",
+                          (job.status === "cancelled" ||
+                            job.status === "paused") &&
                             "text-muted-foreground"
                         )}
                       >
-                        {statusLabel(entry.status)}
+                        {statusLabel(job.status)}
                       </span>
                     </li>
                   ))}

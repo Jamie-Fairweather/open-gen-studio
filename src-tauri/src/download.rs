@@ -12,8 +12,9 @@ const USER_AGENT: &str = "OpenGenAI/0.1 (local; +https://github.com/open-gen-ai)
 
 pub use crate::providers::{SETTING_CIVITAI_TOKEN, SETTING_HF_TOKEN};
 
-/// Cooperative cancel for in-flight `download_file` / blueprint installs.
+/// Cooperative cancel / pause for the active HTTP transfer (single-flight worker).
 static DOWNLOAD_CANCEL: AtomicBool = AtomicBool::new(false);
+static DOWNLOAD_PAUSE: AtomicBool = AtomicBool::new(false);
 
 /// Request cancel of the current download(s). Cleared when a new install starts.
 pub fn request_cancel() {
@@ -22,10 +23,28 @@ pub fn request_cancel() {
 
 pub fn clear_cancel() {
     DOWNLOAD_CANCEL.store(false, Ordering::SeqCst);
+    DOWNLOAD_PAUSE.store(false, Ordering::SeqCst);
 }
 
 pub fn is_cancelled() -> bool {
     DOWNLOAD_CANCEL.load(Ordering::SeqCst)
+}
+
+pub fn request_pause() {
+    DOWNLOAD_PAUSE.store(true, Ordering::SeqCst);
+}
+
+pub fn clear_pause() {
+    DOWNLOAD_PAUSE.store(false, Ordering::SeqCst);
+}
+
+pub fn is_paused() -> bool {
+    DOWNLOAD_PAUSE.load(Ordering::SeqCst)
+}
+
+/// Clear both signals before the worker starts a job.
+pub fn clear_transfer_controls() {
+    clear_cancel();
 }
 
 /// Sync Hugging Face token from Settings DB (or clear it).
@@ -146,6 +165,7 @@ pub fn local_file_len(path: &Path) -> Option<u64> {
 
 /// True when a local model file looks like real weights (not an HTML error page).
 /// Size-only skip is unsafe: a resumed HF HTML gate + Range can match remote length.
+/// Note: truncated safetensors still pass — use [`local_file_complete`] before skipping downloads.
 pub fn local_file_usable(path: &Path) -> bool {
     let Ok(mut file) = File::open(path) else {
         return false;
@@ -181,6 +201,68 @@ pub fn local_file_usable(path: &Path) -> bool {
     }
     let mut first = [0u8; 1];
     matches!(file.read_exact(&mut first), Ok(())) && first[0] == b'{'
+}
+
+/// Usable **and** fully present. Truncated safetensors keep a valid header but miss tensor bytes.
+pub fn local_file_complete(path: &Path) -> bool {
+    if !local_file_usable(path) {
+        return false;
+    }
+    let is_st = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("safetensors"));
+    if !is_st {
+        return true;
+    }
+    safetensors_payload_complete(path)
+}
+
+/// Verify file length covers every tensor listed in the safetensors JSON header.
+fn safetensors_payload_complete(path: &Path) -> bool {
+    let Ok(mut file) = File::open(path) else {
+        return false;
+    };
+    let Ok(meta) = file.metadata() else {
+        return false;
+    };
+    let file_len = meta.len();
+    let mut len_buf = [0u8; 8];
+    if file.read_exact(&mut len_buf).is_err() {
+        return false;
+    }
+    let header_len = u64::from_le_bytes(len_buf);
+    if !(2..=16 * 1024 * 1024).contains(&header_len) {
+        return false;
+    }
+    if file_len < 8 + header_len {
+        return false;
+    }
+    let mut header = vec![0u8; header_len as usize];
+    if file.read_exact(&mut header).is_err() {
+        return false;
+    }
+    let Ok(serde_json::Value::Object(map)) = serde_json::from_slice::<serde_json::Value>(&header)
+    else {
+        return false;
+    };
+    let mut max_end = 0u64;
+    for (key, val) in &map {
+        if key == "__metadata__" {
+            continue;
+        }
+        let Some(offsets) = val.get("data_offsets").and_then(|o| o.as_array()) else {
+            continue;
+        };
+        if offsets.len() != 2 {
+            return false;
+        }
+        let Some(end) = offsets[1].as_u64() else {
+            return false;
+        };
+        max_end = max_end.max(end);
+    }
+    file_len >= 8 + header_len + max_end
 }
 
 fn looks_like_html(bytes: &[u8]) -> bool {
@@ -312,6 +394,20 @@ fn download_once(
             );
             return Err("cancelled".into());
         }
+        if is_paused() {
+            let _ = app.emit(
+                "downloads://progress",
+                DownloadProgress {
+                    url: url.into(),
+                    dest: dest_str,
+                    downloaded,
+                    total,
+                    done: true,
+                    error: Some("paused".into()),
+                },
+            );
+            return Err("paused".into());
+        }
         let n = response.read(&mut buf).map_err(|e| e.to_string())?;
         if n == 0 {
             break;
@@ -359,6 +455,41 @@ fn download_once(
         let err = format!(
             "downloaded file is not valid model weights (got HTML or corrupt data). URL: {url}"
         );
+        let _ = app.emit(
+            "downloads://progress",
+            DownloadProgress {
+                url: url.into(),
+                dest: dest_str,
+                downloaded,
+                total,
+                done: true,
+                error: Some(err.clone()),
+            },
+        );
+        return Err(err);
+    }
+
+    // Interrupted transfers leave a valid safetensors header with a short payload.
+    if let Some(expected) = total {
+        if downloaded != expected {
+            let err = format!(
+                "download incomplete: got {downloaded} bytes, expected {expected}. URL: {url}"
+            );
+            let _ = app.emit(
+                "downloads://progress",
+                DownloadProgress {
+                    url: url.into(),
+                    dest: dest_str,
+                    downloaded,
+                    total,
+                    done: true,
+                    error: Some(err.clone()),
+                },
+            );
+            return Err(err);
+        }
+    } else if !local_file_complete(dest) {
+        let err = format!("download incomplete (truncated weights). URL: {url}");
         let _ = app.emit(
             "downloads://progress",
             DownloadProgress {
@@ -432,6 +563,23 @@ mod tests {
         f.write_all(&[0u8; 4]).unwrap();
         drop(f);
         assert!(local_file_usable(&path));
+        assert!(local_file_complete(&path));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rejects_truncated_safetensors_payload() {
+        let dir = std::env::temp_dir().join(format!("oga-dl-trunc-{}", std::process::id()));
+        let _ = fs::create_dir_all(&dir);
+        let path = dir.join("trunc.safetensors");
+        let header = br#"{"a":{"dtype":"F32","shape":[1],"data_offsets":[0,4]}}"#;
+        let mut f = File::create(&path).unwrap();
+        f.write_all(&(header.len() as u64).to_le_bytes()).unwrap();
+        f.write_all(header).unwrap();
+        // Missing the 4 payload bytes.
+        drop(f);
+        assert!(local_file_usable(&path));
+        assert!(!local_file_complete(&path));
         let _ = fs::remove_dir_all(&dir);
     }
 }

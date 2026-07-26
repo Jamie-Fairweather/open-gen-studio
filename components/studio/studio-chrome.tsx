@@ -33,7 +33,8 @@ export function StudioChrome({ children }: { children: ReactNode }) {
     )
   }
 
-  const downloading = s.installingId != null || s.installQueue.length > 0
+  const downloading =
+    s.downloadSnapshot.active != null || s.downloadSnapshot.queued.length > 0
 
   return (
     <div className="relative flex min-h-dvh flex-col overflow-hidden bg-background">

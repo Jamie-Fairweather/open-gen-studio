@@ -443,6 +443,84 @@ export function onDownloadProgress(
   )
 }
 
+export type DownloadSpec =
+  | { kind: "blueprint"; id: string }
+  | { kind: "lora"; id: string; arch: string }
+  | { kind: "upscale"; id: string }
+  | { kind: "promptTools"; provider: string }
+  | { kind: "runtime"; engine: string }
+
+export type EnsureOpts = { wait?: boolean }
+
+export type EnsureResult = {
+  status: string
+  jobId: string | null
+  message: string | null
+}
+
+export type DownloadStepView = {
+  id: string
+  idx: number
+  stepKind: string
+  label: string
+  status: string
+  bytesDone: number
+  bytesTotal: number | null
+  error: string | null
+}
+
+export type DownloadJobView = {
+  id: string
+  jobKey: string
+  title: string
+  kind: string
+  status: string
+  error: string | null
+  createdAt: number
+  updatedAt: number
+  steps: DownloadStepView[]
+  activeLabel: string | null
+  downloaded: number
+  total: number | null
+}
+
+export type DownloadSnapshot = {
+  active: DownloadJobView | null
+  queued: DownloadJobView[]
+  history: DownloadJobView[]
+}
+
+export async function ensureDownload(
+  spec: DownloadSpec,
+  opts?: EnsureOpts
+): Promise<EnsureResult> {
+  return invoke("ensure_download", { spec, opts: opts ?? { wait: false } })
+}
+
+export async function listDownloads(): Promise<DownloadSnapshot> {
+  return invoke("list_downloads")
+}
+
+export async function pauseDownload(jobId: string): Promise<void> {
+  return invoke("pause_download", { jobId })
+}
+
+export async function resumeDownload(jobId: string): Promise<void> {
+  return invoke("resume_download", { jobId })
+}
+
+export async function cancelDownload(jobId: string): Promise<void> {
+  return invoke("cancel_download", { jobId })
+}
+
+export function onDownloadManager(
+  handler: (snapshot: DownloadSnapshot) => void
+): Promise<UnlistenFn> {
+  return listen<DownloadSnapshot>("downloads://manager", (e) =>
+    handler(e.payload)
+  )
+}
+
 export async function listRuntimes(): Promise<RuntimeInstall[]> {
   return invoke("list_runtimes")
 }
@@ -766,6 +844,14 @@ export async function ensurePromptToolsProvider(
   return invoke("ensure_prompt_tools_provider", { providerId })
 }
 
+export type PromptToolsProgress = {
+  stage: string
+  message: string
+  modelId?: string
+  providerId?: string
+  filename?: string
+}
+
 export async function readImageEmbeddedPrompt(
   imagePath: string
 ): Promise<string | null> {
@@ -813,22 +899,10 @@ export async function runPromptEnhance(args: {
 }
 
 export function onPromptToolsProgress(
-  handler: (progress: {
-    stage: string
-    message: string
-    providerId?: string
-    filename?: string
-  }) => void
+  handler: (progress: PromptToolsProgress) => void
 ): Promise<UnlistenFn> {
-  return listen("prompt-tools://progress", (e) =>
-    handler(
-      e.payload as {
-        stage: string
-        message: string
-        providerId?: string
-        filename?: string
-      }
-    )
+  return listen<PromptToolsProgress>("prompt-tools://progress", (e) =>
+    handler(e.payload)
   )
 }
 

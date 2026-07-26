@@ -399,7 +399,7 @@ export function ImageToPromptPanel() {
                     <img
                       src={previewUrl}
                       alt="Reference"
-                      className="size-full object-cover"
+                      className="size-full object-contain"
                     />
                     <button
                       type="button"

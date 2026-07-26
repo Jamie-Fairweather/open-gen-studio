@@ -12,8 +12,8 @@ use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::sync::Mutex;
+use std::process::Command;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use uuid::Uuid;
@@ -21,10 +21,12 @@ use uuid::Uuid;
 const EVENT_PROGRESS: &str = "prompt-tools://progress";
 const EVENT_UPDATED: &str = "prompt-tools://updated";
 
-/// Instruct GGUF used by Prompt Rewriter (text enhance + optional VLM pack).
-pub const INSTRUCT_GGUF_FILENAME: &str = "qwen2.5-3b-instruct-q4_k_m.gguf";
-const INSTRUCT_GGUF_URL: &str =
-    "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf";
+/// Shared Qwen3-VL-8B (HF transformers, 4-bit) for Image→Prompt + Prompt Enhancer.
+/// GGUF/llama-cpp was tried first but hard-crashed Comfy on CUDA load (cu131 wheel vs cu130 torch).
+pub const QWENVL_MODEL_ID: &str = "qwen3-vl-8b";
+const QWENVL_MODEL_NAME: &str = "Qwen3-VL-8B-Instruct";
+const QWENVL_HF_REPO: &str = "Qwen/Qwen3-VL-8B-Instruct";
+const QWENVL_QUANT: &str = "4-bit (VRAM-friendly)";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -96,33 +98,21 @@ impl PromptTarget {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Provider {
-    JoyCaption,
-    InstructGguf,
+    QwenVl,
 }
 
 impl Provider {
     fn pin_id(self) -> &'static str {
-        match self {
-            Provider::JoyCaption => "joycaption",
-            Provider::InstructGguf => "llm-session",
-        }
+        "qwenvl"
     }
 
     fn id(self) -> &'static str {
-        match self {
-            Provider::JoyCaption => "joycaption",
-            Provider::InstructGguf => "instruct-gguf",
-        }
+        "qwenvl"
     }
 }
 
-fn provider_for_format(format: PromptFormat) -> Provider {
-    match format {
-        PromptFormat::General
-        | PromptFormat::Structured
-        | PromptFormat::GraphicDesign
-        | PromptFormat::Json => Provider::JoyCaption,
-    }
+fn provider_for_format(_format: PromptFormat) -> Provider {
+    Provider::QwenVl
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -167,6 +157,7 @@ fn emit_progress(app: &AppHandle, stage: &str, message: &str, extra: Option<Valu
     let mut payload = json!({
         "stage": stage,
         "message": message,
+        "modelId": QWENVL_MODEL_ID,
     });
     if let Some(Value::Object(map)) = extra {
         if let Some(obj) = payload.as_object_mut() {
@@ -178,72 +169,72 @@ fn emit_progress(app: &AppHandle, stage: &str, message: &str, extra: Option<Valu
     let _ = app.emit(EVENT_PROGRESS, payload);
 }
 
-fn models_llm_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = comfy::models_dir(app)?.join("LLM");
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    Ok(dir)
+fn portable_root(app: &AppHandle) -> Result<PathBuf, String> {
+    comfy::find_portable_root(&comfy::runtimes_dir(app)?.join("portable")).map_err(|_| {
+        "ComfyUI portable not found — install the runtime before Prompt Tools".to_string()
+    })
 }
 
-fn models_gguf_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = models_llm_dir(app)?.join("gguf");
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    Ok(dir)
-}
-
-/// Prompt Rewriter hardcodes `ComfyUI/models/LLM/gguf` (ignores extra_model_paths).
-fn comfy_gguf_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = portable_root(app)?
-        .join("ComfyUI")
-        .join("models")
+fn qwenvl_model_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    // Matches ComfyUI-QwenVL ensure_model(): models/LLM/Qwen-VL/<repo_name>
+    let dir = comfy::models_dir(app)?
         .join("LLM")
-        .join("gguf");
+        .join("Qwen-VL")
+        .join(QWENVL_MODEL_NAME);
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
 }
 
-fn prompt_rewriter_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(portable_root(app)?
-        .join("ComfyUI")
-        .join("custom_nodes")
-        .join("ComfyUI-Prompt-Rewriter"))
+/// HF hub files for Qwen3-VL-8B-Instruct (skip README / .gitattributes).
+pub const QWENVL_HF_FILES: &[&str] = &[
+    "chat_template.json",
+    "config.json",
+    "generation_config.json",
+    "merges.txt",
+    "model-00001-of-00004.safetensors",
+    "model-00002-of-00004.safetensors",
+    "model-00003-of-00004.safetensors",
+    "model-00004-of-00004.safetensors",
+    "model.safetensors.index.json",
+    "preprocessor_config.json",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "video_preprocessor_config.json",
+    "vocab.json",
+];
+
+pub fn qwenvl_weights_ready(app: &AppHandle) -> bool {
+    let Ok(dir) = qwenvl_model_dir(app) else {
+        return false;
+    };
+    // All hub files, and safetensors must be fully present (not just a valid header).
+    QWENVL_HF_FILES
+        .iter()
+        .all(|f| download::local_file_complete(&dir.join(f)))
 }
 
-fn instruct_gguf_path(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(models_gguf_dir(app)?.join(INSTRUCT_GGUF_FILENAME))
+/// `(filename, url, dest)` for Download Manager expansion.
+pub fn qwenvl_http_files(app: &AppHandle) -> Result<Vec<(String, String, PathBuf)>, String> {
+    let dir = qwenvl_model_dir(app)?;
+    Ok(QWENVL_HF_FILES
+        .iter()
+        .map(|f| {
+            (
+                (*f).to_string(),
+                format!("https://huggingface.co/{QWENVL_HF_REPO}/resolve/main/{f}"),
+                dir.join(f),
+            )
+        })
+        .collect())
 }
 
-fn instruct_gguf_ready(app: &AppHandle) -> bool {
-    instruct_gguf_path(app)
-        .map(|p| download::local_file_usable(&p))
-        .unwrap_or(false)
-}
-
-fn find_llama_server(app: &AppHandle) -> Option<PathBuf> {
-    let dir = prompt_rewriter_dir(app).ok()?;
-    let mut best: Option<(String, PathBuf)> = None;
-    let entries = fs::read_dir(&dir).ok()?;
-    for entry in entries.flatten() {
-        let name = entry.file_name().to_string_lossy().to_string();
-        if !name.starts_with("llama_binaries_") || !entry.path().is_dir() {
-            continue;
+pub fn provider_ready(app: &AppHandle, provider_id: &str) -> bool {
+    match provider_id {
+        "qwenvl" | "qwen3-vl-8b" | "enhancer" | "instruct-gguf" | "joycaption" => {
+            node_ready(app, "qwenvl") && qwenvl_weights_ready(app)
         }
-        let exe = entry.path().join(if cfg!(target_os = "windows") {
-            "llama-server.exe"
-        } else {
-            "llama-server"
-        });
-        if !exe.is_file() {
-            continue;
-        }
-        if best
-            .as_ref()
-            .map(|(n, _)| name.as_str() > n.as_str())
-            .unwrap_or(true)
-        {
-            best = Some((name, exe));
-        }
+        _ => false,
     }
-    best.map(|(_, p)| p)
 }
 
 fn node_ready(app: &AppHandle, pin_id: &str) -> bool {
@@ -278,61 +269,42 @@ fn node_ready(app: &AppHandle, pin_id: &str) -> bool {
 }
 
 pub fn list_weights(app: &AppHandle) -> Result<Vec<PromptToolWeightInfo>, String> {
-    Ok(vec![
-        PromptToolWeightInfo {
-            id: "joycaption".into(),
-            name: "JoyCaption".into(),
-            description: "Natural-language captions (General / Structured / Graphic / JSON)"
-                .into(),
-            ready: node_ready(app, "joycaption"),
-            provider: "joycaption".into(),
-        },
-        PromptToolWeightInfo {
-            id: "instruct-gguf".into(),
-            name: "Instruct GGUF (Qwen2.5-3B)".into(),
-            description: "Prompt Enhancer rewrite model".into(),
-            ready: node_ready(app, "llm-session")
-                && instruct_gguf_ready(app)
-                && find_llama_server(app).is_some(),
-            provider: "instruct-gguf".into(),
-        },
-    ])
+    Ok(vec![PromptToolWeightInfo {
+        id: QWENVL_MODEL_ID.into(),
+        name: "Qwen3-VL-8B Instruct (4-bit)".into(),
+        description: "Image→Prompt + Prompt Enhancer (shared vision-language model)".into(),
+        ready: node_ready(app, "qwenvl") && qwenvl_weights_ready(app),
+        provider: "qwenvl".into(),
+    }])
 }
 
-/// `restart_comfy` — caller should bounce the runtime so new pip packages load.
+/// `restart_comfy` — caller should bounce the runtime so new pip packages / nodes load.
 pub struct EnsureOutcome {
     pub restart_comfy: bool,
 }
 
+fn ensure_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
 pub fn ensure_provider(app: &AppHandle, provider_id: &str) -> Result<EnsureOutcome, String> {
+    let _gate = ensure_lock()
+        .lock()
+        .map_err(|e| format!("prompt-tools ensure lock: {e}"))?;
     let mut restart_comfy = false;
     match provider_id {
-        "joycaption" => {
-            let was_ready = node_ready(app, "joycaption");
-            emit_progress(app, "install", "Ensuring JoyCaption custom node…", None);
-            upscale::ensure_pinned_node(app, "joycaption")?;
+        "qwenvl" | "qwen3-vl-8b" | "enhancer" | "instruct-gguf" | "joycaption" => {
+            let was_ready = node_ready(app, "qwenvl");
+            emit_progress(app, "install", "Ensuring ComfyUI-QwenVL custom node…", None);
+            upscale::ensure_pinned_node(app, "qwenvl")?;
             if !was_ready {
                 restart_comfy = true;
             }
-            if patch_joycaption(app)? {
+            if install_qwenvl_python_deps(app)? {
                 restart_comfy = true;
             }
-            if install_joycaption_python_deps(app)? {
-                restart_comfy = true;
-            }
-        }
-        "instruct-gguf" | "llm-session" | "enhancer" => {
-            let was_ready = node_ready(app, "llm-session");
-            emit_progress(app, "install", "Ensuring Prompt Rewriter…", None);
-            upscale::ensure_pinned_node(app, "llm-session")?;
-            if install_prompt_rewriter_python_deps(app)? {
-                restart_comfy = true;
-            }
-            if ensure_instruct_gguf(app)? {
-                // Dropdown is built at Comfy load; new GGUF needs a bounce.
-                restart_comfy = true;
-            }
-            ensure_llama_server(app)?;
+            let _ = ensure_qwenvl_weights(app)?;
             if !was_ready {
                 restart_comfy = true;
             }
@@ -343,17 +315,18 @@ pub fn ensure_provider(app: &AppHandle, provider_id: &str) -> Result<EnsureOutco
     emit_progress(
         app,
         "done",
-        "Provider ready",
-        Some(json!({ "providerId": provider_id })),
+        "Qwen3-VL-8B ready",
+        Some(json!({ "providerId": "qwenvl", "filename": QWENVL_MODEL_NAME })),
     );
     Ok(EnsureOutcome { restart_comfy })
 }
 
-fn provider_required_nodes(provider: Provider) -> &'static [&'static str] {
-    match provider {
-        Provider::JoyCaption => &["JC", "JC_adv", "PreviewAny"],
-        Provider::InstructGguf => &["PromptRewriterOptionsZ", "PromptRewriterZ", "PreviewAny"],
-    }
+fn provider_required_nodes(_provider: Provider) -> &'static [&'static str] {
+    &[
+        "AILab_QwenVL",
+        "AILab_QwenVL_PromptEnhancer",
+        "PreviewAny",
+    ]
 }
 
 fn comfy_has_node_type(port: u16, class_type: &str) -> bool {
@@ -433,200 +406,88 @@ fn ensure_comfy_with_nodes(
     Ok(port)
 }
 
-fn install_prompt_rewriter_python_deps(app: &AppHandle) -> Result<bool, String> {
+fn hf_resolve_url(filename: &str) -> String {
+    format!("https://huggingface.co/{QWENVL_HF_REPO}/resolve/main/{filename}")
+}
+
+/// Download HF transformers weights into models/LLM/Qwen-VL/<name>. Returns true if anything new.
+fn ensure_qwenvl_weights(app: &AppHandle) -> Result<bool, String> {
+    if qwenvl_weights_ready(app) {
+        return Ok(false);
+    }
+    let dir = qwenvl_model_dir(app)?;
+    let mut changed = false;
+    let total = QWENVL_HF_FILES.len();
+    for (i, filename) in QWENVL_HF_FILES.iter().enumerate() {
+        let dest = dir.join(filename);
+        if download::local_file_complete(&dest) {
+            continue;
+        }
+        let resume = dest.is_file();
+        emit_progress(
+            app,
+            "download",
+            &format!(
+                "{} {filename} ({}/{})…",
+                if resume { "Resuming" } else { "Downloading" },
+                i + 1,
+                total
+            ),
+            Some(json!({ "filename": filename })),
+        );
+        download::clear_cancel();
+        download::download_file(app, &hf_resolve_url(filename), &dest, None)?;
+        if !download::local_file_complete(&dest) {
+            return Err(format!(
+                "download incomplete for {filename} — reopen Downloads / retry Image→Prompt to resume"
+            ));
+        }
+        changed = true;
+    }
+    if !qwenvl_weights_ready(app) {
+        return Err("Qwen3-VL-8B download finished but weights look incomplete".into());
+    }
+    Ok(changed)
+}
+
+pub fn install_qwenvl_python_deps(app: &AppHandle) -> Result<bool, String> {
     let root = portable_root(app)?;
-    let marker = root.join(".oga_prompt_rewriter_deps");
+    // New marker: prior GGUF path wrote `.oga_qwenvl_deps` after llama-cpp install.
+    let marker = root.join(".oga_qwenvl_hf_deps");
     if marker.is_file() {
         return Ok(false);
     }
     let python = root.join("python_embeded").join("python.exe");
     if !python.is_file() {
-        return Err("ComfyUI portable python.exe missing — cannot install Prompt Rewriter deps".into());
+        return Err("ComfyUI portable python.exe missing — cannot install QwenVL deps".into());
     }
     let reqs = root
         .join("ComfyUI")
         .join("custom_nodes")
-        .join("ComfyUI-Prompt-Rewriter")
+        .join("ComfyUI-QwenVL")
         .join("requirements.txt");
-    if !reqs.is_file() {
-        return Ok(false);
-    }
-    emit_progress(
-        app,
-        "install",
-        "Installing Prompt Rewriter Python dependencies…",
-        None,
-    );
-    let output = Command::new(&python)
-        .args([
-            "-s",
-            "-m",
-            "pip",
+    if reqs.is_file() {
+        emit_progress(
+            app,
             "install",
-            "-r",
-            reqs.to_str().ok_or("invalid Prompt Rewriter requirements path")?,
-        ])
-        .current_dir(&root)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .map_err(|e| format!("failed to run pip for Prompt Rewriter: {e}"))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!(
-            "Prompt Rewriter pip install failed: {}",
-            stderr.chars().take(800).collect::<String>()
-        ));
-    }
-    fs::write(&marker, b"ok").map_err(|e| e.to_string())?;
-    Ok(true)
-}
-
-fn portable_root(app: &AppHandle) -> Result<PathBuf, String> {
-    comfy::find_portable_root(&comfy::runtimes_dir(app)?.join("portable")).map_err(|_| {
-        "ComfyUI portable not found — install the runtime first".to_string()
-    })
-}
-
-/// Install JoyCaption pip deps (bitsandbytes, transformers extras). Returns true if newly installed.
-fn install_joycaption_python_deps(app: &AppHandle) -> Result<bool, String> {
-    let root = portable_root(app)?;
-    let marker = root.join(".oga_joycaption_deps");
-    if marker.is_file() {
-        return Ok(false);
-    }
-
-    let python = root.join("python_embeded").join("python.exe");
-    if !python.is_file() {
-        return Err("ComfyUI portable python.exe missing — cannot install JoyCaption deps".into());
-    }
-    let reqs = root
-        .join("ComfyUI")
-        .join("custom_nodes")
-        .join("ComfyUI-JoyCaption")
-        .join("requirements.txt");
-    if !reqs.is_file() {
-        return Err("JoyCaption requirements.txt missing after clone".into());
-    }
-
-    emit_progress(
-        app,
-        "install",
-        "Installing JoyCaption Python dependencies (bitsandbytes, etc.)…",
-        None,
-    );
-
-    let output = Command::new(&python)
-        .args([
-            "-s",
-            "-m",
-            "pip",
-            "install",
-            "-r",
-            reqs.to_str().ok_or("invalid JoyCaption requirements path")?,
-        ])
-        .current_dir(&root)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .map_err(|e| format!("failed to run pip for JoyCaption: {e}"))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!(
-            "JoyCaption pip install failed: {}",
-            stderr.chars().take(800).collect::<String>()
-        ));
-    }
-
-    fs::write(&marker, b"ok").map_err(|e| e.to_string())?;
-    Ok(true)
-}
-
-/// Patch JoyCaption for transformers SizeDict + safer cleanup. Returns true if the file changed.
-fn patch_joycaption(app: &AppHandle) -> Result<bool, String> {
-    let jc = portable_root(app)?
-        .join("ComfyUI")
-        .join("custom_nodes")
-        .join("ComfyUI-JoyCaption")
-        .join("JC.py");
-    if !jc.is_file() {
-        return Ok(false);
-    }
-    let mut src = fs::read_to_string(&jc).map_err(|e| e.to_string())?;
-    let original = src.clone();
-
-    // 1) Don't mask load failures when self.model was never set.
-    let cleanup_needle = "cleanup_model_resources(self.model, self.processor)";
-    let cleanup_fix = "cleanup_model_resources(getattr(self, \"model\", None), getattr(self, \"processor\", None))  # OGA_JOYCAPTION_CLEANUP_FIX";
-    if src.contains(cleanup_needle) {
-        src = src.replace(cleanup_needle, cleanup_fix);
-    }
-
-    // 2) Newer transformers returns SizeDict (not dict) for image_processor.size —
-    //    JoyCaption then does resize((SizeDict, SizeDict)) and PIL throws TypeError.
-    if !src.contains("OGA_JOYCAPTION_SIZEDICT_FIX") {
-        const OLD_SIZE_BLOCK: &str = r#"if hasattr(self.processor, 'image_processor') and hasattr(self.processor.image_processor, 'size'):
-            expected_size = self.processor.image_processor.size
-            if isinstance(expected_size, dict):
-                self.target_size = (expected_size.get('height', 336), expected_size.get('width', 336))
-            elif isinstance(expected_size, (list, tuple)):
-                self.target_size = tuple(expected_size) if len(expected_size) == 2 else (expected_size[0], expected_size[0])
-            else:
-                self.target_size = (expected_size, expected_size)
-        else:
-            self.target_size = (336, 336)"#;
-
-        const NEW_SIZE_BLOCK: &str = r#"# OGA_JOYCAPTION_SIZEDICT_FIX — coerce CLIP size (incl. SizeDict) to int tuple for PIL
-        expected_size = None
-        if hasattr(self.processor, 'image_processor') and hasattr(self.processor.image_processor, 'size'):
-            expected_size = self.processor.image_processor.size
-        def _oga_joy_size(sz):
-            if sz is None:
-                return (336, 336)
-            if isinstance(sz, (tuple, list)) and len(sz) >= 2 and all(isinstance(x, int) for x in sz[:2]):
-                return (int(sz[0]), int(sz[1]))
-            if isinstance(sz, dict) or hasattr(sz, 'get'):
-                try:
-                    short = sz.get('shortest_edge', None)
-                    h = sz.get('height', short if short is not None else 336)
-                    w = sz.get('width', short if short is not None else 336)
-                    return (int(h), int(w))
-                except Exception:
-                    return (336, 336)
-            try:
-                v = int(sz)
-                return (v, v)
-            except Exception:
-                return (336, 336)
-        self.target_size = _oga_joy_size(expected_size)"#;
-
-        if src.contains(OLD_SIZE_BLOCK) {
-            src = src.replace(OLD_SIZE_BLOCK, NEW_SIZE_BLOCK);
-        } else {
-            // Fallback: harden the resize call site.
-            let resize_old = "image = image.resize(self.target_size, Image.Resampling.LANCZOS)";
-            let resize_new = r#"_oga_ts = self.target_size
-        if not (isinstance(_oga_ts, (tuple, list)) and len(_oga_ts) >= 2 and all(isinstance(x, int) for x in _oga_ts[:2])):
-            if hasattr(_oga_ts, 'get'):
-                _short = _oga_ts.get('shortest_edge', 336)
-                _oga_ts = (int(_oga_ts.get('height', _short)), int(_oga_ts.get('width', _short)))
-            elif isinstance(_oga_ts, (tuple, list)) and len(_oga_ts) >= 2 and hasattr(_oga_ts[0], 'get'):
-                _s0, _s1 = _oga_ts[0], _oga_ts[1]
-                _oga_ts = (int(_s0.get('height', _s0.get('shortest_edge', 336))), int(_s1.get('width', _s1.get('shortest_edge', 336))))
-            else:
-                _oga_ts = (336, 336)
-        image = image.resize(_oga_ts, Image.Resampling.LANCZOS)  # OGA_JOYCAPTION_SIZEDICT_FIX"#;
-            if src.contains(resize_old) {
-                src = src.replace(resize_old, resize_new);
-            }
+            "Installing ComfyUI-QwenVL Python dependencies…",
+            Some(json!({ "filename": "requirements.txt" })),
+        );
+        let status = Command::new(&python)
+            .args([
+                "-m",
+                "pip",
+                "install",
+                "-r",
+                reqs.to_str().ok_or("invalid requirements path")?,
+            ])
+            .status()
+            .map_err(|e| format!("failed to run pip for QwenVL: {e}"))?;
+        if !status.success() {
+            return Err("QwenVL requirements.txt pip install failed".into());
         }
     }
-
-    if src == original {
-        return Ok(false);
-    }
-    fs::write(&jc, &src).map_err(|e| e.to_string())?;
+    fs::write(&marker, b"ok").map_err(|e| e.to_string())?;
     Ok(true)
 }
 
@@ -637,307 +498,15 @@ fn reject_model_error_text(text: &str) -> Result<String, String> {
         || lower.starts_with("error:")
         || lower.contains("error loading model:")
         || lower.contains("object has no attribute")
+        || lower.contains("qwen3vlchathandler")
     {
         return Err(format!(
-            "JoyCaption failed to load: {t}. Dependencies were installed — if this persists, restart ComfyUI from Settings and retry."
+            "QwenVL failed to load: {t}. Dependencies were installed — if this persists, restart ComfyUI from Settings and retry."
         ));
     }
     Ok(t.to_string())
 }
 
-/// Download shared GGUF and place it where Prompt Rewriter scans.
-/// Returns `true` when the Comfy-local file was newly created (caller should restart Comfy).
-fn ensure_instruct_gguf(app: &AppHandle) -> Result<bool, String> {
-    let shared = instruct_gguf_path(app)?;
-    if !download::local_file_usable(&shared) {
-        emit_progress(
-            app,
-            "download",
-            &format!("Downloading {INSTRUCT_GGUF_FILENAME}…"),
-            Some(json!({ "filename": INSTRUCT_GGUF_FILENAME })),
-        );
-        download::clear_cancel();
-        download::download_file(app, INSTRUCT_GGUF_URL, &shared, None)?;
-        if !download::local_file_usable(&shared) {
-            return Err(format!(
-                "download produced unusable file: {INSTRUCT_GGUF_FILENAME}"
-            ));
-        }
-    }
-
-    let comfy_dest = comfy_gguf_dir(app)?.join(INSTRUCT_GGUF_FILENAME);
-    if download::local_file_usable(&comfy_dest) {
-        return Ok(false);
-    }
-    if comfy_dest.exists() {
-        let _ = fs::remove_file(&comfy_dest);
-    }
-
-    emit_progress(
-        app,
-        "install",
-        "Linking instruct GGUF into ComfyUI models/LLM/gguf…",
-        Some(json!({ "filename": INSTRUCT_GGUF_FILENAME })),
-    );
-    match fs::hard_link(&shared, &comfy_dest) {
-        Ok(()) => Ok(true),
-        Err(link_err) => {
-            fs::copy(&shared, &comfy_dest).map_err(|e| {
-                format!(
-                    "failed to place GGUF for Prompt Rewriter (hardlink: {link_err}; copy: {e})"
-                )
-            })?;
-            Ok(true)
-        }
-    }
-}
-
-fn comfy_rewriter_model_list(port: u16) -> Option<Vec<String>> {
-    let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()
-        .ok()?;
-    let url = format!("http://127.0.0.1:{port}/object_info/PromptRewriterOptionsZ");
-    let v: Value = client.get(&url).send().ok()?.json().ok()?;
-    let models = v
-        .pointer("/PromptRewriterOptionsZ/input/required/model/0")?
-        .as_array()?;
-    Some(
-        models
-            .iter()
-            .filter_map(|m| m.as_str().map(|s| s.to_string()))
-            .collect(),
-    )
-}
-
-fn comfy_sees_instruct_gguf(port: u16) -> bool {
-    match comfy_rewriter_model_list(port) {
-        Some(list) => list.iter().any(|m| {
-            m == INSTRUCT_GGUF_FILENAME || m.trim_start_matches('⬇').trim() == INSTRUCT_GGUF_FILENAME
-        }),
-        None => false,
-    }
-}
-
-/// Prompt Rewriter's model combo is filled at Comfy startup — bounce once if our GGUF is absent.
-fn ensure_comfy_sees_instruct_gguf(
-    app: &AppHandle,
-    db: &Mutex<Db>,
-    processes: &Mutex<ProcessState>,
-    runtime: &RuntimeInstall,
-    port: u16,
-) -> Result<u16, String> {
-    if comfy_sees_instruct_gguf(port) {
-        return Ok(port);
-    }
-    emit_progress(
-        app,
-        "restart",
-        "Restarting ComfyUI so Prompt Rewriter can see the instruct GGUF…",
-        None,
-    );
-    let _ = comfy::stop(processes);
-    let port = ensure_comfy_running(app, db, processes, runtime)?;
-    if !comfy_sees_instruct_gguf(port) {
-        let list = comfy_rewriter_model_list(port)
-            .map(|l| l.join(", "))
-            .unwrap_or_else(|| "(unavailable)".into());
-        return Err(format!(
-            "Prompt Rewriter still reports no usable models after placing {INSTRUCT_GGUF_FILENAME}. \
-Seen: [{list}]. Expected file under ComfyUI/models/LLM/gguf/."
-        ));
-    }
-    Ok(port)
-}
-
-/// Download CUDA llama-server into Prompt Rewriter's `llama_binaries_*` folder.
-fn ensure_llama_server(app: &AppHandle) -> Result<(), String> {
-    if find_llama_server(app).is_some() {
-        return Ok(());
-    }
-
-    emit_progress(
-        app,
-        "download",
-        "Downloading llama.cpp CUDA binaries for Prompt Rewriter…",
-        None,
-    );
-
-    let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(120))
-        .user_agent("open-gen-ai")
-        .build()
-        .map_err(|e| e.to_string())?;
-    let releases: Value = client
-        .get("https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=20")
-        .send()
-        .map_err(|e| format!("llama.cpp releases request failed: {e}"))?
-        .error_for_status()
-        .map_err(|e| format!("llama.cpp releases HTTP error: {e}"))?
-        .json()
-        .map_err(|e| format!("llama.cpp releases JSON error: {e}"))?;
-
-    let releases = releases
-        .as_array()
-        .ok_or_else(|| "llama.cpp releases: expected array".to_string())?;
-
-    let mut chosen: Option<(String, String, Option<String>)> = None; // tag, main_url, cudart_url
-    for rel in releases {
-        let tag = rel
-            .get("tag_name")
-            .and_then(|t| t.as_str())
-            .unwrap_or("")
-            .to_string();
-        let assets = match rel.get("assets").and_then(|a| a.as_array()) {
-            Some(a) => a,
-            None => continue,
-        };
-        let mut cuda_zips: Vec<(u32, String, String)> = Vec::new(); // cuda_major, name, url
-        let mut cudart: Vec<(String, String)> = Vec::new(); // cuda_ver, url
-        for asset in assets {
-            let name = asset
-                .get("name")
-                .and_then(|n| n.as_str())
-                .unwrap_or("")
-                .to_string();
-            let url = asset
-                .get("browser_download_url")
-                .and_then(|u| u.as_str())
-                .unwrap_or("")
-                .to_string();
-            if name.is_empty() || url.is_empty() || !name.ends_with(".zip") {
-                continue;
-            }
-            // e.g. llama-b7436-bin-win-cuda-12.4.zip
-            if name.starts_with("llama-") && name.contains("bin-win-cuda") {
-                let cuda_ver = name
-                    .split("cuda-")
-                    .nth(1)
-                    .and_then(|s| s.strip_suffix(".zip"))
-                    .unwrap_or("");
-                let major = cuda_ver
-                    .split('.')
-                    .next()
-                    .and_then(|s| s.parse::<u32>().ok())
-                    .unwrap_or(0);
-                cuda_zips.push((major, name, url));
-            } else if name.contains("cudart-") && name.contains("win-cuda") {
-                let ver = name
-                    .split("cuda-")
-                    .nth(1)
-                    .and_then(|s| s.strip_suffix(".zip"))
-                    .unwrap_or("")
-                    .to_string();
-                cudart.push((ver, url));
-            }
-        }
-        if cuda_zips.is_empty() {
-            continue;
-        }
-        cuda_zips.sort_by(|a, b| b.0.cmp(&a.0));
-        let (_major, main_name, main_url) = cuda_zips.remove(0);
-        let cuda_ver = main_name
-            .split("cuda-")
-            .nth(1)
-            .and_then(|s| s.strip_suffix(".zip"))
-            .unwrap_or("")
-            .to_string();
-        let cudart_url = cudart
-            .iter()
-            .find(|(v, _)| *v == cuda_ver)
-            .map(|(_, u)| u.clone());
-        chosen = Some((tag, main_url, cudart_url));
-        break;
-    }
-
-    let (tag, main_url, cudart_url) =
-        chosen.ok_or_else(|| "no win-cuda llama.cpp release asset found".to_string())?;
-    let dest_dir = prompt_rewriter_dir(app)?.join(format!("llama_binaries_{tag}"));
-    if dest_dir.exists() {
-        fs::remove_dir_all(&dest_dir).map_err(|e| e.to_string())?;
-    }
-    fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
-
-    let main_zip = dest_dir.join("main.zip");
-    download::clear_cancel();
-    download::download_file(app, &main_url, &main_zip, None)?;
-    extract_zip_flat(&main_zip, &dest_dir)?;
-    let _ = fs::remove_file(&main_zip);
-
-    if let Some(url) = cudart_url {
-        let cudart_zip = dest_dir.join("cudart.zip");
-        download::download_file(app, &url, &cudart_zip, None)?;
-        extract_zip_flat(&cudart_zip, &dest_dir)?;
-        let _ = fs::remove_file(&cudart_zip);
-    }
-
-    if find_llama_server(app).is_none() {
-        return Err(format!(
-            "llama.cpp extract finished but llama-server.exe missing under {}",
-            dest_dir.display()
-        ));
-    }
-    Ok(())
-}
-
-fn extract_zip_flat(zip_path: &Path, dest: &Path) -> Result<(), String> {
-    let status = Command::new("tar")
-        .args([
-            "-xf",
-            zip_path
-                .to_str()
-                .ok_or_else(|| "invalid zip path".to_string())?,
-            "-C",
-            dest.to_str()
-                .ok_or_else(|| "invalid extract dest".to_string())?,
-        ])
-        .status()
-        .map_err(|e| format!("failed to run tar for zip extract: {e}"))?;
-    if !status.success() {
-        return Err(format!(
-            "tar extract failed for {}",
-            zip_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("archive")
-        ));
-    }
-
-    // llama.cpp zips nest under llama-* / cudart-*; flatten one level.
-    let entries: Vec<_> = fs::read_dir(dest)
-        .map_err(|e| e.to_string())?
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| {
-            p.is_dir()
-                && p.file_name()
-                    .and_then(|n| n.to_str())
-                    .map(|n| n.starts_with("llama-") || n.starts_with("cudart-"))
-                    .unwrap_or(false)
-        })
-        .collect();
-    for nested in entries {
-        for child in fs::read_dir(&nested).map_err(|e| e.to_string())?.flatten() {
-            let to = dest.join(child.file_name());
-            if to.exists() {
-                if to.is_dir() {
-                    let _ = fs::remove_dir_all(&to);
-                } else {
-                    let _ = fs::remove_file(&to);
-                }
-            }
-            fs::rename(child.path(), &to).map_err(|e| {
-                format!(
-                    "failed to flatten {} → {}: {e}",
-                    child.path().display(),
-                    to.display()
-                )
-            })?;
-        }
-        let _ = fs::remove_dir_all(&nested);
-    }
-    Ok(())
-}
 
 fn comfy_input_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let portable = comfy::find_portable_root(&comfy::runtimes_dir(app)?.join("portable"))
@@ -981,7 +550,7 @@ fn target_dialect_hint(target: PromptTarget) -> &'static str {
     }
 }
 
-/// Checklist so JoyCaption captions are dense enough to recreate the image as closely as text allows.
+/// Checklist so captions are dense enough to recreate the image as closely as text allows.
 fn recreation_detail_instruction() -> &'static str {
     "Goal: a prompt that could recreate this image as closely as possible. Describe only what is \
 visible — do not invent props, logos, or celebrity names. Cover all of the following when present:\n\
@@ -1071,38 +640,6 @@ fn preview_any_node(source: (&str, usize)) -> Value {
 }
 
 
-fn build_joycaption_general(filename: &str, target: PromptTarget) -> Value {
-    // JC_adv + custom prompt (JC's built-in "Straightforward" style is too terse for pose/facing).
-    build_joycaption_custom(filename, &general_custom_prompt(target))
-}
-
-fn build_joycaption_custom(filename: &str, custom_prompt: &str) -> Value {
-    // JC_adv RETURN_NAMES: PROMPT (template), STRING (caption)
-    json!({
-        "1": {
-            "class_type": "LoadImage",
-            "inputs": { "image": filename }
-        },
-        "2": {
-            "class_type": "JC_adv",
-            "inputs": {
-                "image": ["1", 0],
-                "model": "joycaption-beta-one",
-                "quantization": "Maximum Savings (4-bit)",
-                "prompt_style": "Descriptive",
-                "caption_length": "very long",
-                "max_new_tokens": 1024,
-                "temperature": 0.6,
-                "top_p": 0.9,
-                "top_k": 0,
-                "custom_prompt": custom_prompt,
-                "memory_management": "Clear After Run"
-            }
-        },
-        "3": preview_any_node(("2", 1))
-    })
-}
-
 fn style_look_bit(look: &str) -> &'static str {
     match look {
         "anime" => {
@@ -1122,7 +659,6 @@ Remove unrelated lifestyle clutter when it fights a clean product read."
 depth of field, expression and wardrobe detail. Keep identity and outfit; de-emphasize wide \
 environment unless it supports the portrait."
         }
-        // cinematic (default)
         _ => {
             "Rewrite as a CINEMATIC film still: dramatic keyed light, lens/camera language, \
 color grade, atmosphere, and composition. Keep the same subject and scene; make it feel like \
@@ -1186,40 +722,53 @@ Output ONLY the final prompt, no preamble. {mode_bit}{style_override}{}",
     )
 }
 
+fn build_qwenvl_image(filename: &str, custom_prompt: &str) -> Value {
+    json!({
+        "1": {
+            "class_type": "LoadImage",
+            "inputs": { "image": filename }
+        },
+        "2": {
+            "class_type": "AILab_QwenVL",
+            "inputs": {
+                "image": ["1", 0],
+                "model_name": QWENVL_MODEL_NAME,
+                "quantization": QWENVL_QUANT,
+                "attention_mode": "auto",
+                "preset_prompt": "🖼️ Detailed Description",
+                "custom_prompt": custom_prompt,
+                "max_tokens": 1024,
+                "keep_model_loaded": false,
+                "seed": 1
+            }
+        },
+        "3": preview_any_node(("2", 0))
+    })
+}
+
 fn build_enhance_workflow(prompt: &str, target: PromptTarget, mode: &str) -> Value {
     let system = enhance_system_prompt(target, mode);
     json!({
         "1": {
-            "class_type": "PromptRewriterOptionsZ",
+            "class_type": "AILab_QwenVL_PromptEnhancer",
             "inputs": {
-                "model": INSTRUCT_GGUF_FILENAME,
-                "gpu_layers": "",
-                "enable_thinking": false,
-                "context_size": 4096,
-                "max_tokens": 1024,
-                "flash_attention": true,
-                "system_prompt": system,
-                "use_model_default_sampling": false,
+                "model_name": QWENVL_MODEL_NAME,
+                "quantization": QWENVL_QUANT,
+                "attention_mode": "auto",
+                "use_torch_compile": false,
+                "device": "auto",
+                "prompt_text": prompt,
+                "enhancement_style": "📝 Enhance",
+                "custom_system_prompt": system,
+                "max_tokens": 768,
                 "temperature": 0.7,
                 "top_p": 0.9,
-                "top_k": 40,
-                "min_p": 0.05,
-                "repeat_penalty": 1.05
+                "repetition_penalty": 1.1,
+                "keep_model_loaded": false,
+                "seed": 1
             }
         },
-        "2": {
-            "class_type": "PromptRewriterZ",
-            "inputs": {
-                "prompt": prompt,
-                "seed": 0,
-                "backend": "CUDA",
-                "options": ["1", 0],
-                "show_everything_in_console": false,
-                "keep_mmproj_loaded": false,
-                "stop_server_after": true
-            }
-        },
-        "3": preview_any_node(("2", 0))
+        "2": preview_any_node(("1", 0))
     })
 }
 
@@ -1229,16 +778,17 @@ fn build_workflow(
     filename: &str,
 ) -> Result<Value, String> {
     Ok(match format {
-        PromptFormat::General => build_joycaption_general(filename, target),
+        PromptFormat::General => build_qwenvl_image(filename, &general_custom_prompt(target)),
         PromptFormat::Structured => {
-            build_joycaption_custom(filename, &structured_custom_prompt(target))
+            build_qwenvl_image(filename, &structured_custom_prompt(target))
         }
-        PromptFormat::Json => build_joycaption_custom(filename, &json_custom_prompt(target)),
+        PromptFormat::Json => build_qwenvl_image(filename, &json_custom_prompt(target)),
         PromptFormat::GraphicDesign => {
-            build_joycaption_custom(filename, &graphic_custom_prompt(target))
+            build_qwenvl_image(filename, &graphic_custom_prompt(target))
         }
     })
 }
+
 
 fn free_port(runtime: &RuntimeInstall) -> Result<u16, String> {
     Ok(runtime.port.unwrap_or(comfy::DEFAULT_PORT as i64) as u16)
@@ -1317,6 +867,18 @@ pub fn run_image_to_prompt(
         "Preparing Prompt Tools…",
         Some(json!({ "jobId": job.id, "provider": provider.id() })),
     );
+    let dl = crate::download_manager::ensure(
+        app,
+        crate::download_manager::DownloadSpec::PromptTools {
+            provider: provider.pin_id().into(),
+        },
+        crate::download_manager::EnsureOpts { wait: true },
+    )?;
+    if matches!(dl.status.as_str(), "error" | "cancelled") {
+        return Err(dl
+            .message
+            .unwrap_or_else(|| format!("Prompt Tools install {}", dl.status)));
+    }
     let ensured = ensure_provider(app, provider.pin_id())?;
     let port = ensure_comfy_with_nodes(
         app,
@@ -1415,16 +977,27 @@ pub fn run_prompt_enhance(
         "Preparing Prompt Enhancer…",
         Some(json!({ "jobId": job.id })),
     );
-    let ensured = ensure_provider(app, "instruct-gguf")?;
+    let dl = crate::download_manager::ensure(
+        app,
+        crate::download_manager::DownloadSpec::PromptTools {
+            provider: "qwenvl".into(),
+        },
+        crate::download_manager::EnsureOpts { wait: true },
+    )?;
+    if matches!(dl.status.as_str(), "error" | "cancelled") {
+        return Err(dl
+            .message
+            .unwrap_or_else(|| format!("Prompt Tools install {}", dl.status)));
+    }
+    let ensured = ensure_provider(app, "qwenvl")?;
     let port = ensure_comfy_with_nodes(
         app,
         db,
         processes,
         runtime,
-        provider_required_nodes(Provider::InstructGguf),
+        provider_required_nodes(Provider::QwenVl),
         ensured.restart_comfy,
     )?;
-    let port = ensure_comfy_sees_instruct_gguf(app, db, processes, runtime, port)?;
     emit_progress(
         app,
         "free",
@@ -1475,7 +1048,7 @@ pub fn run_prompt_enhance(
     Ok(PromptToolResult {
         prompt: text,
         negative: suggest_negative(target, PromptFormat::General),
-        provider: Provider::InstructGguf.id().into(),
+        provider: Provider::QwenVl.id().into(),
         format: "enhance".into(),
         target: match target {
             PromptTarget::Auto => "auto",

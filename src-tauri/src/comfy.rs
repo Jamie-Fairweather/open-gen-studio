@@ -209,6 +209,7 @@ fn write_extra_model_paths(portable_root: &Path, models: &Path) -> Result<(), St
         "controlnet",
         "embeddings",
         "upscale_models",
+        "LLM",
     ] {
         fs::create_dir_all(models.join(sub)).map_err(|e| e.to_string())?;
     }
@@ -231,6 +232,7 @@ open_gen_ai:
   controlnet: controlnet
   embeddings: embeddings
   upscale_models: upscale_models
+  LLM: LLM
 "#
     );
     let path = portable_root.join("ComfyUI").join("extra_model_paths.yaml");
@@ -570,6 +572,8 @@ pub fn start(
 
     // Existing installs from before Manager support — install on first start.
     ensure_comfy_manager(app, &root)?;
+    // Keep shared model paths current (e.g. LLM for Prompt Tools / QwenVL).
+    write_extra_model_paths(&root, &models_dir(app)?)?;
 
     let mut guard = processes.lock().map_err(|e| e.to_string())?;
     if let Some(child) = guard.child.as_mut() {

@@ -7,6 +7,7 @@ use crate::creator::{
 };
 use crate::db::{Db, GalleryItem, Job, RuntimeInstall};
 use crate::download;
+use crate::download_manager::{self, DownloadSpec, EnsureOpts, EnsureResult, DownloadSnapshot};
 use crate::generate;
 use crate::gpu::{self, GpuInfo};
 use crate::loras::{self, LoraPack, SaveUserLoraArgs};
@@ -32,6 +33,8 @@ pub struct AppState {
     pub lora_install_busy: Mutex<Option<String>>,
     /// Active upscale install id (or `"usdu"` / `"supir"`), if any.
     pub upscale_install_busy: Mutex<Option<String>>,
+    /// Active prompt-tools install id (e.g. `"qwen3-vl-8b"`), if any.
+    pub prompt_tools_install_busy: Mutex<Option<String>>,
     /// Job ids the user asked to cancel.
     pub cancelled_jobs: Mutex<HashSet<String>>,
 }
@@ -262,6 +265,32 @@ pub fn enqueue_comfy_install(
     state: &AppState,
     force: bool,
 ) -> Result<RuntimeInstall, String> {
+    if !force {
+        let _ = download_manager::ensure(
+            app,
+            DownloadSpec::Runtime {
+                engine: comfy::ENGINE.into(),
+            },
+            EnsureOpts { wait: false },
+        )?;
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        if let Some(r) = db.get_runtime_by_engine(comfy::ENGINE)? {
+            return Ok(r);
+        }
+        // Row may appear after install completes; return a placeholder installing row.
+        return Ok(RuntimeInstall {
+            id: uuid::Uuid::new_v4().to_string(),
+            engine: comfy::ENGINE.into(),
+            version: comfy::pinned_version().into(),
+            install_path: String::new(),
+            port: Some(comfy::DEFAULT_PORT as i64),
+            status: "installing".into(),
+            error: None,
+            created_at: now_secs(),
+            updated_at: now_secs(),
+        });
+    }
+
     {
         let mut busy = state.comfy_install_busy.lock().map_err(|e| e.to_string())?;
         if *busy {
@@ -809,68 +838,59 @@ pub fn cancel_job(
     Ok(job)
 }
 
-/// Returns immediately; model downloads run on a background thread.
+/// Enqueue blueprint install via Download Manager (soft / non-blocking).
 #[tauri::command]
 pub fn install_official_blueprint(
     app: AppHandle,
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     id: String,
 ) -> Result<(), String> {
-    {
-        let mut busy = state
-            .blueprint_install_busy
-            .lock()
-            .map_err(|e| e.to_string())?;
-        if let Some(current) = busy.as_ref() {
-            return Err(format!("Already installing blueprint: {current}"));
-        }
-        *busy = Some(id.clone());
-    }
-    download::clear_cancel();
-
-    let app_bg = app.clone();
-    let blueprint_id = id.clone();
-    std::thread::spawn(move || {
-        let result = blueprints::install_models(&app_bg, &blueprint_id);
-        let state = app_bg.state::<AppState>();
-        if let Err(err) = result {
-            let stage = if err == "cancelled" { "cancelled" } else { "error" };
-            let _ = app_bg.emit(
-                "blueprints://progress",
-                blueprints::BlueprintProgress {
-                    blueprint_id: blueprint_id.clone(),
-                    stage: stage.into(),
-                    message: if err == "cancelled" {
-                        "Download cancelled".into()
-                    } else {
-                        err
-                    },
-                    model_index: 0,
-                    model_total: 0,
-                    filename: None,
-                    downloaded: None,
-                    total: None,
-                },
-            );
-        }
-        if let Ok(mut busy) = state.blueprint_install_busy.lock() {
-            *busy = None;
-        }
-        download::clear_cancel();
-        // Cache is warm from install probes — push an immediate refresh (no network).
-        if let Ok(list) = blueprints::list_blueprints(&app_bg, false) {
-            let _ = app_bg.emit("blueprints://sizes", &list);
-        }
-        let _ = app_bg.emit("blueprints://updated", &blueprint_id);
-    });
-
+    let _ = download_manager::ensure(
+        &app,
+        DownloadSpec::Blueprint { id },
+        EnsureOpts { wait: false },
+    )?;
     Ok(())
 }
 
 #[tauri::command]
-pub fn cancel_blueprint_install() -> Result<(), String> {
+pub fn cancel_blueprint_install(app: AppHandle) -> Result<(), String> {
+    if let Ok(snap) = download_manager::snapshot(&app) {
+        if let Some(active) = snap.active {
+            return download_manager::cancel_job(&app, &active.id);
+        }
+    }
     download::request_cancel();
     Ok(())
+}
+
+#[tauri::command]
+pub fn ensure_download(
+    app: AppHandle,
+    spec: DownloadSpec,
+    opts: Option<EnsureOpts>,
+) -> Result<EnsureResult, String> {
+    download_manager::ensure(&app, spec, opts.unwrap_or(EnsureOpts { wait: false }))
+}
+
+#[tauri::command]
+pub fn list_downloads(app: AppHandle) -> Result<DownloadSnapshot, String> {
+    download_manager::snapshot(&app)
+}
+
+#[tauri::command]
+pub fn pause_download(app: AppHandle, job_id: String) -> Result<(), String> {
+    download_manager::pause_job(&app, &job_id)
+}
+
+#[tauri::command]
+pub fn resume_download(app: AppHandle, job_id: String) -> Result<(), String> {
+    download_manager::resume_job(&app, &job_id)
+}
+
+#[tauri::command]
+pub fn cancel_download(app: AppHandle, job_id: String) -> Result<(), String> {
+    download_manager::cancel_job(&app, &job_id)
 }
 
 #[tauri::command]
@@ -883,56 +903,19 @@ pub fn get_lora(app: AppHandle, id: String) -> Result<LoraPack, String> {
     loras::get_lora(&app, &id)
 }
 
-/// Download one arch variant for a LoRA pack (background). Queueing is owned by the UI.
+/// Enqueue LoRA variant install via Download Manager.
 #[tauri::command]
 pub fn install_lora_variant(
     app: AppHandle,
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     id: String,
     arch: String,
 ) -> Result<(), String> {
-    let key = format!("{id}:{arch}");
-    {
-        let mut busy = state
-            .lora_install_busy
-            .lock()
-            .map_err(|e| e.to_string())?;
-        if let Some(current) = busy.as_ref() {
-            return Err(format!("Already installing LoRA: {current}"));
-        }
-        *busy = Some(key);
-    }
-    download::clear_cancel();
-
-    let app_bg = app.clone();
-    let lora_id = id;
-    let arch_bg = arch;
-    std::thread::spawn(move || {
-        let result = loras::install_variant(&app_bg, &lora_id, &arch_bg);
-        let state = app_bg.state::<AppState>();
-        if let Err(err) = &result {
-            let stage = if err.as_str() == "cancelled" {
-                "cancelled"
-            } else {
-                "error"
-            };
-            let _ = app_bg.emit(
-                "loras://progress",
-                serde_json::json!({
-                    "loraId": lora_id,
-                    "arch": arch_bg,
-                    "stage": stage,
-                    "message": err,
-                }),
-            );
-        }
-        if let Ok(mut busy) = state.lora_install_busy.lock() {
-            *busy = None;
-        }
-        download::clear_cancel();
-        let _ = app_bg.emit("loras://updated", &lora_id);
-    });
-
+    let _ = download_manager::ensure(
+        &app,
+        DownloadSpec::Lora { id, arch },
+        EnsureOpts { wait: false },
+    )?;
     Ok(())
 }
 
@@ -961,48 +944,41 @@ pub fn supir_node_ready(app: AppHandle) -> Result<bool, String> {
     Ok(upscale::supir_installed(&app))
 }
 
-/// Download one Official SR/SUPIR weight (background). Queueing is owned by the UI.
+/// Enqueue upscale weight install via Download Manager.
 #[tauri::command]
 pub fn install_upscaler(
     app: AppHandle,
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     id: String,
 ) -> Result<(), String> {
-    start_upscale_install(app, state, id)
+    let _ = download_manager::ensure(
+        &app,
+        DownloadSpec::Upscale { id },
+        EnsureOpts { wait: false },
+    )?;
+    Ok(())
 }
 
-/// Ensure Ultimate SD Upscale is at the app-pinned commit (background as `"usdu"`).
+/// Ensure Ultimate SD Upscale is at the app-pinned commit.
 #[tauri::command]
-pub fn ensure_usdu_node(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    if upscale::usdu_at_pin(&app) {
-        let _ = app.emit(
-            "upscale://progress",
-            serde_json::json!({
-                "modelId": "usdu",
-                "stage": "done",
-                "message": "Ultimate SD Upscale already at pinned version",
-            }),
-        );
-        return Ok(());
-    }
-    start_upscale_install(app, state, "usdu".into())
+pub fn ensure_usdu_node(app: AppHandle, _state: State<'_, AppState>) -> Result<(), String> {
+    let _ = download_manager::ensure(
+        &app,
+        DownloadSpec::Upscale { id: "usdu".into() },
+        EnsureOpts { wait: false },
+    )?;
+    Ok(())
 }
 
-/// Ensure SUPIR custom node is at the app-pinned commit + deps (background as `"supir"`).
+/// Ensure SUPIR custom node is at the app-pinned commit + deps.
 #[tauri::command]
-pub fn ensure_supir_node(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    if upscale::supir_at_pin(&app) {
-        let _ = app.emit(
-            "upscale://progress",
-            serde_json::json!({
-                "modelId": "supir",
-                "stage": "done",
-                "message": "SUPIR already at pinned version",
-            }),
-        );
-        return Ok(());
-    }
-    start_upscale_install(app, state, "supir".into())
+pub fn ensure_supir_node(app: AppHandle, _state: State<'_, AppState>) -> Result<(), String> {
+    let _ = download_manager::ensure(
+        &app,
+        DownloadSpec::Upscale { id: "supir".into() },
+        EnsureOpts { wait: false },
+    )?;
+    Ok(())
 }
 
 /// Expected vs installed pins for ComfyUI + managed custom nodes (Settings).
@@ -1016,59 +992,6 @@ pub fn runtime_pins_status(app: AppHandle, state: State<'_, AppState>) -> Result
         comfy: comfy::comfy_pin_status(&app, runtime.as_ref()),
         nodes: upscale::managed_nodes_pin_status(&app),
     })
-}
-
-fn start_upscale_install(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    id: String,
-) -> Result<(), String> {
-    {
-        let mut busy = state
-            .upscale_install_busy
-            .lock()
-            .map_err(|e| e.to_string())?;
-        if let Some(current) = busy.as_ref() {
-            return Err(format!("Already installing upscale: {current}"));
-        }
-        *busy = Some(id.clone());
-    }
-    download::clear_cancel();
-
-    let app_bg = app.clone();
-    let job_id = id;
-    std::thread::spawn(move || {
-        let result = if job_id == "usdu" {
-            upscale::ensure_usdu_custom_node(&app_bg)
-        } else if job_id == "supir" {
-            upscale::ensure_supir_custom_node(&app_bg)
-        } else {
-            upscale::install_upscaler(&app_bg, &job_id)
-        };
-        let state = app_bg.state::<AppState>();
-        if let Err(err) = &result {
-            let stage = if err.as_str() == "cancelled" {
-                "cancelled"
-            } else {
-                "error"
-            };
-            let _ = app_bg.emit(
-                "upscale://progress",
-                serde_json::json!({
-                    "modelId": job_id,
-                    "stage": stage,
-                    "message": err,
-                }),
-            );
-        }
-        if let Ok(mut busy) = state.upscale_install_busy.lock() {
-            *busy = None;
-        }
-        download::clear_cancel();
-        let _ = app_bg.emit("upscale://updated", &job_id);
-    });
-
-    Ok(())
 }
 
 #[tauri::command]
@@ -1121,10 +1044,21 @@ pub fn list_prompt_tool_weights(app: AppHandle) -> Result<Vec<PromptToolWeightIn
     prompt_tools::list_weights(&app)
 }
 
+/// Enqueue Prompt Tools provider install via Download Manager.
 #[tauri::command]
-pub fn ensure_prompt_tools_provider(app: AppHandle, provider_id: String) -> Result<(), String> {
-    // Blocking install so the UI can await readiness before queueing a run.
-    prompt_tools::ensure_provider(&app, &provider_id).map(|_| ())
+pub fn ensure_prompt_tools_provider(
+    app: AppHandle,
+    _state: State<'_, AppState>,
+    provider_id: String,
+) -> Result<(), String> {
+    let _ = download_manager::ensure(
+        &app,
+        DownloadSpec::PromptTools {
+            provider: provider_id,
+        },
+        EnsureOpts { wait: false },
+    )?;
+    Ok(())
 }
 
 #[tauri::command]

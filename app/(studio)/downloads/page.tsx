@@ -10,13 +10,30 @@ export default function DownloadsStudioPage() {
   return (
     <div className="absolute inset-0 flex flex-col pt-14">
       <DownloadsPanel
-        activeModel={s.activeModel}
-        queuedModels={s.queuedModels}
-        progress={s.installProgress}
-        history={s.downloadHistory}
-        onCancel={() => {
+        snapshot={s.downloadSnapshot}
+        onPause={(jobId) => {
           void s
-            .cancelBlueprintInstall()
+            .pauseDownload(jobId)
+            .catch((e) =>
+              notifyError(
+                e instanceof Error ? e.message : String(e),
+                "Could not pause"
+              )
+            )
+        }}
+        onResume={(jobId) => {
+          void s
+            .resumeDownload(jobId)
+            .catch((e) =>
+              notifyError(
+                e instanceof Error ? e.message : String(e),
+                "Could not resume"
+              )
+            )
+        }}
+        onCancel={(jobId) => {
+          void s
+            .cancelDownload(jobId)
             .catch((e) =>
               notifyError(
                 e instanceof Error ? e.message : String(e),
@@ -24,7 +41,6 @@ export default function DownloadsStudioPage() {
               )
             )
         }}
-        onRemoveBlueprint={s.removeQueuedInstall}
         onOpenBlueprints={() => s.setPickerOpen(true)}
       />
     </div>

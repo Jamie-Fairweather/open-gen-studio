@@ -4,6 +4,7 @@ mod commands;
 mod creator;
 mod db;
 mod download;
+mod download_manager;
 mod generate;
 mod gpu;
 mod loras;
@@ -64,11 +65,14 @@ pub fn run() {
                 blueprint_install_busy: Mutex::new(None),
                 lora_install_busy: Mutex::new(None),
                 upscale_install_busy: Mutex::new(None),
+                prompt_tools_install_busy: Mutex::new(None),
                 cancelled_jobs: Mutex::new(Default::default()),
             });
 
             // Restore remote model sizes so installed blueprints look ready immediately.
             blueprints::load_remote_size_cache(app.handle());
+
+            download_manager::start_worker(app.handle().clone());
 
             // Blueprint thumbnails (Official + user app-data).
             if let Ok(dir) = blueprints::official_dir(app.handle()) {
@@ -153,6 +157,11 @@ pub fn run() {
             commands::free_comfy_vram,
             commands::list_prompt_tool_weights,
             commands::ensure_prompt_tools_provider,
+            commands::ensure_download,
+            commands::list_downloads,
+            commands::pause_download,
+            commands::resume_download,
+            commands::cancel_download,
             commands::read_image_embedded_prompt,
             commands::save_temp_tool_image,
             commands::run_image_to_prompt,

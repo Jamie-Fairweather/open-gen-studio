@@ -153,7 +153,11 @@ fn history_entry(port: u16, prompt_id: &str) -> Result<Option<Value>, String> {
         .build()
         .map_err(|e| e.to_string())?;
     let url = format!("http://127.0.0.1:{port}/history/{prompt_id}");
-    let res = client.get(&url).send().map_err(|e| e.to_string())?;
+    let res = client.get(&url).send().map_err(|e| {
+        format!(
+            "ComfyUI is not responding on port {port} (it may have crashed while loading a model). {e}"
+        )
+    })?;
     if !res.status().is_success() {
         return Ok(None);
     }

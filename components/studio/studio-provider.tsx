@@ -14,42 +14,31 @@ import {
   type SetStateAction,
 } from "react"
 import { usePathname, useRouter } from "next/navigation"
-import type {
-  BlueprintInstallProgress,
-  DownloadModelItem,
-} from "@/components/blueprint-picker-dialog"
-import {
-  pushDownloadHistory,
-  type DownloadHistoryEntry,
-} from "@/components/downloads-panel"
 import { SIDE_RAIL_WIDTH } from "@/components/side-rail"
 import { STUDIO_TABS, tabFromPath } from "@/components/studio/studio-tabs"
 import {
-  cancelBlueprintInstall,
+  cancelDownload,
   cancelJob,
   comfyuiStatus,
   deleteGalleryItem,
   detectGpu,
+  ensureDownload,
   galleryItemCategory,
   gallerySrc,
   generateImage,
-  getBlueprint,
   getOfficialBlueprint,
-  installComfyui,
   deleteUserLora,
-  installLoraVariant,
-  installOfficialBlueprint,
   isTauri,
+  listDownloads,
   listGallery,
   listBlueprints,
-  ensureSupirNode,
-  ensureUsduNode,
-  installUpscaler,
-  supirNodeReady,
   listLoras,
   listRuntimes,
   listSettings,
   listUpscalers,
+  onDownloadManager,
+  pauseDownload,
+  resumeDownload,
   setSetting,
   onBlueprintProbe,
   onBlueprintProgress,
@@ -58,6 +47,7 @@ import {
   onDownloadProgress,
   onLoraProgress,
   onLorasUpdated,
+  onPromptToolsProgress,
   onUpscaleProgress,
   onUpscalersUpdated,
   onGalleryDeleted,
@@ -71,6 +61,7 @@ import {
   stopComfyui,
   usduNodeReady,
   type BlueprintDetail,
+  type DownloadSnapshot,
   type GalleryItem,
   type GalleryRecipe,
   type LoraPack,
@@ -82,8 +73,6 @@ import {
   type StudioTab,
   type ToolsHandoff,
 } from "@/lib/host"
-
-const DEFAULT_UPSCALE_MODEL_ID = "4x-ultrasharp"
 import {
   applyReuseAllSettings,
   isInstalled,
@@ -104,6 +93,28 @@ import {
   sizeFromAspectAndSide,
   syncSizeControls,
 } from "@/lib/image-size"
+
+const DEFAULT_UPSCALE_MODEL_ID = "4x-ultrasharp"
+
+const EMPTY_DOWNLOAD_SNAPSHOT: DownloadSnapshot = {
+  active: null,
+  queued: [],
+  history: [],
+}
+
+function blueprintIdFromJobKey(jobKey: string): string | null {
+  return jobKey.startsWith("blueprint:")
+    ? jobKey.slice("blueprint:".length)
+    : null
+}
+
+function loraKeyFromJobKey(jobKey: string): string | null {
+  return jobKey.startsWith("lora:") ? jobKey.slice("lora:".length) : null
+}
+
+function upscaleIdFromJobKey(jobKey: string): string | null {
+  return jobKey.startsWith("upscale:") ? jobKey.slice("upscale:".length) : null
+}
 
 export { STUDIO_TABS, tabFromPath } from "@/components/studio/studio-tabs"
 
@@ -153,6 +164,11 @@ export type StudioContextValue = {
   upscaleInstallingId: string | null
   beginUpscaleInstall: (id: string) => Promise<void>
   beginUsduInstall: () => Promise<void>
+  beginPromptToolsInstall: () => Promise<void>
+  downloadSnapshot: DownloadSnapshot
+  pauseDownload: (jobId: string) => Promise<void>
+  resumeDownload: (jobId: string) => Promise<void>
+  cancelDownload: (jobId: string) => Promise<void>
   hfToken: string
   setHfToken: Dispatch<SetStateAction<string>>
   hfTokenDirty: boolean
@@ -186,8 +202,6 @@ export type StudioContextValue = {
   comfy: RuntimeInstall | undefined
   installingId: string | null
   installQueue: string[]
-  installProgress: BlueprintInstallProgress | null
-  downloadHistory: DownloadHistoryEntry[]
   sizesProbing: boolean
   detail: BlueprintDetail | null
   activeDetail: BlueprintDetail | null
@@ -233,8 +247,6 @@ export type StudioContextValue = {
   openPromptEnhancer: (handoff?: ToolsHandoff) => void
   stageInsetLeft: string | undefined
   stageInsetRight: string | undefined
-  activeModel: DownloadModelItem | null
-  queuedModels: DownloadModelItem[]
   handleGenerate: () => Promise<void>
   handleCancel: () => Promise<void>
   handleDeleteGalleryItem: (id: string) => Promise<void>
@@ -242,8 +254,6 @@ export type StudioContextValue = {
   handleReuseGallerySettings: (item: GalleryItem) => void
   requestBlueprintInstall: (id: string) => Promise<void>
   handleInstallBlueprint: (id: string) => Promise<void>
-  removeQueuedInstall: (id: string) => void
-  cancelBlueprintInstall: typeof cancelBlueprintInstall
   handleInstallComfy: () => Promise<void>
   handleStartComfy: () => Promise<void>
   handleStopComfy: () => Promise<void>
@@ -287,7 +297,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const navigateTabRef = useRef(navigateTab)
 
   const [blueprints, setBlueprints] = useState<Blueprint[]>([])
-  const blueprintsRef = useRef<Blueprint[]>([])
   const [blueprintsLoaded, setBlueprintsLoaded] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const preferredBlueprintIdRef = useRef<string | null>(null)
@@ -306,13 +315,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [usduDenoise, setUsduDenoise] = useState(0.15)
   const [upscaleModels, setUpscaleModels] = useState<UpscaleModelInfo[]>([])
   const [usduReady, setUsduReady] = useState(false)
-  const [upscaleInstallingId, setUpscaleInstallingId] = useState<string | null>(
-    null
-  )
   const [loraStack, setLoraStack] = useState<LoraStackEntry[]>([])
-  const [loraInstallingKey, setLoraInstallingKey] = useState<string | null>(
-    null
-  )
   const [hfToken, setHfToken] = useState("")
   const [hfTokenDirty, setHfTokenDirty] = useState(false)
   const [hfTokenSaving, setHfTokenSaving] = useState(false)
@@ -357,30 +360,16 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [sideLength, setSideLength] = useState(SIDE_LENGTH_DEFAULT)
   const aspectIdRef = useRef(aspectId)
   const sideLengthRef = useRef(sideLength)
+  aspectIdRef.current = aspectId
+  sideLengthRef.current = sideLength
   const [runtimes, setRuntimes] = useState<RuntimeInstall[]>([])
   const [gpu, setGpu] = useState<GpuInfo | null>(null)
   const [runtimeBusy, setRuntimeBusy] = useState(false)
   const [runtimeMessage, setRuntimeMessage] = useState<string | null>(null)
   const [comfyHealthy, setComfyHealthy] = useState(false)
-  const [installingId, setInstallingId] = useState<string | null>(null)
-  const installingIdRef = useRef<string | null>(null)
-  /** Global install queue keys: blueprint id | `lora:id:arch` | `upscale:id`. */
-  const [installQueue, setInstallQueue] = useState<string[]>([])
-  const installQueueRef = useRef<string[]>([])
-  const pumpInstallQueueRef = useRef<() => void>(() => {})
-  /** Pending file rows per install job key (Downloads active + waiting). */
-  const [pendingByBlueprint, setPendingByBlueprint] = useState<
-    Record<string, DownloadModelItem[]>
-  >({})
-  const pendingByBlueprintRef = useRef(pendingByBlueprint)
-  /** Completed-model bytes for the in-flight blueprint install (overall progress). */
-  const installByteOffsetRef = useRef(0)
-  const installByteTotalRef = useRef<number | null>(null)
-  const [installProgress, setInstallProgress] =
-    useState<BlueprintInstallProgress | null>(null)
-  const [downloadHistory, setDownloadHistory] = useState<
-    DownloadHistoryEntry[]
-  >([])
+  const [downloadSnapshot, setDownloadSnapshot] = useState<DownloadSnapshot>(
+    EMPTY_DOWNLOAD_SNAPSHOT
+  )
   const [sizesProbing, setSizesProbing] = useState(false)
   const [detail, setDetail] = useState<BlueprintDetail | null>(null)
   const [controlValues, setControlValues] = useState<Record<string, unknown>>(
@@ -603,6 +592,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     let unlistenRuntimes: (() => void) | undefined
     let unlistenProgress: (() => void) | undefined
     let unlistenDownload: (() => void) | undefined
+    let unlistenDownloadManager: (() => void) | undefined
     let unlistenBlueprintProgress: (() => void) | undefined
     let unlistenBlueprintsUpdated: (() => void) | undefined
     let unlistenBlueprintSizes: (() => void) | undefined
@@ -615,8 +605,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     let unlistenLoraProgress: (() => void) | undefined
     let unlistenUpscalersUpdated: (() => void) | undefined
     let unlistenUpscaleProgress: (() => void) | undefined
+    let unlistenPromptToolsProgress: (() => void) | undefined
 
-    /** Rolling window for download speed — longer span = smoother ETA. */
+    /** Rolling window for runtime download speed (Comfy portable, etc.). */
     const SPEED_WINDOW_MS = 10_000
     const SPEED_MIN_MS = 3_000
     let speedSamples: { t: number; bytes: number; url: string }[] = []
@@ -683,6 +674,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             "Installing in the background…"
           )
         }
+        const snap = await listDownloads().catch(() => EMPTY_DOWNLOAD_SNAPSHOT)
+        setDownloadSnapshot(snap)
       } catch (e) {
         setSizesProbing(false)
         setBlueprintsLoaded(true)
@@ -691,6 +684,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     }
 
     void load()
+
+    void onDownloadManager((snap) => {
+      setDownloadSnapshot(snap)
+    }).then((u) => {
+      unlistenDownloadManager = u
+    })
 
     void onRuntimesUpdated((runtime) => {
       setRuntimes((prev) => {
@@ -741,9 +740,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     })
 
     void onDownloadProgress((p) => {
+      // Runtime / other non-manager status line only (manager owns install progress).
       const now = performance.now()
-      const bpId = installingIdRef.current
-      // Blueprint installs: track the current file only (queue is per model).
       const trackedBytes = p.downloaded
       if (p.done) {
         speedSamples = []
@@ -758,7 +756,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         while (speedSamples.length > 1 && speedSamples[0]!.t < cutoff) {
           speedSamples.shift()
         }
-        // Drop stale head if bytes went backwards (new file / resume reset).
         while (
           speedSamples.length > 1 &&
           speedSamples[speedSamples.length - 1]!.bytes < speedSamples[0]!.bytes
@@ -771,29 +768,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           const dtMs = newest.t - oldest.t
           if (dtMs >= SPEED_MIN_MS) {
             const windowSpeed = ((newest.bytes - oldest.bytes) / dtMs) * 1000
-            // Gentle blend on top of the windowed rate.
             emaSpeed =
               emaSpeed > 0 ? emaSpeed * 0.88 + windowSpeed * 0.12 : windowSpeed
           }
         }
       }
 
-      if (bpId) {
-        setInstallProgress((prev) => ({
-          blueprintId: bpId,
-          stage: prev?.stage ?? "download",
-          message: prev?.message ?? "Downloading…",
-          modelIndex: prev?.modelIndex ?? 0,
-          modelTotal: prev?.modelTotal ?? 0,
-          filename: prev?.filename,
-          downloaded: p.downloaded,
-          total: p.total,
-          bytesPerSec: emaSpeed,
-        }))
-        return
-      }
-
-      // Runtime / other downloads (e.g. Comfy portable) — status line only.
       const total = p.total ? ` / ${formatBytes(p.total)}` : ""
       const pct =
         p.total && p.total > 0
@@ -817,123 +797,18 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       unlistenDownload = u
     })
 
-    function finishInstallHistory(
-      status: DownloadHistoryEntry["status"],
-      message: string,
-      blueprintId: string
-    ) {
-      const id = blueprintId || installingIdRef.current || ""
-      const name =
-        blueprintsRef.current.find((bp) => bp.id === id)?.name ||
-        id ||
-        "Blueprint"
-      if (id) {
-        setDownloadHistory((prev) =>
-          pushDownloadHistory(prev, { blueprintId: id, name, status, message })
-        )
-        setPendingByBlueprint((prev) => {
-          if (!(id in prev)) return prev
-          const next = { ...prev }
-          delete next[id]
-          return next
-        })
-      }
-    }
-
     void onBlueprintProgress((p) => {
       if (p.stage === "done") {
-        finishInstallHistory("done", p.message, p.blueprintId)
-        installingIdRef.current = null
-        setInstallingId(null)
-        setInstallProgress(null)
-        speedSamples = []
-        emaSpeed = 0
-        installByteOffsetRef.current = 0
-        installByteTotalRef.current = null
         notifySuccess("Blueprint ready", p.message)
-        pumpInstallQueueRef.current()
         return
       }
       if (p.stage === "error") {
-        finishInstallHistory("error", p.message, p.blueprintId)
-        installingIdRef.current = null
-        setInstallingId(null)
-        setInstallProgress(null)
-        speedSamples = []
-        emaSpeed = 0
-        installByteOffsetRef.current = 0
-        installByteTotalRef.current = null
         notifyError(p.message, "Blueprint install failed")
-        pumpInstallQueueRef.current()
         return
       }
       if (p.stage === "cancelled") {
-        finishInstallHistory("cancelled", p.message, p.blueprintId)
-        installingIdRef.current = null
-        setInstallingId(null)
-        setInstallProgress(null)
-        speedSamples = []
-        emaSpeed = 0
-        installByteOffsetRef.current = 0
-        installByteTotalRef.current = null
         notifyDismiss("blueprint")
-        pumpInstallQueueRef.current()
-        return
       }
-
-      if (p.blueprintId) {
-        installingIdRef.current = p.blueprintId
-        setInstallingId(p.blueprintId)
-      }
-      // Rust sends overall offset (completed models) before each file download.
-      if (typeof p.downloaded === "number") {
-        installByteOffsetRef.current = p.downloaded
-      }
-      if (typeof p.total === "number") {
-        installByteTotalRef.current = p.total
-      }
-
-      // Drop finished/skipped models from the per-file queue.
-      if (
-        p.blueprintId &&
-        p.filename &&
-        (p.stage === "skip" || p.message.startsWith("Downloaded "))
-      ) {
-        const bpId = p.blueprintId
-        const filename = p.filename
-        setPendingByBlueprint((prev) => {
-          const list = prev[bpId]
-          if (!list?.some((m) => m.filename === filename)) return prev
-          return {
-            ...prev,
-            [bpId]: list.filter((m) => m.filename !== filename),
-          }
-        })
-      }
-
-      setInstallProgress((prev) => {
-        const filename = p.filename ?? prev?.filename ?? null
-        const newFile =
-          Boolean(p.filename) &&
-          p.stage === "download" &&
-          p.filename !== prev?.filename
-        if (newFile) {
-          speedSamples = []
-          emaSpeed = 0
-        }
-        return {
-          blueprintId: p.blueprintId || prev?.blueprintId || "",
-          stage: p.stage,
-          message: p.message,
-          modelIndex: p.modelIndex,
-          modelTotal: p.modelTotal,
-          filename,
-          // File bytes come from downloads://progress; reset when a new file starts.
-          downloaded: newFile ? 0 : (prev?.downloaded ?? 0),
-          total: newFile ? null : (prev?.total ?? null),
-          bytesPerSec: newFile ? 0 : (prev?.bytesPerSec ?? 0),
-        }
-      })
     }).then((u) => {
       unlistenBlueprintProgress = u
     })
@@ -967,8 +842,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     })
 
     void onJobProgress((p) => {
-      // Auto-start emits a separate "runtime" loading toast; clear it once
-      // generation has moved on (or finished). Progress lives in the composer bar.
       if (p.stage !== "start") {
         notifyDismiss("runtime")
       }
@@ -1011,7 +884,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         return [item, ...prev]
       })
       navigateTabRef.current(category)
-      // Select the new image on the stage; do not open the gallery rail.
       setSelectedGalleryId(item.id)
     }).then((u) => {
       unlistenGallery = u
@@ -1046,149 +918,45 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     })
 
     void onUpscaleProgress((p) => {
-      // Ignore legacy Rust "queued" — UI owns the global queue.
-      if (p.stage === "queued") return
-      const key = `upscale:${p.modelId}`
-      if (p.stage === "download") {
-        setUpscaleInstallingId(p.modelId)
-        installingIdRef.current = key
-        setInstallingId(key)
-        setInstallProgress({
-          blueprintId: key,
-          stage: "download",
-          message: p.message,
-          modelIndex: 1,
-          modelTotal: 1,
-          filename: p.filename ?? null,
-          downloaded: 0,
-          total: null,
-          bytesPerSec: 0,
-        })
-        return
-      }
-      if (
-        p.stage === "done" ||
-        p.stage === "error" ||
-        p.stage === "cancelled"
-      ) {
-        const name =
-          pendingByBlueprintRef.current[key]?.[0]?.blueprintName ?? p.modelId
-        setPendingByBlueprint((prev) => {
-          if (!(key in prev)) return prev
-          const next = { ...prev }
-          delete next[key]
-          return next
-        })
-        if (installingIdRef.current === key) {
-          setUpscaleInstallingId(null)
-          installingIdRef.current = null
-          setInstallingId(null)
-          setInstallProgress(null)
-        } else {
-          setUpscaleInstallingId((cur) => (cur === p.modelId ? null : cur))
-        }
-        const status =
-          p.stage === "done"
-            ? ("done" as const)
-            : p.stage === "cancelled"
-              ? ("cancelled" as const)
-              : ("error" as const)
-        setDownloadHistory((prev) =>
-          pushDownloadHistory(prev, {
-            blueprintId: key,
-            name,
-            status,
-            message: p.message,
-          })
+      if (p.stage === "error") {
+        notifyError(p.message, "Upscale install failed")
+      } else if (p.stage === "done") {
+        notifySuccess(
+          p.modelId === "usdu"
+            ? "Ultimate SD Upscale ready"
+            : p.modelId === "supir"
+              ? "SUPIR node ready — restart Comfy if it was running"
+              : p.modelId.startsWith("supir-")
+                ? "SUPIR weights ready"
+                : "Upscale model ready"
         )
-        if (p.stage === "error") {
-          notifyError(p.message, "Upscale install failed")
-        } else if (p.stage === "done") {
-          notifySuccess(
-            p.modelId === "usdu"
-              ? "Ultimate SD Upscale ready"
-              : p.modelId === "supir"
-                ? "SUPIR node ready — restart Comfy if it was running"
-                : p.modelId.startsWith("supir-")
-                  ? "SUPIR weights ready"
-                  : "Upscale model ready"
-          )
-        }
         void listUpscalers()
           .then(setUpscaleModels)
           .catch(() => {})
         void usduNodeReady()
           .then(setUsduReady)
           .catch(() => {})
-        pumpInstallQueueRef.current()
       }
     }).then((u) => {
       unlistenUpscaleProgress = u
     })
 
-    void onLoraProgress((p) => {
-      if (p.stage === "queued") return
-      const key = `lora:${p.loraId}:${p.arch}`
-      if (p.stage === "download") {
-        setLoraInstallingKey(`${p.loraId}:${p.arch}`)
-        installingIdRef.current = key
-        setInstallingId(key)
-        setInstallProgress({
-          blueprintId: key,
-          stage: "download",
-          message: p.message,
-          modelIndex: 1,
-          modelTotal: 1,
-          filename: p.filename ?? null,
-          downloaded: 0,
-          total: null,
-          bytesPerSec: 0,
-        })
-        return
+    void onPromptToolsProgress((p) => {
+      if (p.stage === "error") {
+        notifyError(p.message, "Prompt Tools install failed")
       }
-      if (
-        p.stage === "done" ||
-        p.stage === "error" ||
-        p.stage === "cancelled"
-      ) {
-        const name =
-          pendingByBlueprintRef.current[key]?.[0]?.blueprintName ??
-          `${p.loraId} · ${p.arch}`
-        setPendingByBlueprint((prev) => {
-          if (!(key in prev)) return prev
-          const next = { ...prev }
-          delete next[key]
-          return next
-        })
-        if (installingIdRef.current === key) {
-          setLoraInstallingKey(null)
-          installingIdRef.current = null
-          setInstallingId(null)
-          setInstallProgress(null)
-        }
-        const status =
-          p.stage === "done"
-            ? ("done" as const)
-            : p.stage === "cancelled"
-              ? ("cancelled" as const)
-              : ("error" as const)
-        setDownloadHistory((prev) =>
-          pushDownloadHistory(prev, {
-            blueprintId: key,
-            name,
-            status,
-            message: p.message,
-          })
-        )
-        if (p.stage === "error") {
-          notifyError(p.message, "LoRA install failed")
-        } else if (p.stage === "done") {
-          notifySuccess("LoRA ready", name)
-        }
+    }).then((u) => {
+      unlistenPromptToolsProgress = u
+    })
+
+    void onLoraProgress((p) => {
+      if (p.stage === "error") {
+        notifyError(p.message, "LoRA install failed")
+      } else if (p.stage === "done") {
+        notifySuccess("LoRA ready", `${p.loraId} · ${p.arch}`)
         void listLoras()
           .then(setLoraPacks)
           .catch(() => {})
-        pumpInstallQueueRef.current()
       }
     }).then((u) => {
       unlistenLoraProgress = u
@@ -1198,6 +966,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       unlistenRuntimes?.()
       unlistenProgress?.()
       unlistenDownload?.()
+      unlistenDownloadManager?.()
       unlistenBlueprintProgress?.()
       unlistenBlueprintsUpdated?.()
       unlistenBlueprintSizes?.()
@@ -1210,6 +979,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       unlistenLoraProgress?.()
       unlistenUpscalersUpdated?.()
       unlistenUpscaleProgress?.()
+      unlistenPromptToolsProgress?.()
     }
   }, [desktop])
 
@@ -1332,168 +1102,61 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function loadPendingModels(id: string): Promise<DownloadModelItem[]> {
-    const detail = await getBlueprint(id)
-    const blueprintName =
-      detail.name || blueprintsRef.current.find((b) => b.id === id)?.name || id
-    return (detail.models ?? [])
-      .filter((m) => m.url.trim() !== "" && !m.ready)
-      .map((m) => ({
-        blueprintId: id,
-        blueprintName,
-        filename: m.filename,
-        path: m.path,
-        role: m.role,
-      }))
-  }
-
-  function rememberPendingModels(id: string) {
-    void loadPendingModels(id)
-      .then((models) => {
-        setPendingByBlueprint((prev) => ({ ...prev, [id]: models }))
-      })
-      .catch((e) => {
-        notifyError(
-          e instanceof Error ? e.message : String(e),
-          "Could not list models"
-        )
-      })
-  }
-
-  function enqueueBlueprintInstall(id: string) {
-    if (installingIdRef.current === id) return
-    if (installQueueRef.current.includes(id)) return
-    const next = [...installQueueRef.current, id]
-    installQueueRef.current = next
-    setInstallQueue(next)
-    rememberPendingModels(id)
-  }
-
-  function removeQueuedInstall(id: string) {
-    const next = installQueueRef.current.filter((item) => item !== id)
-    installQueueRef.current = next
-    setInstallQueue(next)
-    setPendingByBlueprint((prev) => {
-      if (!(id in prev)) return prev
-      const copy = { ...prev }
-      delete copy[id]
-      return copy
-    })
-  }
-
-  async function startBlueprintInstall(id: string) {
-    installingIdRef.current = id
-    setInstallingId(id)
-    const bp = blueprintsRef.current.find((b) => b.id === id)
-    installByteOffsetRef.current = 0
-    installByteTotalRef.current = bp?.totalSizeBytes ?? null
+  async function requestBlueprintInstall(id: string) {
     try {
-      const models = await loadPendingModels(id)
-      setPendingByBlueprint((prev) => ({ ...prev, [id]: models }))
+      await ensureDownload({ kind: "blueprint", id }, { wait: false })
     } catch (e) {
       notifyError(
         e instanceof Error ? e.message : String(e),
-        "Could not list models"
+        "Blueprint install failed"
       )
-    }
-    setInstallProgress({
-      blueprintId: id,
-      stage: "start",
-      message: "Starting model download…",
-      modelIndex: 0,
-      modelTotal: bp?.modelCount ?? 0,
-      filename: null,
-      downloaded: 0,
-      total: null,
-      bytesPerSec: 0,
-    })
-    notifyDismiss("download")
-    notifyDismiss("blueprint")
-    try {
-      await installOfficialBlueprint(id)
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e)
-      installingIdRef.current = null
-      setInstallingId(null)
-      setInstallProgress(null)
-      installByteOffsetRef.current = 0
-      installByteTotalRef.current = null
-      // Backend still one-at-a-time — queue instead of surfacing a confusing error.
-      if (message.startsWith("Already installing blueprint:")) {
-        enqueueBlueprintInstall(id)
-        return
-      }
-      setPendingByBlueprint((prev) => {
-        if (!(id in prev)) return prev
-        const copy = { ...prev }
-        delete copy[id]
-        return copy
-      })
-      const name = blueprintsRef.current.find((b) => b.id === id)?.name || id
-      setDownloadHistory((prev) =>
-        pushDownloadHistory(prev, {
-          blueprintId: id,
-          name,
-          status: "error",
-          message,
-        })
-      )
-      notifyError(message, "Blueprint install failed")
-      pumpInstallQueueRef.current()
     }
   }
 
-  useEffect(() => {
-    navigateTabRef.current = navigateTab
-  }, [navigateTab])
+  async function handleInstallBlueprint(id: string) {
+    if (!(await ensureInstallTokens(id))) return
+    await requestBlueprintInstall(id)
+  }
 
-  useEffect(() => {
-    blueprintsRef.current = blueprints
-  }, [blueprints])
-
-  useEffect(() => {
-    loraPacksRef.current = loraPacks
-  }, [loraPacks])
-
-  useEffect(() => {
-    pendingByBlueprintRef.current = pendingByBlueprint
-  }, [pendingByBlueprint])
-
-  useEffect(() => {
-    aspectIdRef.current = aspectId
-  }, [aspectId])
-
-  useEffect(() => {
-    sideLengthRef.current = sideLength
-  }, [sideLength])
-
-  useEffect(() => {
-    pumpInstallQueueRef.current = () => {
-      if (installingIdRef.current) return
-      const next = installQueueRef.current[0]
-      if (!next) return
-      const rest = installQueueRef.current.slice(1)
-      installQueueRef.current = rest
-      setInstallQueue(rest)
-      if (next.startsWith("lora:")) {
-        const restKey = next.slice("lora:".length)
-        const colon = restKey.lastIndexOf(":")
-        if (colon <= 0) {
-          pumpInstallQueueRef.current()
-          return
-        }
-        const id = restKey.slice(0, colon)
-        const arch = restKey.slice(colon + 1)
-        void startLoraInstall(id, arch)
-        return
-      }
-      if (next.startsWith("upscale:")) {
-        void startUpscaleInstall(next.slice("upscale:".length))
-        return
-      }
-      void startBlueprintInstall(next)
+  async function beginLoraInstall(id: string, arch: string) {
+    try {
+      await ensureDownload({ kind: "lora", id, arch }, { wait: false })
+    } catch (e) {
+      notifyError(
+        e instanceof Error ? e.message : String(e),
+        "LoRA install failed"
+      )
     }
-  })
+  }
+
+  async function beginUpscaleInstall(id: string) {
+    try {
+      await ensureDownload({ kind: "upscale", id }, { wait: false })
+    } catch (e) {
+      notifyError(
+        e instanceof Error ? e.message : String(e),
+        "Upscale install failed"
+      )
+    }
+  }
+
+  async function beginUsduInstall() {
+    await beginUpscaleInstall("usdu")
+  }
+
+  async function beginPromptToolsInstall() {
+    try {
+      await ensureDownload(
+        { kind: "promptTools", provider: "qwenvl" },
+        { wait: false }
+      )
+    } catch (e) {
+      notifyError(
+        e instanceof Error ? e.message : String(e),
+        "Prompt Tools install failed"
+      )
+    }
+  }
 
   async function ensureInstallTokens(id: string): Promise<boolean> {
     const bp = blueprints.find((b) => b.id === id)
@@ -1520,282 +1183,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       notifyError(e instanceof Error ? e.message : String(e), "Settings")
       return false
     }
-  }
-
-  async function requestBlueprintInstall(id: string) {
-    if (installingIdRef.current === id) return
-    if (installQueueRef.current.includes(id)) return
-    if (installingIdRef.current) {
-      enqueueBlueprintInstall(id)
-      return
-    }
-    await startBlueprintInstall(id)
-  }
-
-  const { activeModel, queuedModels } = useMemo(() => {
-    const queued: DownloadModelItem[] = []
-    let active: DownloadModelItem | null = null
-    const installing = installingId
-
-    if (installing) {
-      const pending = pendingByBlueprint[installing] ?? []
-      const currentName = installProgress?.filename ?? null
-      if (currentName) {
-        const idx = pending.findIndex((m) => m.filename === currentName)
-        if (idx >= 0) {
-          active = pending[idx]!
-          queued.push(...pending.slice(idx + 1))
-        } else {
-          // File started before pending list refreshed, or already dropped.
-          const bpName =
-            blueprints.find((b) => b.id === installing)?.name || installing
-          if (
-            installProgress?.stage === "download" ||
-            installProgress?.stage === "start" ||
-            installProgress?.stage === "deps"
-          ) {
-            active = {
-              blueprintId: installing,
-              blueprintName: bpName,
-              filename: currentName,
-              path: "",
-            }
-          }
-          queued.push(...pending)
-        }
-      } else if (pending.length > 0) {
-        active = pending[0]!
-        queued.push(...pending.slice(1))
-      }
-    }
-
-    for (const id of installQueue) {
-      queued.push(...(pendingByBlueprint[id] ?? []))
-    }
-
-    return { activeModel: active, queuedModels: queued }
-  }, [
-    installingId,
-    installQueue,
-    pendingByBlueprint,
-    installProgress?.filename,
-    installProgress?.stage,
-    blueprints,
-  ])
-
-  async function handleInstallBlueprint(id: string) {
-    if (!(await ensureInstallTokens(id))) return
-    await requestBlueprintInstall(id)
-  }
-
-  function seedLoraPending(id: string, arch: string) {
-    const pack = loraPacksRef.current.find((p) => p.id === id)
-    const filename = pack?.variants.find((v) => v.arch === arch)?.filename ?? id
-    const key = `lora:${id}:${arch}`
-    const item: DownloadModelItem = {
-      blueprintId: key,
-      blueprintName: `${pack?.name ?? id} · ${arch}`,
-      filename,
-      path: "loras",
-    }
-    setPendingByBlueprint((prev) => ({ ...prev, [key]: [item] }))
-    return { key, filename, name: item.blueprintName }
-  }
-
-  function seedUpscalePending(id: string) {
-    const key = `upscale:${id}`
-    const model = upscaleModels.find((m) => m.id === id)
-    const name =
-      id === "usdu"
-        ? "Ultimate SD Upscale"
-        : id === "supir"
-          ? "SUPIR node"
-          : (model?.name ?? id)
-    const filename =
-      id === "usdu" || id === "supir" ? id : (model?.filename ?? id)
-    const item: DownloadModelItem = {
-      blueprintId: key,
-      blueprintName: name,
-      filename,
-      path: model?.kind === "supir" ? "checkpoints" : "upscale_models",
-    }
-    setPendingByBlueprint((prev) => ({ ...prev, [key]: [item] }))
-    return { key, filename, name }
-  }
-
-  function enqueueInstallJob(key: string) {
-    if (installingIdRef.current === key) return
-    if (installQueueRef.current.includes(key)) return
-    const next = [...installQueueRef.current, key]
-    installQueueRef.current = next
-    setInstallQueue(next)
-  }
-
-  async function startLoraInstall(id: string, arch: string) {
-    const { key, filename, name } = seedLoraPending(id, arch)
-    installingIdRef.current = key
-    setInstallingId(key)
-    setLoraInstallingKey(`${id}:${arch}`)
-    setInstallProgress({
-      blueprintId: key,
-      stage: "start",
-      message: `Starting ${name}…`,
-      modelIndex: 1,
-      modelTotal: 1,
-      filename,
-      downloaded: 0,
-      total: null,
-      bytesPerSec: 0,
-    })
-    try {
-      await installLoraVariant(id, arch)
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e)
-      installingIdRef.current = null
-      setInstallingId(null)
-      setLoraInstallingKey(null)
-      setInstallProgress(null)
-      if (message.startsWith("Already installing LoRA:")) {
-        enqueueInstallJob(key)
-        return
-      }
-      setPendingByBlueprint((prev) => {
-        if (!(key in prev)) return prev
-        const next = { ...prev }
-        delete next[key]
-        return next
-      })
-      setDownloadHistory((prev) =>
-        pushDownloadHistory(prev, {
-          blueprintId: key,
-          name,
-          status: "error",
-          message,
-        })
-      )
-      notifyError(message, "LoRA install failed")
-      pumpInstallQueueRef.current()
-    }
-  }
-
-  async function finishUpscaleJobLocally(
-    key: string,
-    name: string,
-    message: string
-  ) {
-    setPendingByBlueprint((prev) => {
-      if (!(key in prev)) return prev
-      const next = { ...prev }
-      delete next[key]
-      return next
-    })
-    if (installingIdRef.current === key) {
-      setUpscaleInstallingId(null)
-      installingIdRef.current = null
-      setInstallingId(null)
-      setInstallProgress(null)
-    }
-    setDownloadHistory((prev) =>
-      pushDownloadHistory(prev, {
-        blueprintId: key,
-        name,
-        status: "done",
-        message,
-      })
-    )
-    notifySuccess(message)
-    void listUpscalers()
-      .then(setUpscaleModels)
-      .catch(() => {})
-    void usduNodeReady()
-      .then(setUsduReady)
-      .catch(() => {})
-    pumpInstallQueueRef.current()
-  }
-
-  async function startUpscaleInstall(id: string) {
-    const { key, filename, name } = seedUpscalePending(id)
-    installingIdRef.current = key
-    setInstallingId(key)
-    setUpscaleInstallingId(id)
-    setInstallProgress({
-      blueprintId: key,
-      stage: "start",
-      message: `Starting ${name}…`,
-      modelIndex: 1,
-      modelTotal: 1,
-      filename,
-      downloaded: 0,
-      total: null,
-      bytesPerSec: 0,
-    })
-    try {
-      if (id === "usdu") {
-        if (await usduNodeReady()) {
-          await finishUpscaleJobLocally(key, name, "Ultimate SD Upscale ready")
-          return
-        }
-        await ensureUsduNode()
-      } else if (id === "supir") {
-        if (await supirNodeReady()) {
-          await finishUpscaleJobLocally(key, name, "SUPIR already installed")
-          return
-        }
-        await ensureSupirNode()
-      } else await installUpscaler(id)
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e)
-      installingIdRef.current = null
-      setInstallingId(null)
-      setUpscaleInstallingId(null)
-      setInstallProgress(null)
-      if (message.startsWith("Already installing upscale:")) {
-        enqueueInstallJob(key)
-        return
-      }
-      setPendingByBlueprint((prev) => {
-        if (!(key in prev)) return prev
-        const next = { ...prev }
-        delete next[key]
-        return next
-      })
-      setDownloadHistory((prev) =>
-        pushDownloadHistory(prev, {
-          blueprintId: key,
-          name,
-          status: "error",
-          message,
-        })
-      )
-      notifyError(message, "Upscale install failed")
-      pumpInstallQueueRef.current()
-    }
-  }
-
-  async function beginLoraInstall(id: string, arch: string) {
-    const { key } = seedLoraPending(id, arch)
-    if (installingIdRef.current === key) return
-    if (installQueueRef.current.includes(key)) return
-    if (installingIdRef.current) {
-      enqueueInstallJob(key)
-      return
-    }
-    await startLoraInstall(id, arch)
-  }
-
-  async function beginUpscaleInstall(id: string) {
-    const { key } = seedUpscalePending(id)
-    if (installingIdRef.current === key) return
-    if (installQueueRef.current.includes(key)) return
-    if (installingIdRef.current) {
-      enqueueInstallJob(key)
-      return
-    }
-    await startUpscaleInstall(id)
-  }
-
-  async function beginUsduInstall() {
-    await beginUpscaleInstall("usdu")
   }
 
   async function handleHfTokenDialogConfirm(token: string) {
@@ -1830,7 +1217,10 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     setRuntimeMessage("Queued ComfyUI install…")
     notifyProgress("runtime", "Installing ComfyUI", "Queued install…")
     try {
-      await installComfyui()
+      await ensureDownload(
+        { kind: "runtime", engine: "comfyui" },
+        { wait: false }
+      )
     } catch (e) {
       setRuntimeBusy(false)
       notifyError(
@@ -2087,6 +1477,21 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     router.push(`/creator?edit=${id}`)
   }
 
+  const activeJobKey = downloadSnapshot.active?.jobKey ?? null
+  const installingId = activeJobKey
+    ? (blueprintIdFromJobKey(activeJobKey) ?? activeJobKey)
+    : null
+  const installQueue = downloadSnapshot.queued.map((job) => {
+    const bp = blueprintIdFromJobKey(job.jobKey)
+    return bp ?? job.jobKey
+  })
+  const loraInstallingKey = activeJobKey
+    ? loraKeyFromJobKey(activeJobKey)
+    : null
+  const upscaleInstallingId = activeJobKey
+    ? upscaleIdFromJobKey(activeJobKey)
+    : null
+
   const studioLabel =
     STUDIO_TABS.find((tab) => tab.id === studioTab)?.label ?? "Image"
   const canGenerate = studioTab === "image"
@@ -2142,6 +1547,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     upscaleInstallingId,
     beginUpscaleInstall,
     beginUsduInstall,
+    beginPromptToolsInstall,
+    downloadSnapshot,
+    pauseDownload,
+    resumeDownload,
+    cancelDownload,
     hfToken,
     setHfToken,
     hfTokenDirty,
@@ -2175,8 +1585,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     comfy,
     installingId,
     installQueue,
-    installProgress,
-    downloadHistory,
     sizesProbing,
     detail,
     activeDetail,
@@ -2221,8 +1629,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     openPromptEnhancer,
     stageInsetLeft,
     stageInsetRight,
-    activeModel,
-    queuedModels,
     handleGenerate,
     handleCancel,
     handleDeleteGalleryItem,
@@ -2230,8 +1636,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     handleReuseGallerySettings,
     requestBlueprintInstall,
     handleInstallBlueprint,
-    removeQueuedInstall,
-    cancelBlueprintInstall,
     handleInstallComfy,
     handleStartComfy,
     handleStopComfy,

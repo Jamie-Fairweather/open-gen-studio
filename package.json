@@ -11,12 +11,13 @@
     "desktop:build": "tauri build",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
-    "format": "prettier --write \"**/*.{ts,tsx}\"",
+    "format": "prettier --write \"**/*.{ts,tsx}\" && cargo fmt --manifest-path src-tauri/Cargo.toml",
     "typecheck": "tsc --noEmit",
     "prepare": "husky"
   },
   "lint-staged": {
-    "*": "prettier --write --ignore-unknown"
+    "*": "prettier --write --ignore-unknown",
+    "*.rs": "cargo fmt --manifest-path src-tauri/Cargo.toml --"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

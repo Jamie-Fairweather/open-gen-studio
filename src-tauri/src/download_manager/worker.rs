@@ -1,0 +1,178 @@
+use crate::commands::AppState;
+use crate::download;
+use std::sync::{Condvar, Mutex, OnceLock};
+use std::thread;
+use std::time::Duration;
+use tauri::{AppHandle, Manager};
+
+use super::api::emit_snapshot;
+use super::steps::run_step;
+use super::HISTORY_KEEP;
+
+pub(crate) struct Wake {
+    lock: Mutex<bool>,
+    cv: Condvar,
+}
+
+pub(crate) fn wake() -> &'static Wake {
+    static W: OnceLock<Wake> = OnceLock::new();
+    W.get_or_init(|| Wake {
+        lock: Mutex::new(false),
+        cv: Condvar::new(),
+    })
+}
+
+pub(crate) fn notify_worker() {
+    let w = wake();
+    if let Ok(mut g) = w.lock.lock() {
+        *g = true;
+        w.cv.notify_one();
+    }
+}
+
+pub fn start_worker(app: AppHandle) {
+    thread::spawn(move || {
+        {
+            let state = app.state::<AppState>();
+            if let Ok(db) = state.db.lock() {
+                let _ = db.reset_running_downloads_on_startup();
+            };
+        }
+        emit_snapshot(&app);
+        loop {
+            run_next_job(&app);
+            let w = wake();
+            let Ok(guard) = w.lock.lock() else {
+                thread::sleep(Duration::from_secs(1));
+                continue;
+            };
+            let (mut g, _) =
+                w.cv.wait_timeout_while(guard, Duration::from_secs(2), |pending| !*pending)
+                    .unwrap_or_else(|e| e.into_inner());
+            *g = false;
+        }
+    });
+}
+
+pub(crate) fn run_next_job(app: &AppHandle) {
+    let job = {
+        let state = app.state::<AppState>();
+        let Ok(db) = state.db.lock() else {
+            return;
+        };
+        // Prefer paused? No — only queued. Paused waits for resume.
+        let queued = db.list_download_jobs_by_status(&["queued"]).ok();
+        queued.and_then(|v| v.into_iter().next())
+    };
+    let Some(job) = job else {
+        return;
+    };
+
+    download::clear_transfer_controls();
+    {
+        let state = app.state::<AppState>();
+        let Ok(db) = state.db.lock() else {
+            return;
+        };
+        let _ = db.update_download_job_status(&job.id, "running", None);
+    }
+    emit_snapshot(app);
+
+    let steps = {
+        let state = app.state::<AppState>();
+        let Ok(db) = state.db.lock() else {
+            return;
+        };
+        db.list_download_steps(&job.id).unwrap_or_default()
+    };
+
+    for step in steps {
+        if matches!(step.status.as_str(), "done" | "cancelled") {
+            continue;
+        }
+        // If job was paused while queued before this step, stop.
+        {
+            let state = app.state::<AppState>();
+            let Ok(db) = state.db.lock() else {
+                return;
+            };
+            if let Ok(Some(j)) = db.get_download_job(&job.id) {
+                if j.status == "paused" {
+                    emit_snapshot(app);
+                    return;
+                }
+                if j.status == "cancelled" {
+                    emit_snapshot(app);
+                    return;
+                }
+            }
+            let _ = db.update_download_step_status(&step.id, "running", None, None, None);
+        }
+        emit_snapshot(app);
+
+        let result = run_step(app, &job.id, &step);
+        match result {
+            Ok(()) => {
+                let state = app.state::<AppState>();
+                let Ok(db) = state.db.lock() else {
+                    return;
+                };
+                let _ = db.update_download_step_status(&step.id, "done", None, None, None);
+            }
+            Err(err) if err == "paused" => {
+                let state = app.state::<AppState>();
+                let Ok(db) = state.db.lock() else {
+                    return;
+                };
+                let _ =
+                    db.update_download_step_status(&step.id, "paused", Some("paused"), None, None);
+                let _ = db.update_download_job_status(&job.id, "paused", None);
+                download::clear_pause();
+                emit_snapshot(app);
+                return;
+            }
+            Err(err) if err == "cancelled" => {
+                let state = app.state::<AppState>();
+                let Ok(db) = state.db.lock() else {
+                    return;
+                };
+                let _ = db.update_download_step_status(
+                    &step.id,
+                    "cancelled",
+                    Some("cancelled"),
+                    None,
+                    None,
+                );
+                let _ = db.update_download_job_status(&job.id, "cancelled", Some("cancelled"));
+                let _ = db.prune_download_history(HISTORY_KEEP);
+                download::clear_transfer_controls();
+                emit_snapshot(app);
+                return;
+            }
+            Err(err) => {
+                let state = app.state::<AppState>();
+                let Ok(db) = state.db.lock() else {
+                    return;
+                };
+                let _ = db.update_download_step_status(&step.id, "error", Some(&err), None, None);
+                let _ = db.update_download_job_status(&job.id, "error", Some(&err));
+                let _ = db.prune_download_history(HISTORY_KEEP);
+                download::clear_transfer_controls();
+                emit_snapshot(app);
+                return;
+            }
+        }
+        emit_snapshot(app);
+    }
+
+    {
+        let state = app.state::<AppState>();
+        let Ok(db) = state.db.lock() else {
+            return;
+        };
+        let _ = db.update_download_job_status(&job.id, "done", None);
+        let _ = db.prune_download_history(HISTORY_KEEP);
+    }
+    download::clear_transfer_controls();
+    emit_snapshot(app);
+}

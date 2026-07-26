@@ -77,21 +77,15 @@ pub fn run() {
             // Blueprint thumbnails (Official + user app-data).
             if let Ok(dir) = blueprints::official_dir(app.handle()) {
                 let canonical = dir.canonicalize().unwrap_or(dir);
-                let _ = app
-                    .asset_protocol_scope()
-                    .allow_directory(&canonical, true);
+                let _ = app.asset_protocol_scope().allow_directory(&canonical, true);
             }
             if let Ok(dir) = blueprints::user_dir(app.handle()) {
                 let canonical = dir.canonicalize().unwrap_or(dir);
-                let _ = app
-                    .asset_protocol_scope()
-                    .allow_directory(&canonical, true);
+                let _ = app.asset_protocol_scope().allow_directory(&canonical, true);
             }
             if let Ok(dir) = loras::user_dir(app.handle()) {
                 let canonical = dir.canonicalize().unwrap_or(dir);
-                let _ = app
-                    .asset_protocol_scope()
-                    .allow_directory(&canonical, true);
+                let _ = app.asset_protocol_scope().allow_directory(&canonical, true);
             }
 
             // Auto-install ComfyUI portable in the background — most Blueprints need it.
@@ -107,66 +101,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
-            commands::list_settings,
-            commands::set_setting,
-            commands::list_jobs,
-            commands::create_job,
-            commands::update_job_status,
-            commands::list_gallery,
-            commands::add_gallery_item,
-            commands::delete_gallery_item,
-            commands::detect_gpu,
-            commands::download_url,
-            commands::list_runtimes,
-            commands::install_comfyui,
-            commands::start_comfyui,
-            commands::stop_comfyui,
-            commands::comfyui_status,
-            commands::runtime_pins_status,
-            commands::list_official_blueprints,
-            commands::list_blueprints,
-            commands::install_official_blueprint,
-            commands::cancel_blueprint_install,
-            commands::list_loras,
-            commands::get_lora,
-            commands::install_lora_variant,
-            commands::save_user_lora,
-            commands::delete_user_lora,
-            commands::list_upscalers,
-            commands::install_upscaler,
-            commands::ensure_usdu_node,
-            commands::usdu_node_ready,
-            commands::ensure_supir_node,
-            commands::supir_node_ready,
-            commands::list_model_files,
-            commands::open_models_dir,
-            commands::get_official_blueprint,
-            commands::get_blueprint,
-            commands::save_user_blueprint,
-            commands::delete_user_blueprint,
-            commands::open_user_blueprints_dir,
-            commands::open_external_url,
-            commands::creator_ensure_comfy,
-            commands::creator_open_comfy,
-            commands::creator_capture_workflow,
-            commands::creator_suggest_packaging,
-            commands::resolve_model_url,
-            commands::generate_image,
-            commands::cancel_job,
-            commands::free_comfy_vram,
-            commands::list_prompt_tool_weights,
-            commands::ensure_prompt_tools_provider,
-            commands::ensure_download,
-            commands::list_downloads,
-            commands::pause_download,
-            commands::resume_download,
-            commands::cancel_download,
-            commands::read_image_embedded_prompt,
-            commands::save_temp_tool_image,
-            commands::run_image_to_prompt,
-            commands::run_prompt_enhance,
-        ])
+        .invoke_handler(commands::invoke_handler())
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {

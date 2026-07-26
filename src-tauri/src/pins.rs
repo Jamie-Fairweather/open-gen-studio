@@ -55,7 +55,11 @@ pub fn node_pin(id: &str) -> Option<&'static NodePin> {
 }
 
 pub fn short_sha(sha: &str) -> &str {
-    if sha.len() >= 7 { &sha[..7] } else { sha }
+    if sha.len() >= 7 {
+        &sha[..7]
+    } else {
+        sha
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

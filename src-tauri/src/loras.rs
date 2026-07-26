@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Emitter, Manager, path::BaseDirectory};
+use tauri::{path::BaseDirectory, AppHandle, Emitter, Manager};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -345,7 +345,10 @@ pub fn install_variant(app: &AppHandle, id: &str, arch: &str) -> Result<(), Stri
     download::download_file(app, &variant.url, &dest, None)?;
 
     if !download::local_file_usable(&dest) {
-        return Err(format!("download produced unusable file: {}", variant.filename));
+        return Err(format!(
+            "download produced unusable file: {}",
+            variant.filename
+        ));
     }
 
     let _ = app.emit(
@@ -455,10 +458,7 @@ pub fn resolve_stack_for_generate(
     let mut resolved = Vec::new();
 
     for item in items {
-        let strength = item
-            .get("strength")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(1.0);
+        let strength = item.get("strength").and_then(|v| v.as_f64()).unwrap_or(1.0);
         let id = item.get("id").and_then(|v| v.as_str());
 
         // Already resolved (filename present) — keep id when available for gallery reuse.

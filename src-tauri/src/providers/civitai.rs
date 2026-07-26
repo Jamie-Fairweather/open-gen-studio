@@ -93,13 +93,12 @@ or pick a specific version on the site"
         .filter(|u| !u.is_empty())
         .unwrap_or_else(|| format!("https://civitai.com/api/download/models/{version_id}"));
 
-    let filename = primary_filename(&meta.files)
-        .or_else(|| {
-            meta.files
-                .as_ref()
-                .and_then(|files| files.first())
-                .and_then(|f| f.name.clone())
-        });
+    let filename = primary_filename(&meta.files).or_else(|| {
+        meta.files
+            .as_ref()
+            .and_then(|files| files.first())
+            .and_then(|f| f.name.clone())
+    });
 
     Ok(ResolvedModelUrl {
         provider: ProviderKind::CivitAi,

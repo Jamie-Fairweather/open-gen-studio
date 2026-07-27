@@ -4,16 +4,18 @@ use crate::blueprints::{
 };
 use crate::download;
 use crate::download_manager::{self, DownloadSpec, EnsureOpts};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, State};
 
 #[tauri::command]
+#[specta::specta]
 pub fn list_official_blueprints(app: AppHandle) -> Result<Vec<Blueprint>, String> {
     list_blueprints(app)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn list_blueprints(app: AppHandle) -> Result<Vec<Blueprint>, String> {
     // Instant: manifests + local sizes (+ cached remote sizes). Network probe is async.
     let list = blueprints::list_blueprints(&app, false)?;
@@ -22,16 +24,18 @@ pub fn list_blueprints(app: AppHandle) -> Result<Vec<Blueprint>, String> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_official_blueprint(app: AppHandle, id: String) -> Result<BlueprintDetail, String> {
     blueprints::get_detail(&app, &id)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_blueprint(app: AppHandle, id: String) -> Result<BlueprintDetail, String> {
     blueprints::get_detail(&app, &id)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveUserBlueprintArgs {
     pub id: String,
@@ -45,7 +49,7 @@ pub struct SaveUserBlueprintArgs {
     pub models: Vec<ModelEntry>,
     #[serde(default)]
     pub flow_type: String,
-    pub arch: String,
+    pub arch: crate::recipe::RecipeArch,
     #[serde(default)]
     pub sampler: String,
     #[serde(default)]
@@ -53,10 +57,12 @@ pub struct SaveUserBlueprintArgs {
     #[serde(default)]
     pub capabilities: RecipeCapabilities,
     #[serde(default)]
+    #[specta(type = specta_typescript::Any)]
     pub defaults: serde_json::Map<String, Value>,
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn save_user_blueprint(app: AppHandle, args: SaveUserBlueprintArgs) -> Result<String, String> {
     let dir = blueprints::save_user_blueprint(
         &app,
@@ -67,7 +73,7 @@ pub fn save_user_blueprint(app: AppHandle, args: SaveUserBlueprintArgs) -> Resul
         &args.runtime,
         args.models,
         &args.flow_type,
-        &args.arch,
+        args.arch.as_str(),
         &args.sampler,
         &args.scheduler,
         args.capabilities,
@@ -77,17 +83,20 @@ pub fn save_user_blueprint(app: AppHandle, args: SaveUserBlueprintArgs) -> Resul
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn delete_user_blueprint(app: AppHandle, id: String) -> Result<(), String> {
     blueprints::delete_user_blueprint(&app, &id)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn open_user_blueprints_dir(app: AppHandle) -> Result<String, String> {
     blueprints::open_user_blueprints_dir(&app)
 }
 
 /// Enqueue blueprint install via Download Manager (soft / non-blocking).
 #[tauri::command]
+#[specta::specta]
 pub fn install_official_blueprint(
     app: AppHandle,
     _state: State<'_, AppState>,
@@ -102,6 +111,7 @@ pub fn install_official_blueprint(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn cancel_blueprint_install(app: AppHandle) -> Result<(), String> {
     if let Ok(snap) = download_manager::snapshot(&app) {
         if let Some(active) = snap.active {
@@ -113,11 +123,13 @@ pub fn cancel_blueprint_install(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn list_model_files(app: AppHandle) -> Result<Vec<ModelFileEntry>, String> {
     blueprints::list_model_files(&app)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn open_models_dir(app: AppHandle) -> Result<String, String> {
     blueprints::open_models_dir(&app)
 }

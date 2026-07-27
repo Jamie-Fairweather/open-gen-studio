@@ -3,12 +3,14 @@ use crate::db::Job;
 use tauri::{AppHandle, Emitter, State};
 
 #[tauri::command]
+#[specta::specta]
 pub fn list_jobs(state: State<'_, AppState>) -> Result<Vec<Job>, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
     db.list_jobs()
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn create_job(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -25,6 +27,7 @@ pub fn create_job(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn update_job_status(
     app: AppHandle,
     state: State<'_, AppState>,

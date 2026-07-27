@@ -1,5 +1,6 @@
 "use client"
 
+import { isRecipeArch, type RecipeArch } from "@/lib/arch"
 import {
   CheckIcon,
   DownloadIcon,
@@ -34,7 +35,7 @@ type LoraPickerDialogProps = {
   selectedIds?: string[]
   installingKey?: string | null
   onSelect: (id: string) => void
-  onInstall: (id: string, arch: string) => void
+  onInstall: (id: string, arch: RecipeArch) => void
   onDeleteUser?: (id: string) => void
 }
 
@@ -137,7 +138,7 @@ export function LoraPickerDialog({
                         }}
                         onInstall={() => {
                           const a = arch ?? pack.arches[0]
-                          if (a) onInstall(pack.id, a)
+                          if (a && isRecipeArch(a)) onInstall(pack.id, a)
                         }}
                         onDelete={
                           onDeleteUser ? () => onDeleteUser(pack.id) : undefined
@@ -167,7 +168,7 @@ export function LoraPickerDialog({
                         }}
                         onInstall={() => {
                           const a = arch ?? pack.arches[0]
-                          if (a) onInstall(pack.id, a)
+                          if (a && isRecipeArch(a)) onInstall(pack.id, a)
                         }}
                       />
                     ))}
@@ -194,7 +195,7 @@ export function LoraPickerDialog({
                         }}
                         onInstall={() => {
                           const a = arch ?? pack.arches[0]
-                          if (a) onInstall(pack.id, a)
+                          if (a && isRecipeArch(a)) onInstall(pack.id, a)
                         }}
                       />
                     ))}

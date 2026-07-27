@@ -1,12 +1,16 @@
 use serde::{Deserialize, Serialize};
+use specta::Type;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum DownloadSpec {
     #[serde(rename = "blueprint")]
     Blueprint { id: String },
     #[serde(rename = "lora")]
-    Lora { id: String, arch: String },
+    Lora {
+        id: String,
+        arch: crate::recipe::RecipeArch,
+    },
     #[serde(rename = "upscale")]
     Upscale { id: String },
     #[serde(rename = "promptTools")]
@@ -15,14 +19,14 @@ pub enum DownloadSpec {
     Runtime { engine: String },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct EnsureOpts {
     #[serde(default)]
     pub wait: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct EnsureResult {
     pub status: String,
@@ -30,7 +34,7 @@ pub struct EnsureResult {
     pub message: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadStepView {
     pub id: String,
@@ -43,7 +47,7 @@ pub struct DownloadStepView {
     pub error: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadJobView {
     pub id: String,
@@ -60,7 +64,7 @@ pub struct DownloadJobView {
     pub total: Option<i64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadSnapshot {
     pub active: Option<DownloadJobView>,

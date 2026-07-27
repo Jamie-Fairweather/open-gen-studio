@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "src-tauri/**",
+    // Specta / tauri-specta generated bindings
+    "lib/generated/**",
   ]),
 ])
 

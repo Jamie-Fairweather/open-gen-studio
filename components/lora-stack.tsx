@@ -1,5 +1,6 @@
 "use client"
 
+import { isRecipeArch, type RecipeArch } from "@/lib/arch"
 import { DownloadIcon, PlusIcon, XIcon } from "lucide-react"
 import { Fragment, useMemo } from "react"
 import { Button } from "@/components/ui/button"
@@ -21,7 +22,7 @@ type LoraStackProps = {
   packs: LoraPack[]
   stack: LoraStackEntry[]
   onChange: (next: LoraStackEntry[]) => void
-  onInstallVariant: (id: string, arch: string) => void
+  onInstallVariant: (id: string, arch: RecipeArch) => void
   onOpenLibrary: () => void
   installingKey?: string | null
   disabled?: boolean
@@ -127,7 +128,10 @@ export function LoraStack({
                       variant="secondary"
                       className="mt-0.5 h-8 w-full rounded-lg text-[11px]"
                       disabled={disabled || busy}
-                      onClick={() => onInstallVariant(entry.id, arch)}
+                      onClick={() => {
+                        if (!isRecipeArch(arch)) return
+                        onInstallVariant(entry.id, arch)
+                      }}
                     >
                       <DownloadIcon className="size-3.5" />
                       {busy ? "Downloading…" : "Install"}

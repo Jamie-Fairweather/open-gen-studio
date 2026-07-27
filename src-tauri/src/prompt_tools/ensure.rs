@@ -9,7 +9,7 @@ use crate::db::{Db, RuntimeInstall};
 use crate::download;
 use crate::pins;
 use crate::upscale;
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -20,20 +20,23 @@ use tauri::{AppHandle, Emitter};
 pub(crate) const EVENT_PROGRESS: &str = "prompt-tools://progress";
 const EVENT_UPDATED: &str = "prompt-tools://updated";
 
-pub(crate) fn emit_progress(app: &AppHandle, stage: &str, message: &str, extra: Option<Value>) {
-    let mut payload = json!({
-        "stage": stage,
-        "message": message,
-        "modelId": QWENVL_MODEL_ID,
-    });
-    if let Some(Value::Object(map)) = extra {
-        if let Some(obj) = payload.as_object_mut() {
-            for (k, v) in map {
-                obj.insert(k, v);
-            }
-        }
-    }
-    let _ = app.emit(EVENT_PROGRESS, payload);
+pub(crate) fn emit_progress(
+    app: &AppHandle,
+    stage: &str,
+    message: &str,
+    provider_id: Option<&str>,
+    filename: Option<&str>,
+) {
+    let _ = app.emit(
+        EVENT_PROGRESS,
+        crate::ipc::PromptToolsProgress {
+            stage: stage.into(),
+            message: message.into(),
+            model_id: QWENVL_MODEL_ID.into(),
+            provider_id: provider_id.map(str::to_string),
+            filename: filename.map(str::to_string),
+        },
+    );
 }
 
 fn portable_root(app: &AppHandle) -> Result<PathBuf, String> {
@@ -140,7 +143,13 @@ pub fn ensure_provider(app: &AppHandle, provider_id: &str) -> Result<EnsureOutco
     match provider_id {
         "qwenvl" | "qwen3-vl-8b" | "enhancer" | "instruct-gguf" | "joycaption" => {
             let was_ready = node_ready(app, "qwenvl");
-            emit_progress(app, "install", "Ensuring ComfyUI-QwenVL custom node…", None);
+            emit_progress(
+                app,
+                "install",
+                "Ensuring ComfyUI-QwenVL custom node…",
+                None,
+                None,
+            );
             upscale::ensure_pinned_node(app, "qwenvl")?;
             if !was_ready {
                 restart_comfy = true;
@@ -160,7 +169,8 @@ pub fn ensure_provider(app: &AppHandle, provider_id: &str) -> Result<EnsureOutco
         app,
         "done",
         "Qwen3-VL-8B ready",
-        Some(json!({ "providerId": "qwenvl", "filename": QWENVL_MODEL_NAME })),
+        Some("qwenvl"),
+        Some(QWENVL_MODEL_NAME),
     );
     Ok(EnsureOutcome { restart_comfy })
 }
@@ -203,6 +213,7 @@ pub(crate) fn ensure_comfy_with_nodes(
             "restart",
             "Restarting ComfyUI to load Prompt Tools nodes…",
             None,
+            None,
         );
         let _ = comfy::stop(processes);
     }
@@ -228,6 +239,7 @@ pub(crate) fn ensure_comfy_with_nodes(
             "Restarting ComfyUI to load missing nodes ({})…",
             missing.join(", ")
         ),
+        None,
         None,
     );
     let _ = comfy::stop(processes);
@@ -273,7 +285,8 @@ fn ensure_qwenvl_weights(app: &AppHandle) -> Result<bool, String> {
                 i + 1,
                 total
             ),
-            Some(json!({ "filename": filename })),
+            None,
+            Some(filename),
         );
         download::clear_cancel();
         download::download_file(app, &hf_resolve_url(filename), &dest, None)?;
@@ -311,7 +324,8 @@ pub fn install_qwenvl_python_deps(app: &AppHandle) -> Result<bool, String> {
             app,
             "install",
             "Installing ComfyUI-QwenVL Python dependencies…",
-            Some(json!({ "filename": "requirements.txt" })),
+            None,
+            Some("requirements.txt"),
         );
         let status = Command::new(&python)
             .args([
@@ -346,7 +360,7 @@ pub(crate) fn ensure_comfy_running(
         if runtime.install_path.is_empty() {
             return Err("ComfyUI is not installed".into());
         }
-        emit_progress(app, "start", "Starting runtime…", None);
+        emit_progress(app, "start", "Starting runtime…", None, None);
         comfy::start(app, processes, runtime, port)?;
         comfy::wait_until_healthy(port, 60)?;
         if let Ok(db) = db.lock() {

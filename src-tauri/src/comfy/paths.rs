@@ -1,5 +1,6 @@
 use crate::pins::{COMFY_PINNED_VERSION, COMFY_PIN_MARKER};
 use serde::{Deserialize, Serialize};
+use specta::Type;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -10,7 +11,7 @@ use tauri::{AppHandle, Emitter, Manager};
 pub const ENGINE: &str = "comfyui";
 pub const DEFAULT_PORT: u16 = 8188;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeProgress {
     pub engine: String,

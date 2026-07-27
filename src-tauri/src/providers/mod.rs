@@ -5,6 +5,7 @@ mod civitai;
 mod huggingface;
 
 use serde::{Deserialize, Serialize};
+use specta::Type;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
@@ -13,7 +14,7 @@ pub use huggingface::SETTING_HF_TOKEN;
 
 static RESOLVE_CACHE: OnceLock<Mutex<HashMap<String, ResolvedModelUrl>>> = OnceLock::new();
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub enum ProviderKind {
     HuggingFace,
@@ -22,7 +23,7 @@ pub enum ProviderKind {
     Direct,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ResolvedModelUrl {
     pub provider: ProviderKind,
@@ -123,14 +124,6 @@ pub fn set_stored_token(provider: ProviderKind, token: Option<String>) {
         ProviderKind::Direct => {}
     }
     clear_resolve_cache();
-}
-
-pub fn has_stored_token(provider: ProviderKind) -> bool {
-    match provider {
-        ProviderKind::HuggingFace => huggingface::has_stored_token(),
-        ProviderKind::CivitAi => civitai::has_stored_token(),
-        ProviderKind::Direct => true,
-    }
 }
 
 pub fn http_status_hint(status: reqwest::StatusCode, url: &str) -> Option<String> {

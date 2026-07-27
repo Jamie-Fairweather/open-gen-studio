@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use crate::recipe::controls::default_cfg;
 use crate::recipe::upscale_tail::{finish_recipe, GuiderWiring, UpscaleWiring};
 use crate::recipe::values::{f64_val, i64_val, model_by_role, sampler_name, str_val};
+use crate::recipe::RecipeArch;
 
 /// Ideogram 4 txt2img (official Comfy blueprint path):
 /// dual UNET (cond + uncond) + CLIP(ideogram4) + VAE + CFGOverride + DualModelGuider
@@ -26,7 +27,11 @@ pub(crate) fn compile_ideogram4(
     let seed = i64_val(values, "seed", 0);
     let steps = i64_val(values, "steps", 20);
     let batch = i64_val(values, "batch", 1).max(1);
-    let cfg = f64_val(values, "cfg", default_cfg(manifest) as f64);
+    let cfg = f64_val(
+        values,
+        "cfg",
+        default_cfg(RecipeArch::parse(&manifest.arch)) as f64,
+    );
     let weight_dtype = manifest
         .defaults
         .get("weightDtype")

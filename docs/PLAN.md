@@ -1,5 +1,7 @@
 # Open Gen AI — Product & Architecture Plan
 
+> **Design history.** For how-tos and source of truth, prefer docs/contributing/ — especially RecipeArch::ALL / generated RECIPE_ARCHES and Creator ARCHES in lib/creator-arches.ts.
+
 ## Vision
 
 Build a **local AI runtime platform** — not “another ComfyUI frontend.”

@@ -15,16 +15,7 @@ use super::types::{Blueprint, BlueprintProgress, ManifestFile};
 static SIZE_PROBE_BUSY: AtomicBool = AtomicBool::new(false);
 static SIZE_PROBE_PENDING: AtomicBool = AtomicBool::new(false);
 
-/// Fast list: Official + user (disk + in-memory size cache only).
-pub fn list_official(app: &AppHandle) -> Result<Vec<Blueprint>, String> {
-    list_blueprints(app, false)
-}
-
-/// Full list with remote HEAD/Range probes (may block — call off the UI thread).
-pub fn list_official_probed(app: &AppHandle) -> Result<Vec<Blueprint>, String> {
-    list_blueprints(app, true)
-}
-
+/// List Official + user blueprints (`probe_remote` runs HEAD/Range size probes).
 pub fn list_blueprints(app: &AppHandle, probe_remote: bool) -> Result<Vec<Blueprint>, String> {
     let models_root = comfy::models_dir(app)?;
     let mut out = Vec::new();
@@ -105,7 +96,7 @@ pub fn enqueue_size_probe(app: &AppHandle) {
     );
     let app_bg = app.clone();
     std::thread::spawn(move || {
-        let result = list_official_probed(&app_bg);
+        let result = list_blueprints(&app_bg, true);
         match result {
             Ok(list) => {
                 save_remote_size_cache(&app_bg);
@@ -246,8 +237,8 @@ fn read_blueprint(dir: &Path, models_root: &Path, probe_remote: bool) -> Option<
         runtime: manifest.runtime,
         source: "official".into(), // overwritten by caller
         minimum_vram_gb: manifest.minimum_vram_gb,
-        model_count: manifest.models.len(),
-        models_ready,
+        model_count: manifest.models.len() as u32,
+        models_ready: models_ready as u32,
         total_size_bytes,
         local_size_bytes,
         dir: path_for_asset_protocol(dir.to_path_buf()),

@@ -7,6 +7,7 @@ use super::controls::{default_cfg, default_steps};
 use super::graph::{link_from_input, next_node_id};
 use super::lora::finish_with_loras;
 use super::values::{f64_val, i64_val, sampler_name, scheduler_name, str_val};
+use super::RecipeArch;
 
 pub(crate) struct UpscaleWiring {
     /// Node + input that already holds the sampling MODEL (post-LoRA).
@@ -26,11 +27,11 @@ pub(crate) struct GuiderWiring {
     pub(crate) sigmas: (&'static str, u64),
 }
 
-pub(crate) fn usdu_denoise(arch: &str) -> f64 {
+pub(crate) fn usdu_denoise(arch: Option<RecipeArch>) -> f64 {
     // Keep structure: turbo/distilled models rewrite hard above ~0.2.
     match arch {
-        "z-image" | "krea2" => 0.15,
-        "flux" | "flux2" | "ideogram4" => 0.2,
+        Some(RecipeArch::ZImage | RecipeArch::Krea2) => 0.15,
+        Some(RecipeArch::Flux | RecipeArch::Flux2 | RecipeArch::Ideogram4) => 0.2,
         _ => 0.25,
     }
 }
@@ -40,9 +41,9 @@ pub(crate) fn usdu_upscale_by_default() -> f64 {
     2.0
 }
 
-pub(crate) fn usdu_steps(arch: &str, recipe_steps: i64) -> i64 {
+pub(crate) fn usdu_steps(arch: Option<RecipeArch>, recipe_steps: i64) -> i64 {
     let cap = match arch {
-        "z-image" | "krea2" => 8,
+        Some(RecipeArch::ZImage | RecipeArch::Krea2) => 8,
         _ => 12,
     };
     recipe_steps.clamp(1, cap)
@@ -134,23 +135,22 @@ pub(crate) fn finish_with_upscale(
 
         if opts.usdu {
             let seed = i64_val(values, "seed", 0);
-            let recipe_steps = i64_val(values, "steps", default_steps(manifest)).max(1);
+            let arch = RecipeArch::parse(&manifest.arch);
+            let recipe_steps = i64_val(values, "steps", default_steps(arch)).max(1);
             let steps = opts
                 .usdu_steps
-                .unwrap_or_else(|| usdu_steps(manifest.arch.as_str(), recipe_steps));
-            let cfg = if matches!(manifest.arch.as_str(), "flux" | "flux2") {
+                .unwrap_or_else(|| usdu_steps(arch, recipe_steps));
+            let cfg = if matches!(arch, Some(RecipeArch::Flux | RecipeArch::Flux2)) {
                 1.0
             } else {
                 // ideogram4 DualModelGuider CFG applies via UltimateSDUpscaleGuider.
-                f64_val(values, "cfg", default_cfg(manifest) as f64)
+                f64_val(values, "cfg", default_cfg(arch) as f64)
             };
             let upscale_by = opts
                 .usdu_scale
                 .map(|s| if s >= 4 { 4.0 } else { 2.0 })
                 .unwrap_or_else(usdu_upscale_by_default);
-            let denoise = opts
-                .usdu_denoise
-                .unwrap_or_else(|| usdu_denoise(manifest.arch.as_str()));
+            let denoise = opts.usdu_denoise.unwrap_or_else(|| usdu_denoise(arch));
             let sampler = sampler_name(manifest);
             let scheduler = scheduler_name(manifest);
 

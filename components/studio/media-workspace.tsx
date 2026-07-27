@@ -17,6 +17,7 @@ import { SideRailHandle } from "@/components/side-rail"
 import { StageImage } from "@/components/stage-image"
 import { useStudio } from "@/components/studio/studio-provider"
 import type { MediaCategory } from "@/lib/host"
+import { isRecipeArch } from "@/lib/arch"
 
 type MediaWorkspaceProps = {
   category: MediaCategory
@@ -158,6 +159,7 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
               generating={s.generating}
               onOpenLoraLibrary={() => s.setLoraPickerOpen(true)}
               onInstallLoraVariant={(id, arch) => {
+                if (!isRecipeArch(arch)) return
                 void s.beginLoraInstall(id, arch)
               }}
               showInstallHint={Boolean(

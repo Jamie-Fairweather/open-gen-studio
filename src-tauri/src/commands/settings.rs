@@ -5,12 +5,14 @@ use std::collections::HashMap;
 use tauri::{AppHandle, State};
 
 #[tauri::command]
+#[specta::specta]
 pub fn list_settings(state: State<'_, AppState>) -> Result<HashMap<String, String>, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
     Ok(db.list_settings()?.into_iter().collect())
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn set_setting(
     app: AppHandle,
     state: State<'_, AppState>,

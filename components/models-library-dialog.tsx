@@ -33,16 +33,9 @@ import {
 import { formatBytes } from "@/lib/format"
 import { notifyError, notifySuccess } from "@/lib/notify"
 import { cn } from "@/lib/utils"
+import { RECIPE_ARCHES, isRecipeArch, type RecipeArch } from "@/lib/arch"
 
-const ARCH_OPTIONS = [
-  "krea2",
-  "z-image",
-  "flux",
-  "flux2",
-  "ideogram4",
-  "sdxl",
-  "sd15",
-] as const
+const ARCH_OPTIONS = RECIPE_ARCHES
 
 type ModelsLibraryDialogProps = {
   open: boolean
@@ -50,7 +43,7 @@ type ModelsLibraryDialogProps = {
   /** When set, Install buttons target this arch first. */
   preferArch?: string | null
   /** Global download queue — LoRA install. */
-  onInstallLora?: (id: string, arch: string) => void
+  onInstallLora?: (id: string, arch: RecipeArch) => void
   /** Global download queue — upscale model install. */
   onInstallUpscaler?: (id: string) => void
 }
@@ -61,7 +54,7 @@ function ModelsLibraryBody({
   onInstallUpscaler,
 }: {
   preferArch?: string | null
-  onInstallLora?: (id: string, arch: string) => void
+  onInstallLora?: (id: string, arch: RecipeArch) => void
   onInstallUpscaler?: (id: string) => void
 }) {
   const [tab, setTab] = useState<"loras" | "upscale" | "files">("loras")
@@ -152,7 +145,7 @@ function ModelsLibraryBody({
   const loraList = packs ?? []
   const upscaleList = upscalers ?? []
 
-  function handleInstall(pack: LoraPack, arch: string) {
+  function handleInstall(pack: LoraPack, arch: RecipeArch) {
     const variant = pack.variants.find((v) => v.arch === arch)
     if (!variant) return
     const key = `${pack.id}:${arch}`
@@ -321,7 +314,10 @@ function ModelsLibraryBody({
                               prefer && !v.ready && "border-primary/50"
                             )}
                             disabled={v.ready || busy}
-                            onClick={() => void handleInstall(pack, v.arch)}
+                            onClick={() => {
+                              if (!isRecipeArch(v.arch)) return
+                              void handleInstall(pack, v.arch)
+                            }}
                           >
                             {!v.ready ? (
                               <DownloadIcon className="size-3.5" />

@@ -1,7 +1,10 @@
 # Recipe Blueprints & Dynamic Graph Generation
 
+> **Design history.** For how-tos and source of truth, prefer docs/contributing/ — especially RecipeArch::ALL / generated RECIPE_ARCHES and Creator ARCHES in lib/creator-arches.ts.
+
 > Status: **in progress** (2026-07-22)  
 > Relates to: [`PLAN.md`](./PLAN.md) — revises Creator Mode and what a Blueprint stores for image generation.  
+> Contributor how-to: [`contributing/adding-model-architectures.md`](./contributing/adding-model-architectures.md).  
 > Implemented: `recipe.rs` compilers (`z-image`, `krea2`, `flux`, `flux2`, `ideogram4`, `sdxl`/`sd15`); generate is **recipe-only**; UI controls synthesized from arch/capabilities; Creator recipe form; Official `z-image-turbo` / `krea2-turbo` / `ideogram4` recipes; **multi-arch LoRA library** (`loras/official` + user packs, User Mode stack, `LoraLoader` compile); **shared upscale refine** (Official SR including Nomos + optional USDU + SUPIR generative, Advanced → Refine).
 
 ## Summary

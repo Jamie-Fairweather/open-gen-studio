@@ -14,7 +14,7 @@ pub use crud::{delete_user_blueprint, get_detail, save_user_blueprint};
 #[allow(unused_imports)]
 pub use install::install_models;
 #[allow(unused_imports)]
-pub use list::{enqueue_size_probe, list_blueprints, list_official, list_official_probed};
+pub use list::{enqueue_size_probe, list_blueprints};
 #[allow(unused_imports)]
 pub use models_fs::{list_model_files, open_models_dir};
 #[allow(unused_imports)]
@@ -23,5 +23,5 @@ pub(crate) use types::ManifestFile;
 #[allow(unused_imports)]
 pub use types::{
     Blueprint, BlueprintControl, BlueprintDetail, BlueprintModelInfo, BlueprintProgress,
-    CustomNodeDep, ModelEntry, ModelFileEntry, OfficialBlueprint, RecipeCapabilities,
+    CustomNodeDep, ModelEntry, ModelFileEntry, RecipeCapabilities,
 };

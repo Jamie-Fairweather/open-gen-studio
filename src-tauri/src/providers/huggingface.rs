@@ -21,22 +21,6 @@ pub fn set_stored_token(token: Option<String>) {
     }
 }
 
-pub fn has_stored_token() -> bool {
-    if let Ok(guard) = STORED_TOKEN.lock() {
-        if guard.as_ref().is_some_and(|t| !t.is_empty()) {
-            return true;
-        }
-    }
-    for key in ["HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"] {
-        if let Ok(token) = std::env::var(key) {
-            if !token.trim().is_empty() {
-                return true;
-            }
-        }
-    }
-    false
-}
-
 pub fn auth_header() -> Option<String> {
     if let Ok(guard) = STORED_TOKEN.lock() {
         if let Some(ref token) = *guard {

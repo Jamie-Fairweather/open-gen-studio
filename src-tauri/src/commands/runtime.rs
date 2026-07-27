@@ -5,11 +5,11 @@ use crate::db::RuntimeInstall;
 use crate::download_manager::{self, DownloadSpec, EnsureOpts};
 use crate::prompt_tools;
 use crate::upscale;
-use std::collections::HashMap;
 use std::path::Path;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
+#[specta::specta]
 pub fn list_runtimes(state: State<'_, AppState>) -> Result<Vec<RuntimeInstall>, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
     db.list_runtimes()
@@ -18,6 +18,7 @@ pub fn list_runtimes(state: State<'_, AppState>) -> Result<Vec<RuntimeInstall>, 
 /// Returns immediately with status=installing; heavy work runs on a background thread.
 /// Always force-reinstalls the **pinned** portable (Settings → Reinstall).
 #[tauri::command]
+#[specta::specta]
 pub fn install_comfyui(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -189,6 +190,7 @@ pub fn enqueue_comfy_install(
 
 /// Spawns ComfyUI and returns immediately; health wait runs in a background thread.
 #[tauri::command]
+#[specta::specta]
 pub fn start_comfyui(app: AppHandle, state: State<'_, AppState>) -> Result<RuntimeInstall, String> {
     let runtime = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -274,6 +276,7 @@ pub fn start_comfyui(app: AppHandle, state: State<'_, AppState>) -> Result<Runti
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn stop_comfyui(app: AppHandle, state: State<'_, AppState>) -> Result<RuntimeInstall, String> {
     comfy::stop(&state.processes)?;
     let runtime = {
@@ -290,9 +293,8 @@ pub fn stop_comfyui(app: AppHandle, state: State<'_, AppState>) -> Result<Runtim
 }
 
 #[tauri::command]
-pub fn comfyui_status(
-    state: State<'_, AppState>,
-) -> Result<HashMap<String, serde_json::Value>, String> {
+#[specta::specta]
+pub fn comfyui_status(state: State<'_, AppState>) -> Result<crate::ipc::ComfyStatus, String> {
     let runtime = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         db.get_runtime_by_engine(comfy::ENGINE)?
@@ -308,19 +310,17 @@ pub fn comfyui_status(
         false
     };
 
-    let mut map = HashMap::new();
-    map.insert("processAlive".into(), serde_json::json!(process_alive));
-    map.insert("healthy".into(), serde_json::json!(healthy));
-    map.insert("port".into(), serde_json::json!(port));
-    map.insert(
-        "runtime".into(),
-        serde_json::to_value(runtime).map_err(|e| e.to_string())?,
-    );
-    Ok(map)
+    Ok(crate::ipc::ComfyStatus {
+        process_alive,
+        healthy,
+        port,
+        runtime,
+    })
 }
 
 /// Expected vs installed pins for ComfyUI + managed custom nodes (Settings).
 #[tauri::command]
+#[specta::specta]
 pub fn runtime_pins_status(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -336,6 +336,7 @@ pub fn runtime_pins_status(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn free_comfy_vram(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     prompt_tools::free_comfy_vram(&app, &state.db, &state.processes)
 }

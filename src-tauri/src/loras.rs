@@ -5,12 +5,13 @@ use crate::comfy;
 use crate::download;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use specta::Type;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{path::BaseDirectory, AppHandle, Emitter, Manager};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LoraVariant {
     pub arch: String,
@@ -54,7 +55,7 @@ fn default_strength_max() -> f64 {
     2.0
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LoraVariantInfo {
     pub arch: String,
@@ -64,7 +65,7 @@ pub struct LoraVariantInfo {
     pub ready: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LoraPack {
     pub id: String,
@@ -79,11 +80,11 @@ pub struct LoraPack {
     pub arches: Vec<String>,
     pub variants: Vec<LoraVariantInfo>,
     /// Count of variants whose file is on disk.
-    pub variants_ready: usize,
-    pub variant_count: usize,
+    pub variants_ready: u32,
+    pub variant_count: u32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveUserLoraArgs {
     pub id: String,
@@ -237,8 +238,8 @@ fn read_pack(dir: &Path, source: &str, models_root: &Path) -> Option<LoraPack> {
         strength_min: m.strength_min,
         strength_max: m.strength_max,
         arches,
-        variant_count: variants.len(),
-        variants_ready,
+        variant_count: variants.len() as u32,
+        variants_ready: variants_ready as u32,
         variants,
     })
 }
@@ -344,17 +345,19 @@ pub fn variant_download(app: &AppHandle, id: &str, arch: &str) -> Result<Variant
 
 /// Download one arch variant into the shared models library.
 pub fn install_variant(app: &AppHandle, id: &str, arch: &str) -> Result<(), String> {
+    let arch_id = crate::recipe::RecipeArch::parse(arch)
+        .ok_or_else(|| format!("unknown LoRA arch: {arch}"))?;
     let plan = variant_download(app, id, arch)?;
 
     let _ = app.emit(
         "loras://progress",
-        json!({
-            "loraId": id,
-            "arch": arch,
-            "stage": "download",
-            "message": format!("Downloading {}", plan.filename),
-            "filename": plan.filename,
-        }),
+        crate::ipc::LoraProgress {
+            lora_id: id.into(),
+            arch: arch_id,
+            stage: "download".into(),
+            message: format!("Downloading {}", plan.filename),
+            filename: Some(plan.filename.clone()),
+        },
     );
 
     download::clear_cancel();
@@ -369,13 +372,13 @@ pub fn install_variant(app: &AppHandle, id: &str, arch: &str) -> Result<(), Stri
 
     let _ = app.emit(
         "loras://progress",
-        json!({
-            "loraId": id,
-            "arch": arch,
-            "stage": "done",
-            "message": format!("Ready: {}", plan.filename),
-            "filename": plan.filename,
-        }),
+        crate::ipc::LoraProgress {
+            lora_id: id.into(),
+            arch: arch_id,
+            stage: "done".into(),
+            message: format!("Ready: {}", plan.filename),
+            filename: Some(plan.filename.clone()),
+        },
     );
     let _ = app.emit("loras://updated", id);
     Ok(())

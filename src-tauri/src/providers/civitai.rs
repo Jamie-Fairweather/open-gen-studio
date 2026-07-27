@@ -40,17 +40,6 @@ pub fn set_stored_token(token: Option<String>) {
     }
 }
 
-pub fn has_stored_token() -> bool {
-    if let Ok(guard) = STORED_TOKEN.lock() {
-        if guard.as_ref().is_some_and(|t| !t.is_empty()) {
-            return true;
-        }
-    }
-    std::env::var("CIVITAI_API_KEY")
-        .map(|t| !t.trim().is_empty())
-        .unwrap_or(false)
-}
-
 pub fn auth_header() -> Option<String> {
     raw_token().map(|token| format!("Bearer {token}"))
 }
@@ -99,7 +88,6 @@ struct VersionFile {
     primary: Option<bool>,
     #[serde(rename = "type")]
     file_type: Option<String>,
-    download_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

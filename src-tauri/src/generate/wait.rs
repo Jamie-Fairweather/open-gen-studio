@@ -327,13 +327,11 @@ fn wait_via_ws(
                         };
                         let _ = app.emit(
                             "jobs://progress",
-                            json!({
-                                "jobId": job_id,
-                                "stage": "step",
-                                "message": message,
-                                "step": value,
-                                "max": max,
-                            }),
+                            crate::ipc::JobProgress {
+                                step: Some(value as u32),
+                                max: Some(max as u32),
+                                ..crate::ipc::JobProgress::new(job_id, "step", message)
+                            },
                         );
                     }
                 } else if msg_type == "execution_error"
@@ -363,12 +361,10 @@ fn wait_via_ws(
                     preview_slot ^= 1;
                     let _ = app.emit(
                         "jobs://progress",
-                        json!({
-                            "jobId": job_id,
-                            "stage": "preview",
-                            "message": "Preview",
-                            "previewPath": path.display().to_string(),
-                        }),
+                        crate::ipc::JobProgress {
+                            preview_path: Some(path.display().to_string()),
+                            ..crate::ipc::JobProgress::new(job_id, "preview", "Preview")
+                        },
                     );
                 }
             }

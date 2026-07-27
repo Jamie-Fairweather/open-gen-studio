@@ -100,11 +100,6 @@ pub fn parse_upscale_opts(values: &HashMap<String, Value>) -> Option<UpscaleComp
         .unwrap_or(UpscaleKind::Sr);
     let usdu =
         obj.get("usdu").and_then(|v| v.as_bool()).unwrap_or(false) && kind == UpscaleKind::Sr;
-    let model_id = obj
-        .get("modelId")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
     let sdxl_filename = obj
         .get("sdxlFilename")
         .and_then(|v| v.as_str())
@@ -123,7 +118,6 @@ pub fn parse_upscale_opts(values: &HashMap<String, Value>) -> Option<UpscaleComp
         .and_then(|v| v.as_f64())
         .map(|n| n.clamp(0.05, 0.75));
     Some(UpscaleCompileOpts {
-        model_id,
         filename,
         scale,
         kind,

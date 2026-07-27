@@ -3,18 +3,18 @@ use crate::blueprints;
 use crate::comfy;
 use crate::db::Job;
 use crate::generate;
-use serde_json::Value;
-use std::collections::HashMap;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 /// Queue a generate job: returns immediately, runs Comfy /prompt in the background.
 #[tauri::command]
+#[specta::specta]
 pub fn generate_image(
     app: AppHandle,
     state: State<'_, AppState>,
     blueprint_id: String,
-    values: HashMap<String, Value>,
+    values: crate::JsonMap,
 ) -> Result<Job, String> {
+    let values = values.0;
     let runtime = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         db.get_runtime_by_engine(comfy::ENGINE)?
@@ -122,6 +122,7 @@ pub fn generate_image(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn cancel_job(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<Job, String> {
     {
         let mut cancelled = state.cancelled_jobs.lock().map_err(|e| e.to_string())?;

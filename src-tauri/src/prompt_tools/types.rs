@@ -1,6 +1,8 @@
 //! Shared types and QwenVL model constants for Prompt Tools.
 
+use crate::recipe::RecipeArch;
 use serde::{Deserialize, Serialize};
+use specta::Type;
 
 /// Shared Qwen3-VL-8B (HF transformers, 4-bit) for Image→Prompt + Prompt Enhancer.
 /// GGUF/llama-cpp was tried first but hard-crashed Comfy on CUDA load (cu131 wheel vs cu130 torch).
@@ -27,7 +29,7 @@ pub const QWENVL_HF_FILES: &[&str] = &[
     "vocab.json",
 ];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub enum PromptFormat {
     General,
@@ -58,7 +60,7 @@ impl PromptFormat {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub enum PromptTarget {
     Auto,
@@ -85,12 +87,18 @@ impl PromptTarget {
         if self != PromptTarget::Auto {
             return self;
         }
-        match arch.unwrap_or("").to_ascii_lowercase().as_str() {
-            "flux" | "flux2" => PromptTarget::Flux,
-            "sdxl" | "sd15" | "sd" => PromptTarget::StableDiffusion,
-            "ideogram4" | "ideogram" => PromptTarget::Ideogram,
-            "z-image" | "krea2" | "krea" => PromptTarget::ZImageKrea,
-            _ => PromptTarget::Flux,
+        let s = arch.unwrap_or("").to_ascii_lowercase();
+        match RecipeArch::parse(&s) {
+            Some(RecipeArch::Flux | RecipeArch::Flux2) => PromptTarget::Flux,
+            Some(RecipeArch::Sdxl | RecipeArch::Sd15) => PromptTarget::StableDiffusion,
+            Some(RecipeArch::Ideogram4) => PromptTarget::Ideogram,
+            Some(RecipeArch::ZImage | RecipeArch::Krea2) => PromptTarget::ZImageKrea,
+            None => match s.as_str() {
+                "sd" => PromptTarget::StableDiffusion,
+                "ideogram" => PromptTarget::Ideogram,
+                "krea" => PromptTarget::ZImageKrea,
+                _ => PromptTarget::Flux,
+            },
         }
     }
 }
@@ -114,7 +122,7 @@ pub(crate) fn provider_for_format(_format: PromptFormat) -> Provider {
     Provider::QwenVl
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptToolWeightInfo {
     pub id: String,
@@ -124,7 +132,7 @@ pub struct PromptToolWeightInfo {
     pub provider: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptToolResult {
     pub prompt: String,
@@ -134,7 +142,7 @@ pub struct PromptToolResult {
     pub target: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RunImageToPromptArgs {
     pub image_path: String,
@@ -143,7 +151,7 @@ pub struct RunImageToPromptArgs {
     pub arch: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RunPromptEnhanceArgs {
     pub prompt: String,

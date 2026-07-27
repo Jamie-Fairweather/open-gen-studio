@@ -3,7 +3,8 @@
 //! Bump these only with an app release, then smoke Official recipes against the set.
 //! No tip-of-tree /releases/latest downloads for managed deps.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use specta::Type;
 
 /// ComfyUI Windows NVIDIA portable pin (release tag).
 pub const COMFY_PINNED_VERSION: &str = "v0.28.0";
@@ -62,7 +63,7 @@ pub fn short_sha(sha: &str) -> &str {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PinStatus {
     pub id: String,
@@ -71,7 +72,7 @@ pub struct PinStatus {
     pub matches: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimePinsStatus {
     pub comfy: PinStatus,

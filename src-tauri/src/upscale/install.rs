@@ -1,7 +1,6 @@
 use crate::comfy;
 use crate::download;
-use crate::upscale::types::{UpscaleKind, SUPIR_SDXL_FILENAME, SUPIR_SDXL_URL};
-use serde_json::json;
+use crate::upscale::types::{UpscaleKind, UpscaleProgress, SUPIR_SDXL_FILENAME, SUPIR_SDXL_URL};
 use tauri::{AppHandle, Emitter};
 
 /// Download one Official upscale asset (SR → upscale_models; SUPIR → checkpoints + deps).
@@ -17,12 +16,12 @@ pub fn install_upscaler(app: &AppHandle, id: &str) -> Result<(), String> {
 
     let _ = app.emit(
         "upscale://progress",
-        json!({
-            "modelId": id,
-            "stage": "download",
-            "message": format!("Downloading {}", entry.filename),
-            "filename": entry.filename,
-        }),
+        UpscaleProgress {
+            model_id: id.into(),
+            stage: "download".into(),
+            message: format!("Downloading {}", entry.filename),
+            filename: Some(entry.filename.into()),
+        },
     );
 
     download::clear_cancel();
@@ -37,12 +36,12 @@ pub fn install_upscaler(app: &AppHandle, id: &str) -> Result<(), String> {
 
     let _ = app.emit(
         "upscale://progress",
-        json!({
-            "modelId": id,
-            "stage": "done",
-            "message": format!("Ready: {}", entry.filename),
-            "filename": entry.filename,
-        }),
+        UpscaleProgress {
+            model_id: id.into(),
+            stage: "done".into(),
+            message: format!("Ready: {}", entry.filename),
+            filename: Some(entry.filename.into()),
+        },
     );
     let _ = app.emit("upscale://updated", id);
     Ok(())
@@ -58,12 +57,12 @@ pub(crate) fn ensure_supir_sdxl(app: &AppHandle) -> Result<(), String> {
 
     let _ = app.emit(
         "upscale://progress",
-        json!({
-            "modelId": "supir-sdxl",
-            "stage": "download",
-            "message": format!("Downloading companion SDXL ({SUPIR_SDXL_FILENAME})…"),
-            "filename": SUPIR_SDXL_FILENAME,
-        }),
+        UpscaleProgress {
+            model_id: "supir-sdxl".into(),
+            stage: "download".into(),
+            message: format!("Downloading companion SDXL ({SUPIR_SDXL_FILENAME})…"),
+            filename: Some(SUPIR_SDXL_FILENAME.into()),
+        },
     );
 
     download::clear_cancel();

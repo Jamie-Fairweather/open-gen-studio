@@ -21,6 +21,7 @@ import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { WithTooltip } from "@/components/ui/tooltip"
 import type { UpscaleModelInfo } from "@/lib/host"
+import { isRecipeArch } from "@/lib/arch"
 
 type RefineControlsProps = {
   enabled: boolean
@@ -87,11 +88,12 @@ export function RefineControls({
       ? Math.round(height * effectiveScale)
       : null
   const turboArch =
-    arch === "krea2" ||
-    arch === "z-image" ||
-    arch === "flux" ||
-    arch === "flux2" ||
-    arch === "ideogram4"
+    isRecipeArch(arch ?? "") &&
+    (arch === "krea2" ||
+      arch === "z-image" ||
+      arch === "flux" ||
+      arch === "flux2" ||
+      arch === "ideogram4")
   const guiderUsdu = arch === "flux2" || arch === "ideogram4"
   const modelBusy = selected ? installingId === selected.id : false
   const usduBusy = installingId === "usdu"

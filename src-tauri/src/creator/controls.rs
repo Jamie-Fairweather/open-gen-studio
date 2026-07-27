@@ -1,4 +1,3 @@
-use crate::blueprints::BlueprintControl;
 use crate::creator::types::{BindableInput, SuggestedControl};
 use serde_json::Value;
 use std::collections::HashSet;
@@ -139,12 +138,6 @@ fn scalar_kind(value: &Value) -> Option<&'static str> {
         Value::Array(_) => None,
         Value::Null | Value::Object(_) => None,
     }
-}
-
-/// Map UI slots onto discovered workflow inputs (aliases + type).
-pub fn suggest_controls(workflow: &Value) -> Vec<SuggestedControl> {
-    let bindable = list_bindable_inputs(workflow);
-    suggest_controls_from_bindable(&bindable)
 }
 
 /// True when this scalar string is a plausible positive/negative prompt source.
@@ -371,23 +364,6 @@ fn binding_key(b: &BindableInput) -> String {
     format!("{}.{}", b.node_id, b.input)
 }
 
-/// Convert included suggestions into manifest controls.
-pub fn controls_from_suggestions(suggestions: Vec<SuggestedControl>) -> Vec<BlueprintControl> {
-    suggestions
-        .into_iter()
-        .filter(|c| (c.include || c.fixed) && !c.node_id.is_empty() && !c.input.is_empty())
-        .map(|c| BlueprintControl {
-            id: c.id,
-            control_type: c.control_type,
-            node_id: c.node_id,
-            input: c.input,
-            label: c.label,
-            group: c.group,
-            default: c.default,
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -412,7 +388,7 @@ mod tests {
                 "_meta": { "title": "Negative Prompt" }
             }
         });
-        let controls = suggest_controls(&workflow);
+        let controls = suggest_controls_from_bindable(&list_bindable_inputs(&workflow));
         let prompt = controls.iter().find(|c| c.id == "prompt").unwrap();
         let negative = controls.iter().find(|c| c.id == "negative").unwrap();
         assert_eq!(prompt.node_id, "804");

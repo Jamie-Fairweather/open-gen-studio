@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, State};
 
 #[tauri::command]
+#[specta::specta]
 pub fn list_gallery(state: State<'_, AppState>) -> Result<Vec<GalleryItem>, String> {
     let items = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -23,6 +24,7 @@ pub fn list_gallery(state: State<'_, AppState>) -> Result<Vec<GalleryItem>, Stri
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn add_gallery_item(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -41,6 +43,7 @@ pub fn add_gallery_item(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn delete_gallery_item(
     app: AppHandle,
     state: State<'_, AppState>,

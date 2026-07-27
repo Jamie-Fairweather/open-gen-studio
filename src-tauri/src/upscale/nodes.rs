@@ -1,7 +1,6 @@
 use crate::comfy;
 use crate::pins::{self, NodePin, MANAGED_NODES};
-use crate::upscale::types::{SUPIR_NODE_NAME, USDU_NODE_NAME};
-use serde_json::json;
+use crate::upscale::types::{UpscaleProgress, SUPIR_NODE_NAME, USDU_NODE_NAME};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -213,14 +212,15 @@ pub fn ensure_pinned_custom_node(app: &AppHandle, pin: &NodePin) -> Result<(), S
 
     let _ = app.emit(
         "upscale://progress",
-        json!({
-            "modelId": pin.id,
-            "stage": "download",
-            "message": format!(
+        UpscaleProgress {
+            model_id: pin.id.into(),
+            stage: "download".into(),
+            message: format!(
                 "Updating {} to pin {short} (required by this app version)…",
                 pin.folder
             ),
-        }),
+            filename: None,
+        },
     );
 
     if !dest.is_dir() {
@@ -291,14 +291,15 @@ pub fn ensure_pinned_custom_node(app: &AppHandle, pin: &NodePin) -> Result<(), S
 
     let _ = app.emit(
         "upscale://progress",
-        json!({
-            "modelId": pin.id,
-            "stage": "done",
-            "message": format!(
+        UpscaleProgress {
+            model_id: pin.id.into(),
+            stage: "done".into(),
+            message: format!(
                 "{} ready at {short} — restart ComfyUI if it was already running",
                 pin.folder
             ),
-        }),
+            filename: None,
+        },
     );
     let _ = app.emit("upscale://updated", pin.id);
     Ok(())
@@ -326,11 +327,12 @@ pub(crate) fn install_supir_python_deps(app: &AppHandle) -> Result<(), String> {
 
     let _ = app.emit(
         "upscale://progress",
-        json!({
-            "modelId": "supir",
-            "stage": "download",
-            "message": "Installing SUPIR Python dependencies…",
-        }),
+        UpscaleProgress {
+            model_id: "supir".into(),
+            stage: "download".into(),
+            message: "Installing SUPIR Python dependencies…".into(),
+            filename: None,
+        },
     );
 
     let output = Command::new(&python)

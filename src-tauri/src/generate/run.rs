@@ -90,21 +90,17 @@ pub fn run_generate(
             if is_supir {
                 let _ = app.emit(
                     "jobs://progress",
-                    json!({
-                        "jobId": job.id,
-                        "stage": "upscale",
-                        "message": "Ensuring SUPIR…",
-                    }),
+                    crate::ipc::JobProgress::new(&job.id, "upscale", "Ensuring SUPIR…"),
                 );
                 crate::upscale::ensure_supir_custom_node(app)?;
             } else if usdu {
                 let _ = app.emit(
                     "jobs://progress",
-                    json!({
-                        "jobId": job.id,
-                        "stage": "upscale",
-                        "message": "Ensuring Ultimate SD Upscale…",
-                    }),
+                    crate::ipc::JobProgress::new(
+                        &job.id,
+                        "upscale",
+                        "Ensuring Ultimate SD Upscale…",
+                    ),
                 );
                 crate::upscale::ensure_usdu_custom_node(app)?;
             }
@@ -122,11 +118,7 @@ pub fn run_generate(
         }
         let _ = app.emit(
             "jobs://progress",
-            json!({
-                "jobId": job.id,
-                "stage": "start",
-                "message": "Starting runtime…",
-            }),
+            crate::ipc::JobProgress::new(&job.id, "start", "Starting runtime…"),
         );
         comfy::start(app, processes, runtime, port)?;
         comfy::wait_until_healthy(port, 60)?;
@@ -158,21 +150,13 @@ pub fn run_generate(
     let socket = connect_comfy_ws(port, &client_id).ok();
     let _ = app.emit(
         "jobs://progress",
-        json!({
-            "jobId": job.id,
-            "stage": "queue",
-            "message": "Submitting prompt to ComfyUI…",
-        }),
+        crate::ipc::JobProgress::new(&job.id, "queue", "Submitting prompt to ComfyUI…"),
     );
 
     let prompt_id = queue_prompt(port, &workflow, &client_id)?;
     let _ = app.emit(
         "jobs://progress",
-        json!({
-            "jobId": job.id,
-            "stage": "run",
-            "message": "Generating…",
-        }),
+        crate::ipc::JobProgress::new(&job.id, "run", "Generating…"),
     );
 
     let images = wait_for_outputs(
@@ -242,11 +226,7 @@ pub fn run_generate(
 
     let _ = app.emit(
         "jobs://progress",
-        json!({
-            "jobId": job.id,
-            "stage": "done",
-            "message": format!("Saved {} image(s)", items.len()),
-        }),
+        crate::ipc::JobProgress::new(&job.id, "done", format!("Saved {} image(s)", items.len())),
     );
 
     Ok(items)

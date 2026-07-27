@@ -1,5 +1,6 @@
 "use client"
 
+import type { RecipeArch } from "@/lib/arch"
 import { DicesIcon, HistoryIcon } from "lucide-react"
 import type { Dispatch, SetStateAction } from "react"
 import { LoraStack } from "@/components/lora-stack"
@@ -40,7 +41,7 @@ type AdvancedControlsProps = {
   loraInstallingKey: string | null
   generating: boolean
   onOpenLoraLibrary: () => void
-  onInstallLoraVariant: (id: string, arch: string) => void
+  onInstallLoraVariant: (id: string, arch: RecipeArch) => void
   showInstallHint: boolean
   showRefine: boolean
   upscaleEnabled: boolean

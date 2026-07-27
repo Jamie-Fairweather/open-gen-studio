@@ -1,6 +1,7 @@
 "use client"
 
 import { LayersIcon, SettingsIcon } from "lucide-react"
+import { isRecipeArch } from "@/lib/arch"
 import Link from "next/link"
 import type { ReactNode } from "react"
 import { BlueprintPickerDialog } from "@/components/blueprint-picker-dialog"
@@ -117,10 +118,11 @@ export function StudioChrome({ children }: { children: ReactNode }) {
           if (!pack) return
           s.setLoraStack((prev) => {
             if (prev.some((entry) => entry.id === id)) return prev
-            return [...prev, { id, strength: pack.defaultStrength }]
+            return [...prev, { id, strength: pack.defaultStrength ?? 1 }]
           })
         }}
         onInstall={(id, arch) => {
+          if (!isRecipeArch(arch)) return
           void s.beginLoraInstall(id, arch)
         }}
         onDeleteUser={(id) => {
@@ -142,6 +144,7 @@ export function StudioChrome({ children }: { children: ReactNode }) {
         onOpenChange={s.setModelsOpen}
         preferArch={s.activeDetail?.arch ?? null}
         onInstallLora={(id, arch) => {
+          if (!isRecipeArch(arch)) return
           void s.beginLoraInstall(id, arch)
         }}
         onInstallUpscaler={(id) => {

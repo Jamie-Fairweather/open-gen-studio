@@ -85,7 +85,8 @@ pub fn run_image_to_prompt(
         app,
         "prepare",
         "Preparing Prompt Tools…",
-        Some(json!({ "jobId": job.id, "provider": provider.id() })),
+        Some(provider.id()),
+        None,
     );
     let dl = crate::download_manager::ensure(
         app,
@@ -108,12 +109,7 @@ pub fn run_image_to_prompt(
         provider_required_nodes(provider),
         ensured.restart_comfy,
     )?;
-    emit_progress(
-        app,
-        "free",
-        "Freeing VRAM before tool run…",
-        Some(json!({ "jobId": job.id })),
-    );
+    emit_progress(app, "free", "Freeing VRAM before tool run…", None, None);
     let _ = generate::free_vram(port);
 
     let filename = stage_input_image(app, &args.image_path)?;
@@ -124,12 +120,7 @@ pub fn run_image_to_prompt(
     }
 
     let client_id = Uuid::new_v4().to_string();
-    emit_progress(
-        app,
-        "queue",
-        "Running image→prompt…",
-        Some(json!({ "jobId": job.id })),
-    );
+    emit_progress(app, "queue", "Running image→prompt…", None, None);
     let prompt_id = generate::queue_prompt(port, &workflow, &client_id)?;
     let text = reject_model_error_text(&generate::wait_for_text(
         port,
@@ -139,12 +130,7 @@ pub fn run_image_to_prompt(
         &job.id,
     )?)?;
 
-    emit_progress(
-        app,
-        "free",
-        "Freeing tool models from VRAM…",
-        Some(json!({ "jobId": job.id })),
-    );
+    emit_progress(app, "free", "Freeing tool models from VRAM…", None, None);
     let _ = generate::free_vram(port);
 
     let _ = app.emit(
@@ -191,12 +177,7 @@ pub fn run_prompt_enhance(
     let target = PromptTarget::from_str(&args.target)?.resolve(args.arch.as_deref());
     let mode = args.mode.as_deref().unwrap_or("expand");
 
-    emit_progress(
-        app,
-        "prepare",
-        "Preparing Prompt Enhancer…",
-        Some(json!({ "jobId": job.id })),
-    );
+    emit_progress(app, "prepare", "Preparing Prompt Enhancer…", None, None);
     let dl = crate::download_manager::ensure(
         app,
         crate::download_manager::DownloadSpec::PromptTools {
@@ -218,12 +199,7 @@ pub fn run_prompt_enhance(
         provider_required_nodes(Provider::QwenVl),
         ensured.restart_comfy,
     )?;
-    emit_progress(
-        app,
-        "free",
-        "Freeing VRAM before tool run…",
-        Some(json!({ "jobId": job.id })),
-    );
+    emit_progress(app, "free", "Freeing VRAM before tool run…", None, None);
     let _ = generate::free_vram(port);
 
     let workflow = build_enhance_workflow(prompt, target, mode);
@@ -232,12 +208,7 @@ pub fn run_prompt_enhance(
     }
 
     let client_id = Uuid::new_v4().to_string();
-    emit_progress(
-        app,
-        "queue",
-        "Enhancing prompt…",
-        Some(json!({ "jobId": job.id })),
-    );
+    emit_progress(app, "queue", "Enhancing prompt…", None, None);
     let prompt_id = generate::queue_prompt(port, &workflow, &client_id)?;
     let text = reject_model_error_text(&generate::wait_for_text(
         port,
@@ -247,12 +218,7 @@ pub fn run_prompt_enhance(
         &job.id,
     )?)?;
 
-    emit_progress(
-        app,
-        "free",
-        "Freeing tool models from VRAM…",
-        Some(json!({ "jobId": job.id })),
-    );
+    emit_progress(app, "free", "Freeing tool models from VRAM…", None, None);
     let _ = generate::free_vram(port);
 
     let _ = app.emit(

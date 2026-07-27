@@ -13,6 +13,11 @@
     "lint:fix": "eslint --fix .",
     "format": "prettier --write \"**/*.{ts,tsx}\" && cargo fmt --manifest-path src-tauri/Cargo.toml",
     "typecheck": "tsc --noEmit",
+    "test:rust": "bun scripts/test-rust.mjs",
+    "ipc:types": "cargo run --manifest-path src-tauri/Cargo.toml --bin export-ipc",
+    "ipc:check": "bun run ipc:types && git diff --exit-code -- lib/generated/",
+    "check": "bun run typecheck && bun run lint",
+    "check:full": "bun run check && bun run test:rust",
     "prepare": "husky"
   },
   "lint-staged": {

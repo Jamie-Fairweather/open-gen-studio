@@ -2,15 +2,18 @@ use super::state::AppState;
 use crate::creator::{
     self, BindableInput, CapturedWorkflow, EmbeddedModel, SuggestedControl, SuggestedModel,
 };
-use serde_json::Value;
+use serde::Serialize;
+use specta::Type;
 use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
+#[specta::specta]
 pub fn creator_ensure_comfy(app: AppHandle, state: State<'_, AppState>) -> Result<String, String> {
     creator::ensure_comfy_url(&app, &state.db, &state.processes)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn creator_open_comfy(app: AppHandle) -> Result<String, String> {
     // reqwest::blocking (health/start) must not run on the async runtime.
     let app_ensure = app.clone();
@@ -26,11 +29,12 @@ pub async fn creator_open_comfy(app: AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn creator_capture_workflow(app: AppHandle) -> Result<CapturedWorkflow, String> {
     creator::capture_workflow(app).await
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PackagingSuggestions {
     pub models: Vec<SuggestedModel>,
@@ -39,10 +43,12 @@ pub struct PackagingSuggestions {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn creator_suggest_packaging(
-    workflow: Value,
+    workflow: crate::JsonValue,
     embedded_models: Option<Vec<EmbeddedModel>>,
 ) -> Result<PackagingSuggestions, String> {
+    let workflow = workflow.0;
     let mut embedded = embedded_models.unwrap_or_default();
     // File imports of Comfy UI-format JSON may carry URLs on nodes.
     if embedded.is_empty() {

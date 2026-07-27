@@ -1,9 +1,10 @@
 /** Shared Format × Target helpers for Prompt Tools UI. */
 
-export type PromptFormatId = "general" | "structured" | "graphicDesign" | "json"
+import type { PromptFormat, PromptTarget } from "@/lib/generated/bindings"
+import { isRecipeArch } from "@/lib/arch"
 
-export type PromptTargetId =
-  "auto" | "flux" | "stableDiffusion" | "ideogram" | "zImageKrea"
+export type PromptFormatId = PromptFormat
+export type PromptTargetId = PromptTarget
 
 export const PROMPT_FORMATS: {
   id: PromptFormatId
@@ -151,10 +152,24 @@ export function formatTargetHint(
 }
 
 export function targetFromArch(arch?: string | null): PromptTargetId {
-  const a = (arch ?? "").toLowerCase()
-  if (a === "flux" || a === "flux2") return "flux"
-  if (a === "sdxl" || a === "sd15" || a === "sd") return "stableDiffusion"
-  if (a === "ideogram4" || a === "ideogram") return "ideogram"
-  if (a === "z-image" || a === "krea2" || a === "krea") return "zImageKrea"
-  return "auto"
+  if (!arch || !isRecipeArch(arch)) {
+    const a = (arch ?? "").toLowerCase()
+    if (a === "sd") return "stableDiffusion"
+    if (a === "ideogram") return "ideogram"
+    if (a === "krea") return "zImageKrea"
+    return "auto"
+  }
+  switch (arch) {
+    case "flux":
+    case "flux2":
+      return "flux"
+    case "sdxl":
+    case "sd15":
+      return "stableDiffusion"
+    case "ideogram4":
+      return "ideogram"
+    case "z-image":
+    case "krea2":
+      return "zImageKrea"
+  }
 }

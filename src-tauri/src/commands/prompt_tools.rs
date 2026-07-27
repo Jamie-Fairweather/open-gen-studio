@@ -5,12 +5,14 @@ use crate::prompt_tools::{self, PromptToolResult, PromptToolWeightInfo};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
+#[specta::specta]
 pub fn list_prompt_tool_weights(app: AppHandle) -> Result<Vec<PromptToolWeightInfo>, String> {
     prompt_tools::list_weights(&app)
 }
 
 /// Enqueue Prompt Tools provider install via Download Manager.
 #[tauri::command]
+#[specta::specta]
 pub fn ensure_prompt_tools_provider(
     app: AppHandle,
     _state: State<'_, AppState>,
@@ -27,17 +29,20 @@ pub fn ensure_prompt_tools_provider(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn read_image_embedded_prompt(image_path: String) -> Result<Option<String>, String> {
     prompt_tools::read_embedded_prompt(&image_path)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn save_temp_tool_image(app: AppHandle, bytes: Vec<u8>, ext: String) -> Result<String, String> {
     prompt_tools::save_temp_image(&app, bytes, &ext)
 }
 
 /// Queue image→prompt utility job; returns job immediately; result via jobs://progress + invoke wait.
 #[tauri::command]
+#[specta::specta]
 pub fn run_image_to_prompt(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -88,6 +93,7 @@ pub fn run_image_to_prompt(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn run_prompt_enhance(
     app: AppHandle,
     state: State<'_, AppState>,

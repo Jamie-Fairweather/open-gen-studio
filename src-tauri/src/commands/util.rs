@@ -9,12 +9,14 @@ pub(crate) fn now_secs() -> i64 {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn detect_gpu() -> GpuInfo {
     gpu::detect_nvidia()
 }
 
 /// Open an http(s) URL in the user's default system browser.
 #[tauri::command]
+#[specta::specta]
 pub fn open_external_url(url: String) -> Result<(), String> {
     let url = url.trim();
     if !(url.starts_with("https://") || url.starts_with("http://")) {

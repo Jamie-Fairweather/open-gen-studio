@@ -70,7 +70,8 @@ pub(crate) fn is_ready(app: &AppHandle, spec: &DownloadSpec) -> Result<bool, Str
         }
         DownloadSpec::Lora { id, arch } => {
             let pack = loras::get_lora(app, id)?;
-            pack.variants.iter().any(|v| v.arch == *arch && v.ready)
+            let arch_s = arch.as_str();
+            pack.variants.iter().any(|v| v.arch == arch_s && v.ready)
         }
         DownloadSpec::Upscale { id } => {
             if id == "usdu" {
@@ -147,7 +148,7 @@ pub(crate) fn plan_steps(app: &AppHandle, spec: &DownloadSpec) -> Result<Vec<Pla
             spec: json!({ "action": "blueprint", "id": id }),
         }]),
         DownloadSpec::Lora { id, arch } => {
-            let plan = loras::variant_download(app, id, arch)?;
+            let plan = loras::variant_download(app, id, arch.as_str())?;
             Ok(vec![PlannedStep {
                 step_kind: "http".into(),
                 label: plan.filename.clone(),

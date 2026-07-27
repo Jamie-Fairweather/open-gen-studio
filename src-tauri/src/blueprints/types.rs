@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use specta::Type;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Blueprint {
     pub id: String,
@@ -11,8 +12,8 @@ pub struct Blueprint {
     /// `"official"` | `"user"`
     pub source: String,
     pub minimum_vram_gb: Option<u32>,
-    pub model_count: usize,
-    pub models_ready: usize,
+    pub model_count: u32,
+    pub models_ready: u32,
     /// Sum of remote Content-Lengths when probes succeed.
     pub total_size_bytes: Option<u64>,
     /// Bytes already on disk for this blueprint's models.
@@ -28,29 +29,26 @@ pub struct Blueprint {
     pub requires_civitai_token: bool,
 }
 
-/// Back-compat alias for IPC / older call sites.
-pub type OfficialBlueprint = Blueprint;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BlueprintProgress {
     pub blueprint_id: String,
     pub stage: String,
     pub message: String,
-    pub model_index: usize,
-    pub model_total: usize,
+    pub model_index: u32,
+    pub model_total: u32,
     /// Current model filename when stage is download/skip/missing.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub filename: Option<String>,
     /// Bytes already accounted for (completed models, or offset before the current file).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub downloaded: Option<u64>,
     /// Expected total bytes for all models in this install (when known).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub total: Option<u64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BlueprintControl {
     pub id: String,
@@ -63,6 +61,7 @@ pub struct BlueprintControl {
     #[serde(default = "default_group")]
     pub group: String,
     #[serde(default)]
+    #[specta(type = specta_typescript::Any)]
     pub default: Option<serde_json::Value>,
 }
 
@@ -70,7 +69,7 @@ fn default_group() -> String {
     "default".into()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BlueprintModelInfo {
     pub filename: String,
@@ -87,7 +86,7 @@ pub struct BlueprintModelInfo {
     pub ready: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BlueprintDetail {
     pub id: String,
@@ -96,8 +95,8 @@ pub struct BlueprintDetail {
     pub description: String,
     pub runtime: String,
     pub minimum_vram_gb: Option<u32>,
-    pub model_count: usize,
-    pub models_ready: usize,
+    pub model_count: u32,
+    pub models_ready: u32,
     pub controls: Vec<BlueprintControl>,
     #[serde(default)]
     pub flow_type: String,
@@ -115,10 +114,11 @@ pub struct BlueprintDetail {
     #[serde(default)]
     pub models: Vec<BlueprintModelInfo>,
     #[serde(default)]
+    #[specta(type = specta_typescript::Any)]
     pub defaults: serde_json::Map<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RecipeCapabilities {
     #[serde(default)]
@@ -159,7 +159,7 @@ pub(crate) struct ManifestFile {
     pub(crate) defaults: serde_json::Map<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelEntry {
     pub filename: String,
@@ -186,7 +186,7 @@ pub struct CustomNodeDep {
     pub url: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelFileEntry {
     pub relative_path: String,

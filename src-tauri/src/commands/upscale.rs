@@ -4,22 +4,26 @@ use crate::upscale::{self, UpscaleModelInfo};
 use tauri::{AppHandle, State};
 
 #[tauri::command]
+#[specta::specta]
 pub fn list_upscalers(app: AppHandle) -> Result<Vec<UpscaleModelInfo>, String> {
     upscale::list_upscalers(&app)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn usdu_node_ready(app: AppHandle) -> Result<bool, String> {
     Ok(upscale::usdu_installed(&app))
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn supir_node_ready(app: AppHandle) -> Result<bool, String> {
     Ok(upscale::supir_installed(&app))
 }
 
 /// Enqueue upscale weight install via Download Manager.
 #[tauri::command]
+#[specta::specta]
 pub fn install_upscaler(
     app: AppHandle,
     _state: State<'_, AppState>,
@@ -35,6 +39,7 @@ pub fn install_upscaler(
 
 /// Ensure Ultimate SD Upscale is at the app-pinned commit.
 #[tauri::command]
+#[specta::specta]
 pub fn ensure_usdu_node(app: AppHandle, _state: State<'_, AppState>) -> Result<(), String> {
     let _ = download_manager::ensure(
         &app,
@@ -46,6 +51,7 @@ pub fn ensure_usdu_node(app: AppHandle, _state: State<'_, AppState>) -> Result<(
 
 /// Ensure SUPIR custom node is at the app-pinned commit + deps.
 #[tauri::command]
+#[specta::specta]
 pub fn ensure_supir_node(app: AppHandle, _state: State<'_, AppState>) -> Result<(), String> {
     let _ = download_manager::ensure(
         &app,

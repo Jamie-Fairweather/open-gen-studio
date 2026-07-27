@@ -7,12 +7,16 @@ mod download;
 mod download_manager;
 mod generate;
 mod gpu;
+pub mod ipc;
+mod json_any;
 mod loras;
 mod pins;
 mod prompt_tools;
 mod providers;
 mod recipe;
 mod upscale;
+
+pub use json_any::{JsonMap, JsonValue};
 
 use comfy::ProcessState;
 use commands::AppState;
@@ -40,8 +44,21 @@ fn shutdown_comfy(app: &tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let builder = commands::specta_builder();
+
+    #[cfg(debug_assertions)]
+    {
+        // Avoid exporting into a path that Next.js hot-reloads on every keystroke
+        // during `tauri dev` — prefer `npm run ipc:types` / the unit test.
+        // Uncomment to auto-export on each debug launch:
+        // let _ = ipc::export_typescript_bindings();
+    }
+
     tauri::Builder::default()
-        .setup(|app| {
+        .invoke_handler(builder.invoke_handler())
+        .setup(move |app| {
+            builder.mount_events(app);
+
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -62,10 +79,6 @@ pub fn run() {
                 db: Mutex::new(db),
                 processes: Mutex::new(ProcessState::default()),
                 comfy_install_busy: Mutex::new(false),
-                blueprint_install_busy: Mutex::new(None),
-                lora_install_busy: Mutex::new(None),
-                upscale_install_busy: Mutex::new(None),
-                prompt_tools_install_busy: Mutex::new(None),
                 cancelled_jobs: Mutex::new(Default::default()),
             });
 
@@ -101,7 +114,6 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(commands::invoke_handler())
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {

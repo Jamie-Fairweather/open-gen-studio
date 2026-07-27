@@ -89,6 +89,20 @@ pub fn auth_header_for(url: &str) -> Option<String> {
     }
 }
 
+/// Apply provider credentials to a download URL (CivitAI needs `?token=` for CDN redirects).
+pub fn authorize_download_url(url: &str) -> String {
+    match detect(url) {
+        ProviderKind::CivitAi => civitai::url_with_token(url),
+        _ => url.to_string(),
+    }
+}
+
+pub fn clear_resolve_cache() {
+    if let Ok(mut cache) = resolve_cache().lock() {
+        cache.clear();
+    }
+}
+
 /// Whether this URL needs a provider token (HF gated probe, or any CivitAI URL).
 pub fn requires_auth(url: &str) -> bool {
     let url = url.trim();
@@ -108,6 +122,7 @@ pub fn set_stored_token(provider: ProviderKind, token: Option<String>) {
         ProviderKind::CivitAi => civitai::set_stored_token(token),
         ProviderKind::Direct => {}
     }
+    clear_resolve_cache();
 }
 
 pub fn has_stored_token(provider: ProviderKind) -> bool {
@@ -119,20 +134,19 @@ pub fn has_stored_token(provider: ProviderKind) -> bool {
 }
 
 pub fn http_status_hint(status: reqwest::StatusCode, url: &str) -> Option<String> {
-    if status.as_u16() != 401 {
+    let code = status.as_u16();
+    if code != 401 && code != 403 {
         return None;
     }
     match detect(url) {
-        ProviderKind::HuggingFace => Some(
-            "download failed: HTTP 401 — gated Hugging Face model. \
+        ProviderKind::HuggingFace => Some(format!(
+            "download failed: HTTP {code} — gated Hugging Face model. \
 Accept the license on the model page, then add your Hugging Face token in Settings and retry."
-                .into(),
-        ),
-        ProviderKind::CivitAi => Some(
-            "download failed: HTTP 401 — CivitAI API key required. \
+        )),
+        ProviderKind::CivitAi => Some(format!(
+            "download failed: HTTP {code} — CivitAI API key required or invalid. \
 Create an API key at civitai.com/user/account (API Keys section), add it in Settings, and retry."
-                .into(),
-        ),
+        )),
         ProviderKind::Direct => None,
     }
 }

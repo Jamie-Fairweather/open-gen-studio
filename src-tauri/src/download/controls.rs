@@ -1,5 +1,7 @@
+use crate::commands::AppState;
 use crate::providers::{self, ProviderKind};
 use std::sync::atomic::{AtomicBool, Ordering};
+use tauri::{AppHandle, Manager};
 
 /// Cooperative cancel / pause for the active HTTP transfer (single-flight worker).
 static DOWNLOAD_CANCEL: AtomicBool = AtomicBool::new(false);
@@ -44,4 +46,18 @@ pub fn set_stored_hf_token(token: Option<String>) {
 /// Sync CivitAI API key from Settings DB (or clear it).
 pub fn set_stored_civitai_token(token: Option<String>) {
     providers::set_stored_token(ProviderKind::CivitAi, token);
+}
+
+/// Reload provider tokens from Settings so downloads always use the latest keys.
+pub fn sync_provider_tokens_from_db(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let Ok(db) = state.db.lock() else {
+        return;
+    };
+    if let Ok(token) = db.get_setting(crate::providers::SETTING_HF_TOKEN) {
+        set_stored_hf_token(token);
+    }
+    if let Ok(token) = db.get_setting(crate::providers::SETTING_CIVITAI_TOKEN) {
+        set_stored_civitai_token(token);
+    }
 }

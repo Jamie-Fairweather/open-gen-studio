@@ -310,8 +310,14 @@ fn variant_for_arch<'a>(
         .ok_or_else(|| format!("LoRA '{}' has no variant for arch '{arch}'", manifest.id))
 }
 
-/// Download one arch variant into the shared models library.
-pub fn install_variant(app: &AppHandle, id: &str, arch: &str) -> Result<(), String> {
+pub struct VariantDownload {
+    pub url: String,
+    pub dest: PathBuf,
+    pub filename: String,
+}
+
+/// Resolve URL + on-disk dest for one LoRA arch variant.
+pub fn variant_download(app: &AppHandle, id: &str, arch: &str) -> Result<VariantDownload, String> {
     let (_dir, manifest, _source) = load_manifest(app, id)?;
     let variant = variant_for_arch(&manifest, arch)?;
     validate_variant(variant)?;
@@ -329,6 +335,16 @@ pub fn install_variant(app: &AppHandle, id: &str, arch: &str) -> Result<(), Stri
         variant.path.trim()
     };
     let dest = models_root.join(path).join(&variant.filename);
+    Ok(VariantDownload {
+        url: variant.url.clone(),
+        dest,
+        filename: variant.filename.clone(),
+    })
+}
+
+/// Download one arch variant into the shared models library.
+pub fn install_variant(app: &AppHandle, id: &str, arch: &str) -> Result<(), String> {
+    let plan = variant_download(app, id, arch)?;
 
     let _ = app.emit(
         "loras://progress",
@@ -336,18 +352,18 @@ pub fn install_variant(app: &AppHandle, id: &str, arch: &str) -> Result<(), Stri
             "loraId": id,
             "arch": arch,
             "stage": "download",
-            "message": format!("Downloading {}", variant.filename),
-            "filename": variant.filename,
+            "message": format!("Downloading {}", plan.filename),
+            "filename": plan.filename,
         }),
     );
 
     download::clear_cancel();
-    download::download_file(app, &variant.url, &dest, None)?;
+    download::download_file(app, &plan.url, &plan.dest, None)?;
 
-    if !download::local_file_usable(&dest) {
+    if !download::local_file_usable(&plan.dest) {
         return Err(format!(
             "download produced unusable file: {}",
-            variant.filename
+            plan.filename
         ));
     }
 
@@ -357,8 +373,8 @@ pub fn install_variant(app: &AppHandle, id: &str, arch: &str) -> Result<(), Stri
             "loraId": id,
             "arch": arch,
             "stage": "done",
-            "message": format!("Ready: {}", variant.filename),
-            "filename": variant.filename,
+            "message": format!("Ready: {}", plan.filename),
+            "filename": plan.filename,
         }),
     );
     let _ = app.emit("loras://updated", id);

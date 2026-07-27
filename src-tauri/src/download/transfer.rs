@@ -26,6 +26,7 @@ pub fn download_file(
     dest: &Path,
     expected_sha256: Option<&str>,
 ) -> Result<(), String> {
+    super::controls::sync_provider_tokens_from_db(app);
     let download_url = super::http::resolve_download_url(url)?;
     match download_once(app, &download_url, dest, expected_sha256, true) {
         Err(err) if err.contains("416") => {

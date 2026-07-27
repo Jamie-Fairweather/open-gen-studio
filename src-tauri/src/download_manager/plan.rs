@@ -146,11 +146,18 @@ pub(crate) fn plan_steps(app: &AppHandle, spec: &DownloadSpec) -> Result<Vec<Pla
             label: format!("Install blueprint {id}"),
             spec: json!({ "action": "blueprint", "id": id }),
         }]),
-        DownloadSpec::Lora { id, arch } => Ok(vec![PlannedStep {
-            step_kind: "action".into(),
-            label: format!("Install LoRA {id} ({arch})"),
-            spec: json!({ "action": "lora", "id": id, "arch": arch }),
-        }]),
+        DownloadSpec::Lora { id, arch } => {
+            let plan = loras::variant_download(app, id, arch)?;
+            Ok(vec![PlannedStep {
+                step_kind: "http".into(),
+                label: plan.filename.clone(),
+                spec: json!({
+                    "url": plan.url,
+                    "dest": plan.dest.to_string_lossy(),
+                    "filename": plan.filename,
+                }),
+            }])
+        }
         DownloadSpec::Upscale { id } => Ok(vec![PlannedStep {
             step_kind: "action".into(),
             label: format!("Install {id}"),

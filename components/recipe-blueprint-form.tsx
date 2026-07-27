@@ -425,7 +425,7 @@ function filenameFromUrl(url: string): string {
 function needsProviderResolve(url: string): boolean {
   const u = url.trim().toLowerCase()
   if (!u) return false
-  if (u.includes("civitai.com")) {
+  if (u.includes("civitai.com") || u.includes("civitai.red")) {
     // Direct API download already has a version id — still resolve for filename.
     return true
   }

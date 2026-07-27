@@ -45,6 +45,27 @@ pub(crate) fn run_step(
                 }
                 return Ok(());
             }
+
+            // Probe size up front so the UI can show "done / total" and %.
+            download::sync_provider_tokens_from_db(app);
+            let existing = dest.metadata().map(|m| m.len() as i64).unwrap_or(0);
+            let total = download::remote_content_length(url)
+                .ok()
+                .flatten()
+                .map(|n| n as i64);
+            {
+                let state = app.state::<AppState>();
+                let db = state.db.lock().map_err(|e| e.to_string())?;
+                let _ = db.update_download_step_status(
+                    &step.id,
+                    "running",
+                    None,
+                    Some(existing),
+                    total,
+                );
+            }
+            emit_snapshot(app);
+
             use std::sync::atomic::{AtomicBool, Ordering};
             let stop = std::sync::Arc::new(AtomicBool::new(false));
             let stop_t = stop.clone();
@@ -61,7 +82,7 @@ pub(crate) fn run_step(
                                 "running",
                                 None,
                                 Some(meta.len() as i64),
-                                None,
+                                None, // keep probed bytes_total via COALESCE
                             );
                         };
                     }

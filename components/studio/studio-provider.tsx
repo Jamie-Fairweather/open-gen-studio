@@ -185,6 +185,7 @@ export type StudioContextValue = {
   setCivitaiTokenDialogOpen: Dispatch<SetStateAction<boolean>>
   pendingInstallId: string | null
   setPendingInstallId: Dispatch<SetStateAction<string | null>>
+  pendingLoraInstall: { id: string; arch: string } | null
   galleryOpen: boolean
   setGalleryOpen: Dispatch<SetStateAction<boolean>>
   advancedOpen: boolean
@@ -325,6 +326,10 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [civitaiTokenSaving, setCivitaiTokenSaving] = useState(false)
   const [civitaiTokenDialogOpen, setCivitaiTokenDialogOpen] = useState(false)
   const [pendingInstallId, setPendingInstallId] = useState<string | null>(null)
+  const [pendingLoraInstall, setPendingLoraInstall] = useState<{
+    id: string
+    arch: string
+  } | null>(null)
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [prompt, setPrompt] = useState("")
@@ -1120,6 +1125,17 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
   async function beginLoraInstall(id: string, arch: string) {
     try {
+      const pack = loraPacks.find((p) => p.id === id)
+      const variant = pack?.variants.find((v) => v.arch === arch)
+      const url = (variant?.url ?? "").toLowerCase()
+      if (url.includes("civitai.com") || url.includes("civitai.red")) {
+        const settings = await listSettings()
+        if (!(settings.civitai_api_key ?? "").trim()) {
+          setPendingLoraInstall({ id, arch })
+          setCivitaiTokenDialogOpen(true)
+          return
+        }
+      }
       await ensureDownload({ kind: "lora", id, arch }, { wait: false })
     } catch (e) {
       notifyError(
@@ -1187,11 +1203,17 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
   async function handleHfTokenDialogConfirm(token: string) {
     const id = pendingInstallId
+    const lora = pendingLoraInstall
     await setSetting("huggingface_token", token)
     setHfToken(token)
     setHfTokenDirty(false)
     setHfTokenDialogOpen(false)
     notifySuccess("Hugging Face token saved", "Continuing…")
+    if (lora) {
+      setPendingLoraInstall(null)
+      await beginLoraInstall(lora.id, lora.arch)
+      return
+    }
     if (id) {
       if (!(await ensureInstallTokens(id))) return
       setPendingInstallId(null)
@@ -1203,12 +1225,18 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
   async function handleCivitaiTokenDialogConfirm(token: string) {
     const id = pendingInstallId
+    const lora = pendingLoraInstall
     await setSetting("civitai_api_key", token)
     setCivitaiToken(token)
     setCivitaiTokenDirty(false)
     setCivitaiTokenDialogOpen(false)
-    setPendingInstallId(null)
     notifySuccess("CivitAI API key saved", "Continuing model download…")
+    if (lora) {
+      setPendingLoraInstall(null)
+      await beginLoraInstall(lora.id, lora.arch)
+      return
+    }
+    setPendingInstallId(null)
     if (id) await requestBlueprintInstall(id)
   }
 
@@ -1567,6 +1595,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     civitaiTokenDialogOpen,
     setCivitaiTokenDialogOpen,
     pendingInstallId,
+    pendingLoraInstall,
     setPendingInstallId,
     galleryOpen,
     setGalleryOpen,

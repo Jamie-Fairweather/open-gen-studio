@@ -34,9 +34,10 @@ pub fn url_is_gated(url: &str) -> bool {
     matches!(providers::detect(url), ProviderKind::HuggingFace) && providers::requires_auth(url)
 }
 
-/// Resolve a user URL (page or direct) to the HTTP download URL.
+/// Resolve a user URL (page or direct) to the HTTP download URL (with provider auth applied).
 pub fn resolve_download_url(url: &str) -> Result<String, String> {
-    Ok(providers::resolve(url)?.download_url)
+    let resolved = providers::resolve(url)?.download_url;
+    Ok(providers::authorize_download_url(&resolved))
 }
 
 /// Probe remote object size via HEAD (Content-Length), with a Range GET fallback.

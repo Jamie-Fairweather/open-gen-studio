@@ -8,8 +8,27 @@ pub const SETTING_CIVITAI_TOKEN: &str = "civitai_api_key";
 static STORED_TOKEN: Mutex<Option<String>> = Mutex::new(None);
 
 pub fn is_url(url: &str) -> bool {
+    let url = url.trim();
+    if let Ok(parsed) = url::Url::parse(url) {
+        let host = parsed.host_str().unwrap_or("").to_ascii_lowercase();
+        return host == "civitai.com"
+            || host == "civitai.red"
+            || host.ends_with(".civitai.com")
+            || host.ends_with(".civitai.red");
+    }
     let lower = url.to_ascii_lowercase();
-    lower.contains("civitai.com")
+    lower.contains("civitai.com") || lower.contains("civitai.red")
+}
+
+/// Prefer the same front door (.com / .red) as the source URL for download links.
+fn download_origin(source_url: &str) -> &'static str {
+    if let Ok(parsed) = url::Url::parse(source_url.trim()) {
+        let host = parsed.host_str().unwrap_or("").to_ascii_lowercase();
+        if host == "civitai.red" || host.ends_with(".civitai.red") {
+            return "https://civitai.red";
+        }
+    }
+    "https://civitai.com"
 }
 
 pub fn set_stored_token(token: Option<String>) {
@@ -33,18 +52,36 @@ pub fn has_stored_token() -> bool {
 }
 
 pub fn auth_header() -> Option<String> {
+    raw_token().map(|token| format!("Bearer {token}"))
+}
+
+fn raw_token() -> Option<String> {
     if let Ok(guard) = STORED_TOKEN.lock() {
         if let Some(ref token) = *guard {
-            return Some(format!("Bearer {token}"));
+            if !token.is_empty() {
+                return Some(token.clone());
+            }
         }
     }
-    if let Ok(token) = std::env::var("CIVITAI_API_KEY") {
-        let token = token.trim();
-        if !token.is_empty() {
-            return Some(format!("Bearer {token}"));
-        }
+    std::env::var("CIVITAI_API_KEY")
+        .ok()
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+}
+
+/// Append `?token=` so auth survives CDN redirects that strip Authorization.
+pub fn url_with_token(url: &str) -> String {
+    let Some(token) = raw_token() else {
+        return url.to_string();
+    };
+    let Ok(mut parsed) = url::Url::parse(url) else {
+        return url.to_string();
+    };
+    if parsed.query_pairs().any(|(k, _)| k == "token") {
+        return url.to_string();
     }
-    None
+    parsed.query_pairs_mut().append_pair("token", &token);
+    parsed.to_string()
 }
 
 #[derive(Debug, Deserialize)]
@@ -88,10 +125,12 @@ or pick a specific version on the site"
         })?;
 
     let meta = fetch_version(version_id)?;
+    let origin = download_origin(url);
     let download_url = meta
         .download_url
         .filter(|u| !u.is_empty())
-        .unwrap_or_else(|| format!("https://civitai.com/api/download/models/{version_id}"));
+        .unwrap_or_else(|| format!("{origin}/api/download/models/{version_id}"));
+    let download_url = url_with_token(&download_url);
 
     let filename = primary_filename(&meta.files).or_else(|| {
         meta.files

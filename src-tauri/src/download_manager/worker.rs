@@ -1,13 +1,52 @@
 use crate::commands::AppState;
 use crate::download;
+use serde_json::json;
 use std::sync::{Condvar, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 use super::api::emit_snapshot;
 use super::steps::run_step;
 use super::HISTORY_KEEP;
+
+fn parse_lora_job_key(job_key: &str) -> Option<(&str, &str)> {
+    let rest = job_key.strip_prefix("lora:")?;
+    rest.split_once(':')
+}
+
+fn emit_kind_success(app: &AppHandle, kind: &str, job_key: &str) {
+    if kind == "lora" {
+        if let Some((id, arch)) = parse_lora_job_key(job_key) {
+            let _ = app.emit(
+                "loras://progress",
+                json!({
+                    "loraId": id,
+                    "arch": arch,
+                    "stage": "done",
+                    "message": format!("Ready: {id} ({arch})"),
+                }),
+            );
+            let _ = app.emit("loras://updated", id);
+        }
+    }
+}
+
+fn emit_kind_failure(app: &AppHandle, kind: &str, job_key: &str, err: &str) {
+    if kind == "lora" {
+        if let Some((id, arch)) = parse_lora_job_key(job_key) {
+            let _ = app.emit(
+                "loras://progress",
+                json!({
+                    "loraId": id,
+                    "arch": arch,
+                    "stage": "error",
+                    "message": err,
+                }),
+            );
+        }
+    }
+}
 
 pub(crate) struct Wake {
     lock: Mutex<bool>,
@@ -97,11 +136,8 @@ pub(crate) fn run_next_job(app: &AppHandle) {
                 return;
             };
             if let Ok(Some(j)) = db.get_download_job(&job.id) {
-                if j.status == "paused" {
-                    emit_snapshot(app);
-                    return;
-                }
-                if j.status == "cancelled" {
+                if j.status == "paused" || j.status == "cancelled" {
+                    drop(db);
                     emit_snapshot(app);
                     return;
                 }
@@ -120,44 +156,57 @@ pub(crate) fn run_next_job(app: &AppHandle) {
                 let _ = db.update_download_step_status(&step.id, "done", None, None, None);
             }
             Err(err) if err == "paused" => {
-                let state = app.state::<AppState>();
-                let Ok(db) = state.db.lock() else {
-                    return;
-                };
-                let _ =
-                    db.update_download_step_status(&step.id, "paused", Some("paused"), None, None);
-                let _ = db.update_download_job_status(&job.id, "paused", None);
+                {
+                    let state = app.state::<AppState>();
+                    let Ok(db) = state.db.lock() else {
+                        return;
+                    };
+                    let _ = db.update_download_step_status(
+                        &step.id,
+                        "paused",
+                        Some("paused"),
+                        None,
+                        None,
+                    );
+                    let _ = db.update_download_job_status(&job.id, "paused", None);
+                }
                 download::clear_pause();
                 emit_snapshot(app);
                 return;
             }
             Err(err) if err == "cancelled" => {
-                let state = app.state::<AppState>();
-                let Ok(db) = state.db.lock() else {
-                    return;
-                };
-                let _ = db.update_download_step_status(
-                    &step.id,
-                    "cancelled",
-                    Some("cancelled"),
-                    None,
-                    None,
-                );
-                let _ = db.update_download_job_status(&job.id, "cancelled", Some("cancelled"));
-                let _ = db.prune_download_history(HISTORY_KEEP);
+                {
+                    let state = app.state::<AppState>();
+                    let Ok(db) = state.db.lock() else {
+                        return;
+                    };
+                    let _ = db.update_download_step_status(
+                        &step.id,
+                        "cancelled",
+                        Some("cancelled"),
+                        None,
+                        None,
+                    );
+                    let _ = db.update_download_job_status(&job.id, "cancelled", Some("cancelled"));
+                    let _ = db.prune_download_history(HISTORY_KEEP);
+                }
                 download::clear_transfer_controls();
                 emit_snapshot(app);
                 return;
             }
             Err(err) => {
-                let state = app.state::<AppState>();
-                let Ok(db) = state.db.lock() else {
-                    return;
-                };
-                let _ = db.update_download_step_status(&step.id, "error", Some(&err), None, None);
-                let _ = db.update_download_job_status(&job.id, "error", Some(&err));
-                let _ = db.prune_download_history(HISTORY_KEEP);
+                {
+                    let state = app.state::<AppState>();
+                    let Ok(db) = state.db.lock() else {
+                        return;
+                    };
+                    let _ =
+                        db.update_download_step_status(&step.id, "error", Some(&err), None, None);
+                    let _ = db.update_download_job_status(&job.id, "error", Some(&err));
+                    let _ = db.prune_download_history(HISTORY_KEEP);
+                }
                 download::clear_transfer_controls();
+                emit_kind_failure(app, &job.kind, &job.job_key, &err);
                 emit_snapshot(app);
                 return;
             }
@@ -174,5 +223,6 @@ pub(crate) fn run_next_job(app: &AppHandle) {
         let _ = db.prune_download_history(HISTORY_KEEP);
     }
     download::clear_transfer_controls();
+    emit_kind_success(app, &job.kind, &job.job_key);
     emit_snapshot(app);
 }

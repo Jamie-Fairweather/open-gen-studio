@@ -89,21 +89,21 @@ pub fn open_user_blueprints_dir(app: &AppHandle) -> Result<String, String> {
 pub(crate) fn open_dir_in_os(dir: &Path) -> Result<(), String> {
     #[cfg(windows)]
     {
-        std::process::Command::new("explorer")
+        crate::process_cmd::new("explorer")
             .arg(dir)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "macos")]
     {
-        std::process::Command::new("open")
+        crate::process_cmd::new("open")
             .arg(dir)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "linux")]
     {
-        std::process::Command::new("xdg-open")
+        crate::process_cmd::new("xdg-open")
             .arg(dir)
             .spawn()
             .map_err(|e| e.to_string())?;

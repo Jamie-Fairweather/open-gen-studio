@@ -1,6 +1,7 @@
+use crate::process_cmd;
 use std::fs;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use tauri::AppHandle;
 
 /// Install ComfyUI-Manager deps (official portable flow) once per install.
@@ -20,7 +21,7 @@ pub(crate) fn ensure_comfy_manager(app: &AppHandle, root: &Path) -> Result<(), S
     super::paths::emit_progress(app, "configure", "Installing ComfyUI-Manager…");
 
     let output = if reqs.is_file() {
-        Command::new(&python)
+        process_cmd::new(&python)
             .args([
                 "-s",
                 "-m",
@@ -36,7 +37,7 @@ pub(crate) fn ensure_comfy_manager(app: &AppHandle, root: &Path) -> Result<(), S
             .map_err(|e| format!("failed to run pip for ComfyUI-Manager: {e}"))?
     } else {
         // Older portables / docs still mention the pip package.
-        Command::new(&python)
+        process_cmd::new(&python)
             .args([
                 "-s",
                 "-m",

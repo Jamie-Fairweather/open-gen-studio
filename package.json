@@ -18,6 +18,7 @@
     "ipc:check": "bun run ipc:types && git diff --exit-code -- lib/generated/",
     "check": "bun run typecheck && bun run lint",
     "check:full": "bun run check && bun run test:rust",
+    "cleanup": "bun run lint:fix && bun run typecheck && bun run format && graphify update .",
     "prepare": "husky"
   },
   "lint-staged": {

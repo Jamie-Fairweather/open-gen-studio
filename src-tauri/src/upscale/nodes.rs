@@ -1,9 +1,10 @@
 use crate::comfy;
 use crate::pins::{self, NodePin, MANAGED_NODES};
+use crate::process_cmd;
 use crate::upscale::types::{UpscaleProgress, SUPIR_NODE_NAME, USDU_NODE_NAME};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use tauri::{AppHandle, Emitter};
 
 pub(crate) fn custom_nodes_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -61,7 +62,7 @@ pub(crate) fn node_at_pin(app: &AppHandle, pin: &NodePin) -> bool {
 }
 
 pub(crate) fn git_head_sha(repo: &Path) -> Result<String, String> {
-    let out = Command::new("git")
+    let out = process_cmd::new("git")
         .current_dir(repo)
         .args(["rev-parse", "HEAD"])
         .output()
@@ -103,22 +104,22 @@ pub fn managed_nodes_pin_status(app: &AppHandle) -> Vec<pins::PinStatus> {
     MANAGED_NODES
         .iter()
         .map(|pin| {
-            let installed = custom_nodes_dir(app)
-                .ok()
-                .and_then(|d| {
-                    let dest = d.join(pin.folder);
-                    if dest.is_dir() {
-                        git_head_sha(&dest).ok()
-                    } else {
-                        None
-                    }
-                })
-                .map(|h| pins::short_sha(&h).to_string());
-            let matches = node_at_pin(app, pin);
+            // One git rev-parse per node (node_at_pin would spawn a second).
+            let head = custom_nodes_dir(app).ok().and_then(|d| {
+                let dest = d.join(pin.folder);
+                if dest.is_dir() {
+                    git_head_sha(&dest).ok()
+                } else {
+                    None
+                }
+            });
+            let matches = head.as_ref().is_some_and(|h| {
+                h.starts_with(pin.commit) || pin.commit.starts_with(h) || h == pin.commit
+            });
             pins::PinStatus {
                 id: pin.id.into(),
                 expected: pins::short_sha(pin.commit).into(),
-                installed,
+                installed: head.as_ref().map(|h| pins::short_sha(h).to_string()),
                 matches,
             }
         })
@@ -224,7 +225,7 @@ pub fn ensure_pinned_custom_node(app: &AppHandle, pin: &NodePin) -> Result<(), S
     );
 
     if !dest.is_dir() {
-        let status = Command::new("git")
+        let status = process_cmd::new("git")
             .args(["clone", "--no-checkout", pin.repo])
             .arg(&dest)
             .status()
@@ -243,14 +244,14 @@ pub fn ensure_pinned_custom_node(app: &AppHandle, pin: &NodePin) -> Result<(), S
         }
     }
 
-    let fetch = Command::new("git")
+    let fetch = process_cmd::new("git")
         .current_dir(&dest)
         .args(["fetch", "--depth", "1", "origin", pin.commit])
         .status()
         .map_err(|e| format!("git fetch failed for {}: {e}", pin.folder))?;
     if !fetch.success() {
         // Fallback: deepen / full fetch of the commit.
-        let fetch2 = Command::new("git")
+        let fetch2 = process_cmd::new("git")
             .current_dir(&dest)
             .args(["fetch", "origin", pin.commit])
             .status()
@@ -263,13 +264,13 @@ pub fn ensure_pinned_custom_node(app: &AppHandle, pin: &NodePin) -> Result<(), S
         }
     }
 
-    let checkout = Command::new("git")
+    let checkout = process_cmd::new("git")
         .current_dir(&dest)
         .args(["checkout", "--force", pin.commit])
         .status()
         .map_err(|e| format!("git checkout failed for {}: {e}", pin.folder))?;
     if !checkout.success() {
-        let reset = Command::new("git")
+        let reset = process_cmd::new("git")
             .current_dir(&dest)
             .args(["reset", "--hard", pin.commit])
             .status()
@@ -335,7 +336,7 @@ pub(crate) fn install_supir_python_deps(app: &AppHandle) -> Result<(), String> {
         },
     );
 
-    let output = Command::new(&python)
+    let output = process_cmd::new(&python)
         .args([
             "-s",
             "-m",

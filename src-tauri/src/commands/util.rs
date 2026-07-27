@@ -25,21 +25,21 @@ pub fn open_external_url(url: String) -> Result<(), String> {
     #[cfg(windows)]
     {
         // `start` treats the first quoted arg as the window title.
-        std::process::Command::new("cmd")
+        crate::process_cmd::new("cmd")
             .args(["/C", "start", "", url])
             .spawn()
             .map_err(|e| format!("failed to open browser: {e}"))?;
     }
     #[cfg(target_os = "macos")]
     {
-        std::process::Command::new("open")
+        crate::process_cmd::new("open")
             .arg(url)
             .spawn()
             .map_err(|e| format!("failed to open browser: {e}"))?;
     }
     #[cfg(target_os = "linux")]
     {
-        std::process::Command::new("xdg-open")
+        crate::process_cmd::new("xdg-open")
             .arg(url)
             .spawn()
             .map_err(|e| format!("failed to open browser: {e}"))?;

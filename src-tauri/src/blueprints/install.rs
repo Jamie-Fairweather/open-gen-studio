@@ -229,7 +229,7 @@ pub(crate) fn install_custom_nodes(app: &AppHandle, nodes: &[CustomNodeDep]) -> 
         if dest.is_dir() {
             continue;
         }
-        let status = std::process::Command::new("git")
+        let status = crate::process_cmd::new("git")
             .args(["clone", "--depth", "1", url])
             .arg(&dest)
             .status()

@@ -11,6 +11,7 @@ pub mod ipc;
 mod json_any;
 mod loras;
 mod pins;
+mod process_cmd;
 mod prompt_tools;
 mod providers;
 mod recipe;

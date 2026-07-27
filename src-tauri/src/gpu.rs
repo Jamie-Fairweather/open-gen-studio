@@ -1,6 +1,6 @@
+use crate::process_cmd;
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use std::process::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -14,7 +14,7 @@ pub struct GpuInfo {
 
 /// Detect NVIDIA GPU via `nvidia-smi`. Other vendors later.
 pub fn detect_nvidia() -> GpuInfo {
-    let output = Command::new("nvidia-smi")
+    let output = process_cmd::new("nvidia-smi")
         .args([
             "--query-gpu=name,memory.total,driver_version",
             "--format=csv,noheader,nounits",

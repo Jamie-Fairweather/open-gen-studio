@@ -1,7 +1,8 @@
 use crate::comfy::paths::ProcessState;
 use crate::db::RuntimeInstall;
+use crate::process_cmd;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::AppHandle;
@@ -37,7 +38,7 @@ pub fn start(
 
     super::paths::emit_progress(app, "start", "Starting runtime…");
 
-    let child = Command::new(&python)
+    let child = process_cmd::new(&python)
         .args([
             "-s",
             main_py.to_str().ok_or("invalid main.py path")?,
@@ -75,7 +76,7 @@ pub fn stop(processes: &Mutex<ProcessState>) -> Result<(), String> {
         #[cfg(windows)]
         {
             let pid = child.id();
-            let _ = Command::new("taskkill")
+            let _ = process_cmd::new("taskkill")
                 .args(["/PID", &pid.to_string(), "/T", "/F"])
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())

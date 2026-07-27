@@ -8,11 +8,11 @@ use crate::comfy::{self, ProcessState};
 use crate::db::{Db, RuntimeInstall};
 use crate::download;
 use crate::pins;
+use crate::process_cmd;
 use crate::upscale;
 use serde_json::Value;
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
@@ -106,7 +106,7 @@ fn node_ready(app: &AppHandle, pin_id: &str) -> bool {
     if !dest.is_dir() {
         return false;
     }
-    let Ok(out) = std::process::Command::new("git")
+    let Ok(out) = process_cmd::new("git")
         .current_dir(&dest)
         .args(["rev-parse", "HEAD"])
         .output()
@@ -327,7 +327,7 @@ pub fn install_qwenvl_python_deps(app: &AppHandle) -> Result<bool, String> {
             None,
             Some("requirements.txt"),
         );
-        let status = Command::new(&python)
+        let status = process_cmd::new(&python)
             .args([
                 "-m",
                 "pip",

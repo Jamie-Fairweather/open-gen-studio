@@ -2,10 +2,11 @@ use crate::db::RuntimeInstall;
 use crate::download;
 use crate::gpu::{self, GpuInfo};
 use crate::pins::{self, COMFY_NVIDIA_PORTABLE_URL, COMFY_PINNED_VERSION};
+use crate::process_cmd;
 use sevenz_rust2::{ArchiveReader, Password};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
 
@@ -105,7 +106,7 @@ pub(crate) fn extract_with_sevenz_cli(
         "extract",
         &format!("Extracting with {}…", seven.display()),
     );
-    let output = Command::new(&seven)
+    let output = process_cmd::new(&seven)
         .args([
             "x",
             archive

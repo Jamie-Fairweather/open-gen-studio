@@ -1,6 +1,6 @@
 use crate::comfy;
 use crate::download;
-use crate::upscale::types::{UpscaleKind, UpscaleModelInfo, SUPIR_SDXL_FILENAME};
+use crate::upscale::types::{UpscaleKind, UpscaleModelInfo, SUPIR_SDXL_FILENAME, SUPIR_SDXL_URL};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::AppHandle;
@@ -153,4 +153,37 @@ pub fn list_upscalers(app: &AppHandle) -> Result<Vec<UpscaleModelInfo>, String> 
             }
         })
         .collect())
+}
+
+/// Managed custom-node pin for a download id (`usdu` / `supir` / SUPIR weights).
+pub fn node_pin_for_download(id: &str) -> Option<&'static str> {
+    if id == "usdu" {
+        return Some("usdu");
+    }
+    if id == "supir" {
+        return Some("supir");
+    }
+    match catalog_entry(id) {
+        Ok(e) if e.kind == UpscaleKind::Supir => Some("supir"),
+        _ => None,
+    }
+}
+
+/// HTTP files for Download Manager progress (label, url, dest).
+/// SUPIR includes the companion SDXL checkpoint first.
+pub fn http_files(app: &AppHandle, id: &str) -> Result<Vec<(String, String, PathBuf)>, String> {
+    let entry = catalog_entry(id)?;
+    let mut files = Vec::new();
+    if entry.kind == UpscaleKind::Supir {
+        files.push((
+            SUPIR_SDXL_FILENAME.into(),
+            SUPIR_SDXL_URL.into(),
+            comfy::models_dir(app)?
+                .join("checkpoints")
+                .join(SUPIR_SDXL_FILENAME),
+        ));
+    }
+    let dest = dest_for(app, entry)?;
+    files.push((entry.filename.into(), entry.url.into(), dest));
+    Ok(files)
 }

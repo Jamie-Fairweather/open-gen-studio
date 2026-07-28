@@ -8,7 +8,20 @@ pub(crate) fn http_client() -> Result<reqwest::blocking::Client, String> {
     reqwest::blocking::Client::builder()
         .redirect(reqwest::redirect::Policy::limited(10))
         .user_agent(USER_AGENT)
-        .timeout(Duration::from_secs(60))
+        // Large weights (100MB–several GB) must not share a total request timeout —
+        // that surfaces as "request or response body error" mid-stream.
+        .connect_timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| e.to_string())
+}
+
+/// Short-lived client for HEAD / size probes (not streaming downloads).
+pub(crate) fn http_client_probe() -> Result<reqwest::blocking::Client, String> {
+    reqwest::blocking::Client::builder()
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .user_agent(USER_AGENT)
+        .connect_timeout(Duration::from_secs(15))
+        .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| e.to_string())
 }
@@ -49,7 +62,7 @@ pub fn remote_content_length(url: &str) -> Result<Option<u64>, String> {
 }
 
 pub(crate) fn remote_content_length_direct(url: &str) -> Result<Option<u64>, String> {
-    let client = http_client()?;
+    let client = http_client_probe()?;
 
     let head = apply_auth(client.head(url), url)
         .send()

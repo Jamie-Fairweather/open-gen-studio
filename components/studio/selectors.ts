@@ -204,6 +204,17 @@ export function selectUpscaleInstallingId(s: StudioStore): string | null {
   return key ? upscaleIdFromJobKey(key) : null
 }
 
+export function selectUpscaleQueuedIds(s: StudioStore): string[] {
+  return s.downloadSnapshot.queued.flatMap((job) => {
+    const id = upscaleIdFromJobKey(job.jobKey)
+    return id ? [id] : []
+  })
+}
+
+export function selectUpscalePendingIds(s: StudioStore): string[] {
+  return s.pendingUpscaleIds
+}
+
 export function selectStudioLabel(s: StudioStore): string {
   return STUDIO_TABS.find((tab) => tab.id === s.studioTab)?.label ?? "Image"
 }

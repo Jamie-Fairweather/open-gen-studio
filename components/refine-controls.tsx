@@ -1,6 +1,6 @@
 "use client"
 
-import { DownloadIcon } from "lucide-react"
+import { ClockIcon, DownloadIcon } from "lucide-react"
 import { useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
+import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { WithTooltip } from "@/components/ui/tooltip"
 import type { UpscaleModelInfo } from "@/lib/host"
@@ -39,6 +40,8 @@ type RefineControlsProps = {
   models: UpscaleModelInfo[]
   usduReady: boolean
   installingId: string | null
+  queuedIds: string[]
+  pendingIds: string[]
   onInstallModel: (id: string) => void
   onEnsureUsdu: () => void
   width?: number
@@ -64,6 +67,8 @@ export function RefineControls({
   models,
   usduReady,
   installingId,
+  queuedIds,
+  pendingIds,
   onInstallModel,
   onEnsureUsdu,
   width,
@@ -95,8 +100,20 @@ export function RefineControls({
       arch === "flux2" ||
       arch === "ideogram4")
   const guiderUsdu = arch === "flux2" || arch === "ideogram4"
-  const modelBusy = selected ? installingId === selected.id : false
-  const usduBusy = installingId === "usdu"
+  const modelInstalling =
+    selected != null &&
+    (installingId === selected.id ||
+      (pendingIds.includes(selected.id) && !queuedIds.includes(selected.id)))
+  const modelQueued =
+    selected != null &&
+    queuedIds.includes(selected.id) &&
+    installingId !== selected.id
+  const modelBusy = modelInstalling || modelQueued
+  const usduInstalling =
+    installingId === "usdu" ||
+    (pendingIds.includes("usdu") && !queuedIds.includes("usdu"))
+  const usduQueued = queuedIds.includes("usdu") && installingId !== "usdu"
+  const usduBusy = usduInstalling || usduQueued
   const selectItems = useMemo(
     () =>
       models.map((m) => {
@@ -107,12 +124,23 @@ export function RefineControls({
               ? "Nomos"
               : null
         const base = tag ? `${m.name} (${tag})` : m.name
+        const downloading =
+          installingId === m.id ||
+          (pendingIds.includes(m.id) && !queuedIds.includes(m.id))
+        const queued = queuedIds.includes(m.id) && installingId !== m.id
+        const status = m.ready
+          ? null
+          : downloading
+            ? "downloading"
+            : queued
+              ? "queued"
+              : "needs download"
         return {
           value: m.id,
-          label: m.ready ? base : `${base} · needs download`,
+          label: status ? `${base} · ${status}` : base,
         }
       }),
-    [models]
+    [models, installingId, queuedIds, pendingIds]
   )
   const selectValue =
     selectItems.find((i) => i.value === selected?.id) ?? selectItems[0] ?? null
@@ -170,19 +198,47 @@ export function RefineControls({
                   </SelectPopup>
                 </Select>
                 {selected && !selected.ready ? (
-                  <WithTooltip label={`Download ${selected.name}`}>
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="outline"
-                      className="size-8 shrink-0"
-                      disabled={disabled || modelBusy}
-                      aria-label={`Download ${selected.name}`}
-                      onClick={() => onInstallModel(selected.id)}
-                    >
-                      <DownloadIcon className="size-3.5" />
-                    </Button>
-                  </WithTooltip>
+                  modelInstalling ? (
+                    <WithTooltip label="Downloading — see Downloads">
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="outline"
+                        className="size-8 shrink-0"
+                        disabled
+                        aria-label={`Downloading ${selected.name}`}
+                      >
+                        <Spinner className="size-3.5" />
+                      </Button>
+                    </WithTooltip>
+                  ) : modelQueued ? (
+                    <WithTooltip label="Queued in Downloads">
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="outline"
+                        className="size-8 shrink-0"
+                        disabled
+                        aria-label={`${selected.name} queued`}
+                      >
+                        <ClockIcon className="size-3.5 text-muted-foreground" />
+                      </Button>
+                    </WithTooltip>
+                  ) : (
+                    <WithTooltip label={`Download ${selected.name}`}>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="outline"
+                        className="size-8 shrink-0"
+                        disabled={disabled || modelBusy}
+                        aria-label={`Download ${selected.name}`}
+                        onClick={() => onInstallModel(selected.id)}
+                      >
+                        <DownloadIcon className="size-3.5" />
+                      </Button>
+                    </WithTooltip>
+                  )
                 ) : null}
               </div>
               {selected?.description ? (
@@ -220,24 +276,58 @@ export function RefineControls({
                       {turboArch
                         ? "Tiled diffusion refine. Caution with turbo - keep denoise low."
                         : "Tiled diffusion refine after enlarge."}
-                      {!usduReady ? " Node not installed yet." : null}
+                      {!usduReady
+                        ? usduInstalling
+                          ? " Downloading…"
+                          : usduQueued
+                            ? " Queued…"
+                            : " Node not installed yet."
+                        : null}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
                     {!usduReady ? (
-                      <WithTooltip label="Install Ultimate SD Upscale node">
-                        <Button
-                          type="button"
-                          size="icon-sm"
-                          variant="outline"
-                          className="size-8 shrink-0"
-                          disabled={disabled || usduBusy}
-                          aria-label="Install Ultimate SD Upscale"
-                          onClick={onEnsureUsdu}
-                        >
-                          <DownloadIcon className="size-3.5" />
-                        </Button>
-                      </WithTooltip>
+                      usduInstalling ? (
+                        <WithTooltip label="Downloading — see Downloads">
+                          <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="outline"
+                            className="size-8 shrink-0"
+                            disabled
+                            aria-label="Downloading Ultimate SD Upscale"
+                          >
+                            <Spinner className="size-3.5" />
+                          </Button>
+                        </WithTooltip>
+                      ) : usduQueued ? (
+                        <WithTooltip label="Queued in Downloads">
+                          <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="outline"
+                            className="size-8 shrink-0"
+                            disabled
+                            aria-label="Ultimate SD Upscale queued"
+                          >
+                            <ClockIcon className="size-3.5 text-muted-foreground" />
+                          </Button>
+                        </WithTooltip>
+                      ) : (
+                        <WithTooltip label="Install Ultimate SD Upscale node">
+                          <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="outline"
+                            className="size-8 shrink-0"
+                            disabled={disabled || usduBusy}
+                            aria-label="Install Ultimate SD Upscale"
+                            onClick={onEnsureUsdu}
+                          >
+                            <DownloadIcon className="size-3.5" />
+                          </Button>
+                        </WithTooltip>
+                      )
                     ) : null}
                     <Switch
                       checked={usduEnabled}

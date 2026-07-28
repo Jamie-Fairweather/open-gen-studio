@@ -37,6 +37,8 @@ import {
   selectSupportsLoras,
   selectTabGallery,
   selectUpscaleInstallingId,
+  selectUpscaleQueuedIds,
+  selectUpscalePendingIds,
 } from "@/components/studio/selectors"
 import { useStudioSelector, useStudioStore } from "@/components/studio/store"
 import type { MediaCategory } from "@/lib/host"
@@ -125,6 +127,8 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
   const activeLoraStack = useStudioSelector(selectActiveLoraStack)
   const loraInstallingKey = useStudioSelector(selectLoraInstallingKey)
   const upscaleInstallingId = useStudioSelector(selectUpscaleInstallingId)
+  const upscaleQueuedIds = useStudioSelector(selectUpscaleQueuedIds)
+  const upscalePendingIds = useStudioSelector(selectUpscalePendingIds)
 
   const gallery = useStudioStore(
     useShallow((s) => ({
@@ -292,6 +296,8 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
               upscaleModels={advanced.upscaleModels}
               usduReady={advanced.usduReady}
               upscaleInstallingId={upscaleInstallingId}
+              upscaleQueuedIds={upscaleQueuedIds}
+              upscalePendingIds={upscalePendingIds}
               onInstallUpscaler={(id) => {
                 void advanced.beginUpscaleInstall(id)
               }}

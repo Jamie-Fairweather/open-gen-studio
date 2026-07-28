@@ -121,11 +121,13 @@ fn http_step(
     dest: &std::path::Path,
     sha256: Option<&str>,
 ) -> PlannedStep {
-    let bytes_total = crate::blueprints::probe_remote_size(url)
-        .or_else(|| {
-            // Offline / probe failed: use local size when the file is already complete.
-            dest.metadata().ok().map(|m| m.len()).filter(|&n| n > 0)
-        })
+    // Local size only — never HEAD the network here. Blocking probes during
+    // enqueue freeze the UI; the worker fills bytes_total via seed_http_totals.
+    let bytes_total = dest
+        .metadata()
+        .ok()
+        .map(|m| m.len())
+        .filter(|&n| n > 0)
         .map(|n| n as i64);
     PlannedStep {
         step_kind: "http".into(),
@@ -216,12 +218,30 @@ pub(crate) fn plan_steps(app: &AppHandle, spec: &DownloadSpec) -> Result<Vec<Pla
                 None,
             )])
         }
-        DownloadSpec::Upscale { id } => Ok(vec![PlannedStep {
-            step_kind: "action".into(),
-            label: format!("Install {id}"),
-            spec: json!({ "action": "upscale", "id": id }),
-            bytes_total: None,
-        }]),
+        DownloadSpec::Upscale { id } => {
+            let mut steps = Vec::new();
+            if let Some(pin) = upscale::node_pin_for_download(id) {
+                steps.push(PlannedStep {
+                    step_kind: "git_node".into(),
+                    label: if pin == "usdu" {
+                        "Ultimate SD Upscale".into()
+                    } else {
+                        "SUPIR custom node".into()
+                    },
+                    spec: json!({ "pinId": pin }),
+                    bytes_total: None,
+                });
+            }
+            if id != "usdu" && id != "supir" {
+                for (filename, url, dest) in upscale::http_files(app, id)? {
+                    steps.push(http_step(filename, &url, &dest, None));
+                }
+            }
+            if steps.is_empty() {
+                return Err(format!("Unknown upscale id: {id}"));
+            }
+            Ok(steps)
+        }
         DownloadSpec::Runtime { engine } => {
             if engine != comfy::ENGINE {
                 return Err(format!("unknown runtime engine: {engine}"));

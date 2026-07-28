@@ -59,6 +59,8 @@ type AdvancedControlsProps = {
   upscaleModels: UpscaleModelInfo[]
   usduReady: boolean
   upscaleInstallingId: string | null
+  upscaleQueuedIds: string[]
+  upscalePendingIds: string[]
   onInstallUpscaler: (id: string) => void
   onEnsureUsdu: () => void
   refineWidth?: number
@@ -96,6 +98,8 @@ export function AdvancedControls({
   upscaleModels,
   usduReady,
   upscaleInstallingId,
+  upscaleQueuedIds,
+  upscalePendingIds,
   onInstallUpscaler,
   onEnsureUsdu,
   refineWidth,
@@ -331,6 +335,8 @@ export function AdvancedControls({
           models={upscaleModels}
           usduReady={usduReady}
           installingId={upscaleInstallingId}
+          queuedIds={upscaleQueuedIds}
+          pendingIds={upscalePendingIds}
           onInstallModel={onInstallUpscaler}
           onEnsureUsdu={onEnsureUsdu}
           width={refineWidth}

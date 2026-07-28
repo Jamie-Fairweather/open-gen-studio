@@ -7,7 +7,7 @@ import {
   type DownloadSnapshot,
 } from "@/lib/host"
 import type { StudioStore } from "../studio-store-types"
-import { applySet } from "./helpers"
+import { applySet, upscaleIdFromJobKey } from "./helpers"
 
 export const EMPTY_DOWNLOAD_SNAPSHOT: DownloadSnapshot = {
   active: null,
@@ -36,7 +36,22 @@ export const createDownloadsSlice: StateCreator<
   downloadSpeedBps: 0,
 
   setDownloadSnapshot: (next) =>
-    set((s) => ({ downloadSnapshot: applySet(s.downloadSnapshot, next) })),
+    set((s) => {
+      const downloadSnapshot = applySet(s.downloadSnapshot, next)
+      const live = new Set<string>()
+      if (downloadSnapshot.active?.jobKey) {
+        const id = upscaleIdFromJobKey(downloadSnapshot.active.jobKey)
+        if (id) live.add(id)
+      }
+      for (const job of downloadSnapshot.queued) {
+        const id = upscaleIdFromJobKey(job.jobKey)
+        if (id) live.add(id)
+      }
+      return {
+        downloadSnapshot,
+        pendingUpscaleIds: s.pendingUpscaleIds.filter((id) => !live.has(id)),
+      }
+    }),
 
   setDownloadSpeedBps: (bps) => set({ downloadSpeedBps: bps }),
 

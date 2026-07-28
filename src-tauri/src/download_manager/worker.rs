@@ -33,6 +33,18 @@ fn emit_kind_success(app: &AppHandle, kind: &str, job_key: &str) {
         if let Some(id) = job_key.strip_prefix("blueprint:") {
             let _ = app.emit("blueprints://updated", id);
         }
+    } else if kind == "upscale" {
+        if let Some(id) = job_key.strip_prefix("upscale:") {
+            let _ = app.emit(
+                "upscale://progress",
+                json!({
+                    "modelId": id,
+                    "stage": "done",
+                    "message": format!("Ready: {id}"),
+                }),
+            );
+            let _ = app.emit("upscale://updated", id);
+        }
     }
 }
 
@@ -59,6 +71,17 @@ fn emit_kind_failure(app: &AppHandle, kind: &str, job_key: &str, err: &str) {
                     "message": err,
                     "modelIndex": 0,
                     "modelTotal": 0,
+                }),
+            );
+        }
+    } else if kind == "upscale" {
+        if let Some(id) = job_key.strip_prefix("upscale:") {
+            let _ = app.emit(
+                "upscale://progress",
+                json!({
+                    "modelId": id,
+                    "stage": "error",
+                    "message": err,
                 }),
             );
         }

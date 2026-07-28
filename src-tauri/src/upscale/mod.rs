@@ -8,7 +8,7 @@ mod nodes;
 mod types;
 
 #[allow(unused_imports)]
-pub use catalog::list_upscalers;
+pub use catalog::{http_files, list_upscalers, node_pin_for_download};
 #[allow(unused_imports)]
 pub use compile::{parse_upscale_opts, resolve_for_generate};
 #[allow(unused_imports)]

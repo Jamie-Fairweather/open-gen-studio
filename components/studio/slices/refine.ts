@@ -14,6 +14,8 @@ export type RefineSlice = {
   usduScale: 2 | 4
   usduSteps: number
   usduDenoise: number
+  /** Optimistic: ids clicked for install before Downloads snapshot catches up. */
+  pendingUpscaleIds: string[]
   setLoraStack: Dispatch<SetStateAction<LoraStackEntry[]>>
   setUpscaleEnabled: Dispatch<SetStateAction<boolean>>
   setUpscaleModelId: Dispatch<SetStateAction<string>>
@@ -40,6 +42,7 @@ export const createRefineSlice: StateCreator<
   usduScale: 2,
   usduSteps: 8,
   usduDenoise: 0.15,
+  pendingUpscaleIds: [],
 
   setLoraStack: (next) =>
     set((s) => ({ loraStack: applySet(s.loraStack, next) })),
@@ -80,9 +83,26 @@ export const createRefineSlice: StateCreator<
   },
 
   beginUpscaleInstall: async (id) => {
+    set((s) => ({
+      pendingUpscaleIds: s.pendingUpscaleIds.includes(id)
+        ? s.pendingUpscaleIds
+        : [...s.pendingUpscaleIds, id],
+    }))
     try {
-      await ensureDownload({ kind: "upscale", id }, { wait: false })
+      const result = await ensureDownload(
+        { kind: "upscale", id },
+        { wait: false }
+      )
+      // Already installed / no job → drop optimistic pending (snapshot won't clear it).
+      if (result.status === "ready" || !result.jobId) {
+        set((s) => ({
+          pendingUpscaleIds: s.pendingUpscaleIds.filter((x) => x !== id),
+        }))
+      }
     } catch (e) {
+      set((s) => ({
+        pendingUpscaleIds: s.pendingUpscaleIds.filter((x) => x !== id),
+      }))
       notifyError(
         e instanceof Error ? e.message : String(e),
         "Upscale install failed"

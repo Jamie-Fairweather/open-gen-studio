@@ -15,7 +15,7 @@ Related: [Contributing guides](./README.md), [Adding a model architecture](./add
 3. Regenerate bindings:
 
    ```bash
-   npm run ipc:types
+   bun run ipc:types
    ```
 
 4. Import from `@/lib/generated/bindings` (usually via `lib/host.ts` / `lib/arch.ts`). **Do not** hand-copy IPC shapes into TypeScript.
@@ -37,7 +37,7 @@ Related: [Contributing guides](./README.md), [Adding a model architecture](./add
 ### Adding a field or enum variant
 
 1. Change the Rust type (and `#[specta::specta]` / `.typ::<T>()` if new).
-2. Run `npm run ipc:types`.
+2. Run `bun run ipc:types`.
 3. Update call sites / UI that need the new field.
 
 ---
@@ -76,4 +76,4 @@ bun run ipc:check   # after IPC/DTO changes — fail if generated bindings drift
 ## Docs
 
 - Contributor how-tos under `docs/contributing/`.
-- Product/design plans under `docs/PLAN*.md` — update tables when arch lists or IPC conventions change.
+- Product/design background under `docs/PLAN.md` — update when arch lists or IPC conventions change.

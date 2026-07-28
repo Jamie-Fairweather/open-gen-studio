@@ -1,9 +1,9 @@
 # Generated IPC types
 
-`ipc.ts` is produced from Rust `#[derive(specta::Type)]` types.
+`bindings.ts` is produced from Rust `#[derive(specta::Type)]` types. `ipc.ts` re-exports it for older imports.
 
 ```bash
-npm run ipc:types
+bun run ipc:types
 ```
 
 Do not edit by hand. See [`docs/contributing/coding-standards.md`](../../docs/contributing/coding-standards.md).

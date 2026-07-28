@@ -1,8 +1,8 @@
 # Research: Prompt / Style Library (deferred)
 
 > Status: **deferred** (2026-07-26)  
-> Follow-up later. Active work is image→prompt + prompt enhance — see [`RESEARCH-PROMPT-TOOLS.md`](./RESEARCH-PROMPT-TOOLS.md).  
-> Relates to: [`PLAN.md`](./PLAN.md), [`PLAN-RECIPE-BLUEPRINTS.md`](./PLAN-RECIPE-BLUEPRINTS.md) shared-library pattern (LoRAs / upscale).
+> Follow-up later. Image→prompt + prompt enhance already ship under Tools (QwenVL / `prompt_tools`).  
+> Relates to: [`PLAN.md`](./PLAN.md) shared-library pattern (LoRAs / upscale).
 
 ---
 
@@ -91,9 +91,9 @@ Missing `prompt` → negative-only append.
 
 ## Bottom line
 
-| Item               | Status                                                                            |
-| ------------------ | --------------------------------------------------------------------------------- |
-| Feature            | Deferred                                                                          |
-| Official content   | **Write our own** — no third-party credit burden                                  |
-| Implementation     | App-side shared library; same pattern as LoRAs                                    |
-| Active prompt work | [`RESEARCH-PROMPT-TOOLS.md`](./RESEARCH-PROMPT-TOOLS.md) (image→prompt + enhance) |
+| Item             | Status                                           |
+| ---------------- | ------------------------------------------------ |
+| Feature          | Deferred                                         |
+| Official content | **Write our own** — no third-party credit burden |
+| Implementation   | App-side shared library; same pattern as LoRAs   |
+| Shipped already  | Tools → Image to Prompt + Prompt Enhance         |

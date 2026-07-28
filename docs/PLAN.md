@@ -1,6 +1,6 @@
 # Open Gen AI — Product & Architecture Plan
 
-> **Design history.** For how-tos and source of truth, prefer docs/contributing/ — especially RecipeArch::ALL / generated RECIPE_ARCHES and Creator ARCHES in lib/creator-arches.ts.
+> **Design history + product direction.** For how-tos and source of truth, prefer [`docs/contributing/`](./contributing/) — especially `RecipeArch::ALL` / generated `RECIPE_ARCHES` and Creator `ARCHES` in `lib/creator-arches.ts`.
 
 ## Vision
 
@@ -10,7 +10,7 @@ Think **Steam / Docker Desktop for local generative AI**: the app installs runti
 
 Inspiration (and what we want to improve on): [open-generative-ai](https://github.com/anil-matcha/open-generative-ai).
 
-**Day-one promise:** pick an official Blueprint (e.g. FLUX Dev) → one-click install → generate. End users never touch GitHub, Python, or node packing by hand. (We may _host_ Official Blueprint manifests on GitHub for the app to fetch — that is an implementation detail, not a user workflow.)
+**Day-one promise:** pick an Official Blueprint (e.g. Z-Image Turbo) → one-click install → generate. End users never touch GitHub, Python, or node packing by hand. (We may _host_ Official Blueprint manifests on GitHub for the app to fetch — that is an implementation detail, not a user workflow.)
 
 ---
 
@@ -18,10 +18,10 @@ Inspiration (and what we want to improve on): [open-generative-ai](https://githu
 
 1. **The app never performs inference.** It orchestrates: install, start/stop services, queue jobs, unify results.
 2. **Runtimes are plugins.** ComfyUI, Whisper, Kokoro, etc. implement a common interface.
-3. **Publish Blueprints, not workflows.** A Blueprint packages workflow + models + runtime + deps + UI schema + docs + tests.
-4. **Two data planes — never mix them.** Local app state (jobs, installs, gallery) vs Blueprint catalog (read-only manifests from GitHub).
-5. **No hosted marketplace database.** Official/community presets are files in a GitHub repo the app reads; not a public cloud DB.
-6. **99% User Mode, 1% Creator Mode.** Most people never see a node graph. Creators embed the real ComfyUI to author Blueprints.
+3. **Publish Blueprints, not workflows.** Image Blueprints are **recipes** (arch + models + sampler + capabilities). The host **compiles** a Comfy API graph at generate time — we do not ship frozen `workflow.api.json` as the product path.
+4. **Two data planes — never mix them.** Local app state (jobs, installs, gallery) vs Blueprint catalog (read-only manifests; Official ships in-repo today).
+5. **No hosted marketplace database.** Official/community presets are files the app reads; not a public cloud DB.
+6. **99% User Mode, 1% Creator Mode.** Most people never see a node graph. Creator authors **recipes** via a form; optional “Open ComfyUI” is a power-user escape hatch, not the happy path.
 
 ---
 
@@ -31,14 +31,14 @@ Inspiration (and what we want to improve on): [open-generative-ai](https://githu
 | ------------- | ------------------------------------------ | ------------------------------------------------ |
 | **Engine**    | Underlying AI stack                        | ComfyUI, llama.cpp, Whisper                      |
 | **Runtime**   | Installed, managed instance of an engine   | Official ComfyUI Windows Portable under app data |
-| **Blueprint** | Installable capability package             | “FLUX Dev”, “Wan 2.2”, “Kokoro”, “Trellis2”      |
-| **Preset**    | User-facing install of a Blueprint version | Installed FLUX Dev 1.2.0                         |
-| **Resources** | Shared assets                              | Models, LoRAs, custom nodes                      |
+| **Blueprint** | Installable capability package             | “Z-Image Turbo”, “Wan 2.2”, “Kokoro”, “Trellis2” |
+| **Preset**    | User-facing install of a Blueprint version | Installed Z-Image Turbo                          |
+| **Resources** | Shared assets                              | Models, LoRAs, upscalers, custom nodes           |
 | **Projects**  | User workspaces / sessions                 | A portrait series                                |
 | **Gallery**   | All outputs with metadata                  | Lightroom-style library                          |
-| **Registry**  | Catalog UI over GitHub Blueprint sources   | Official repo → later Community → Local          |
+| **Registry**  | Catalog UI over Blueprint sources          | Official (bundled) → later Community → Local     |
 
-Users install **capabilities** (“cinematic images”). Power users can still see engines, nodes, and graphs when they want.
+Users install **capabilities** (“cinematic images”). Power users can still open Comfy when they want.
 
 ---
 
@@ -46,10 +46,10 @@ Users install **capabilities** (“cinematic images”). Power users can still s
 
 Keep these mentally and in code as **two different systems**:
 
-| Plane                 | What it stores                                                                                             | Where it lives               | Who reads/writes                                 |
-| --------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------ |
-| **Local store**       | Jobs, gallery, installed presets, runtime installs, model assets, settings, download progress              | **SQLite owned by Rust**     | Rust writes natively; UI via Tauri IPC / events  |
-| **Blueprint catalog** | Official (later community) Blueprint manifests, UI schemas, workflow JSON refs, model download URLs/hashes | **GitHub repo(s)** (raw/API) | App **reads** only; authors publish via git / PR |
+| Plane                 | What it stores                                                                                | Where it lives                           | Who reads/writes                                 |
+| --------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------ |
+| **Local store**       | Jobs, gallery, installed presets, runtime installs, model assets, settings, download progress | **SQLite owned by Rust**                 | Rust writes natively; UI via Tauri IPC / events  |
+| **Blueprint catalog** | Official (later community) Blueprint manifests, model download URLs/hashes                    | **In-repo Official** today; GitHub later | App **reads** only; authors publish via git / PR |
 
 Do **not** put marketplace/catalog rows into the local SQLite as source of truth. Optional: cache a fetched catalog snapshot locally for offline browsing — still clearly “cache of GitHub,” not the registry itself.
 
@@ -61,7 +61,7 @@ ZenStack is a poor fit here and is **not used**:
 
 - Single-user desktop — access policies add nothing.
 - Rust is the orchestrator and must write job/download/runtime state directly; putting the DB behind Next/ZenStack forces an extra localhost HTTP hop and an always-on Node data server for no real gain.
-- Catalog is GitHub files, not an ORM-backed multi-tenant DB — ZenStack’s strengths never apply.
+- Catalog is files, not an ORM-backed multi-tenant DB — ZenStack’s strengths never apply.
 - UI can get live updates via **Tauri events** + IPC queries; no need for a Next CRUD layer.
 
 Revisit only if we later build a real multi-user cloud product. Not for the local store.
@@ -82,7 +82,7 @@ Revisit only if we later build a real multi-user cloud product. Not for the loca
 |  SQLite (local store)                          |
 |  Job queue · Model mgr · Runtime mgr           |
 |  GPU detect · Downloader · Process mgr         |
-|  Plugin system · Workflow / Blueprint runner   |
+|  Recipe compiler · Blueprint runner            |
 +----------------------|-------------------------+
           |            |            |
        ComfyUI   Whisper   Kokoro / Wan / Trellis2 / …
@@ -92,8 +92,8 @@ Revisit only if we later build a real multi-user cloud product. Not for the loca
                        |
                    Local GPU
 
-Catalog (separate):
-  GitHub Blueprint repo ──fetch manifests──► Registry UI / installer
+Catalog (today): blueprints/official/ (bundled)
+Catalog (later): GitHub Blueprint repo ──fetch──► Registry UI / installer
 ```
 
 **Implication:** Next.js stays a **UI shell** (static export / Tauri `frontendDist` is fine). All durable local state and orchestration live in Rust. No Next.js API routes required for the local store.
@@ -104,9 +104,9 @@ Catalog (separate):
 | ----------- | -------------------------------------- | -------------------------------------- |
 | Shell       | **Tauri 2**                            | Already scaffolded (`src-tauri/`)      |
 | UI          | **Next.js 16 + React 19 + Tailwind 4** | coss/Base UI; talks to Rust via IPC    |
-| Local store | **SQLite in Rust** (`rusqlite` / sqlx) | Single writer next to the orchestrator |
+| Local store | **SQLite in Rust** (`rusqlite`)        | Single writer next to the orchestrator |
 | Host logic  | **Rust (Tauri)**                       | Processes, GPU, downloads, jobs        |
-| Catalog     | **GitHub repo**                        | Blueprint manifests; no cloud DB       |
+| Catalog     | **Bundled Official** (+ GitHub later)  | Blueprint manifests; no cloud DB       |
 | Realtime UI | Tauri events + client state            | e.g. job progress / gallery inserts    |
 | Inference   | External runtimes only                 | GPU-first                              |
 
@@ -123,85 +123,44 @@ Catalog (separate):
 
 ### User Mode (default)
 
-Simple form generated from a Blueprint’s **UI schema**:
+Simple form synthesized from the recipe’s **arch + capabilities** (not a frozen per-node UI schema):
 
-- Prompt / negative prompt
-- Aspect ratio, seed, etc.
+- Prompt / negative prompt (when capable)
+- Size, seed, steps, CFG / guidance
+- LoRA stack + Refine (shared libraries — not per-blueprint models)
 - Generate → job queue → Gallery
-- **Tools** (Image to Prompt, Prompt Enhancer) — Comfy utility jobs that write back into Image Studio
+- **Tools** (Image to Prompt, Prompt Enhancer) — Comfy utility jobs (QwenVL) that write back into Image Studio
 
 No graph. No nodes.
 
 ### Creator Mode (advanced)
 
-Embed the **real ComfyUI frontend** (not a reimplementation). Build → test → **Publish Blueprint** (package files → commit/PR to the Official GitHub Blueprints repo).
+**Recipe authoring form:** choose arch → fill model slots → sampler/defaults/capabilities → save to My blueprints (`%APPDATA%/…/blueprints/user/<id>/`). No Comfy capture required.
 
-Later, Creator can grow beyond Comfy (video graphs, LLM flows, audio pipelines, 3D meshes) while still emitting the same Blueprint format.
-
-> **Proposed revision:** image Blueprints as **recipes** (models + sampler + capabilities) with a **runtime graph compiler**, and Creator as a form — not Comfy embed. See [`PLAN-RECIPE-BLUEPRINTS.md`](./PLAN-RECIPE-BLUEPRINTS.md).
+Optional: open the managed ComfyUI webview for exploration. Promoting a user pack into `blueprints/official/` is a manual copy / PR — the app never writes Official.
 
 ---
 
-## Blueprints
+## Image Blueprints (recipes) — current path
 
-A Blueprint is an immutable, versioned package (npm-style — never overwrite; publish `1.0.0` → `1.1.0` → `2.0.0`).
+A Blueprint is an immutable, versioned package. For **image / txt2img**, the payload is a **recipe**, not a frozen Comfy graph.
 
 ```
-Blueprint
-├── Metadata          (name, category, tags, VRAM, disk, license)
-├── Workflow          (e.g. Comfy JSON)
-├── Models            (URLs, hashes, sizes)
-├── Runtime           (engine + version constraints)
-├── Dependencies      (custom nodes, Python packages, env)
-├── UI Schema         (controls end users see)
-├── Presets           (default parameter sets)
-├── Documentation
-├── Example outputs
-├── Thumbnail
-└── Tests             (smoke generate before publish)
+Blueprint (recipe)
+├── Metadata          (name, category, tags, VRAM, license)
+├── Arch + flowType   (e.g. z-image / txt2img)
+├── Models            (role, filename, path, URL)
+├── Sampler / scheduler + defaults
+├── Capabilities      (negative, loras, controlnet, …)
+├── Runtime           (engine + constraints)
+├── customNodes[]     (optional)
+├── Documentation / thumbnail / examples
+└── Tests             (compile smoke tests in Rust)
 ```
 
-### UI schema (example)
+Supported arches (v1): `z-image`, `krea2`, `flux`, `flux2`, `ideogram4`, `sdxl`, `sd15` — see [`blueprints/official/README.md`](../blueprints/official/README.md) and [`adding-model-architectures.md`](./contributing/adding-model-architectures.md).
 
-```json
-{
-  "controls": [
-    {
-      "id": "prompt",
-      "type": "textarea",
-      "group": "default",
-      "nodeId": "…",
-      "input": "text"
-    },
-    {
-      "id": "aspect_ratio",
-      "type": "select",
-      "group": "default",
-      "values": ["1:1", "16:9", "9:16"]
-    },
-    {
-      "id": "steps",
-      "type": "number",
-      "group": "advanced",
-      "default": 28,
-      "nodeId": "…",
-      "input": "steps"
-    },
-    {
-      "id": "cfg",
-      "type": "number",
-      "group": "advanced",
-      "default": 3.5,
-      "nodeId": "…",
-      "input": "cfg"
-    }
-  ]
-}
-```
-
-`group` is `default` | `advanced`. User Mode always shows `default`; an **Advanced controls** toggle reveals `advanced`. Omit `group` → treat as `default`.
-
-Creators annotate which workflow parameters are user-facing; the app **generates the form**.
+Official packs today: `z-image-turbo`, `krea2-turbo`, `ideogram4`.
 
 ### Models (preset download)
 
@@ -209,6 +168,7 @@ Creators annotate which workflow parameters are user-facing; the app **generates
 {
   "models": [
     {
+      "role": "unet",
       "filename": "z_image_turbo_bf16.safetensors",
       "path": "diffusion_models",
       "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/diffusion_models/z_image_turbo_bf16.safetensors"
@@ -219,14 +179,12 @@ Creators annotate which workflow parameters are user-facing; the app **generates
 
 Install lands files in the shared library: `app_data/models/<path>/<filename>` (wired into Comfy via `extra_model_paths.yaml`). Completeness = local file size vs remote `Content-Length` (HEAD/Range probe) — not hardcoded sizes in the manifest. Optional `sha256` for verify.
 
-### Publish pipeline
+### Shared libraries (not blueprint `models[]`)
 
-```
-Build workflow → Validate → Resolve deps → Generate manifest
-  → Run test → Capture thumbnail → Package → Publish
-```
-
-**Dependency scanner** inspects the workflow and proposes the manifest (models, encoders, VAE, custom nodes, Python/torch versions). Author confirms — no hand-written YAML as the primary path.
+| Library   | Location                           | Notes                                 |
+| --------- | ---------------------------------- | ------------------------------------- |
+| LoRAs     | `loras/official` + user packs      | Arch-filtered stack at generate       |
+| Upscalers | `models/upscale_models/` (+ SUPIR) | Refine UI: SR / USDU / SUPIR — shared |
 
 ---
 
@@ -236,30 +194,25 @@ UI still feels like a Registry. **Official Blueprints ship inside the app** — 
 
 ```
 blueprints/official/<id>/
-  manifest.json        # name, category, models, UI controls → node bindings
-  workflow.api.json    # ComfyUI "Export Workflow (API)" JSON
+  manifest.json        # recipe (arch, models, defaults, capabilities)
   thumbnail.png        # optional
 ```
 
-Drop API-format Comfy exports into that folder; they are bundled with the desktop build (Tauri resources). See [`blueprints/official/README.md`](../blueprints/official/README.md).
+No `workflow.api.json`. No `controls[]`. See [`blueprints/official/README.md`](../blueprints/official/README.md).
 
 ```
 Registry (UI)
 ├── Official   ← read from blueprints/official/ (built-in)
 ├── Community  ← later: GitHub repo(s) of the same folder shape
-└── Local      ← user-added blueprints on disk
+└── Local      ← My blueprints / user-added on disk
 ```
-
-**Workflow format:** use ComfyUI **File → Export Workflow (API)** (numeric node IDs). Normal Save/UI JSON is for Creator Mode editing only — `/prompt` needs API format.
-
-**Community later** can reuse the same `manifest.json` + `workflow.api.json` layout on GitHub. Official stays in-repo so day-one generation does not depend on network catalogs.
 
 ### Install / generate flow (Official)
 
 ```
 App lists blueprints/official/*
-  → User picks Blueprint → ensure Comfy runtime + models
-  → Patch workflow.api.json from UI controls (nodeId + input)
+  → User picks Blueprint → ensure Comfy runtime + models (+ nodes)
+  → Compile Comfy API graph from arch + recipe + live settings
   → POST Comfy /prompt → poll → Gallery
 ```
 
@@ -298,7 +251,7 @@ How we ship/install ComfyUI under the host (researched against current Comfy-Org
 
 ### Decision
 
-**Windows (Phase 2+):** install the **official ComfyUI Windows Portable** that matches detected GPU:
+**Windows:** install the **official ComfyUI Windows Portable** that matches detected GPU:
 
 - NVIDIA (modern): `ComfyUI_windows_portable_nvidia.7z`
 - NVIDIA (older / CUDA 12.6): `ComfyUI_windows_portable_nvidia_cu126.7z`
@@ -312,7 +265,7 @@ Detect GPU → pick release asset URL → download (.7z, resume+checksum)
   → write extra_model_paths.yaml → shared models dir
   → start: python_embeded\python.exe -s ComfyUI\main.py
        --listen 127.0.0.1 --port <managed>
-       (no auto-browser; we own the UI / Creator embed)
+       (no auto-browser; we own the UI / optional Creator embed)
   → health-check HTTP → register runtime_installs row
 ```
 
@@ -332,7 +285,7 @@ Why portable (not “build our own venv”):
 - Downloader must support **`.7z` extract** (portable is 7z, not zip). Pure Rust via **sevenz-rust2** (always works); optional system 7-Zip CLI when present for a faster path.
 - Process manager launches `python_embeded\python.exe`, not `run_nvidia_gpu.bat` (bats are for humans; we pass flags ourselves).
 - Shared **model library** outside the portable tree via `extra_model_paths.yaml` so Blueprint installs don’t duplicate multi‑GB weights per Comfy copy.
-- Creator Mode: point a WebView / iframe at `http://127.0.0.1:<port>` of _our_ managed Comfy process (embed the real UI; don’t ship a second Comfy Desktop).
+- Optional Creator Comfy view: point a WebView at `http://127.0.0.1:<port>` of _our_ managed Comfy process.
 
 ---
 
@@ -346,6 +299,7 @@ Why portable (not “build our own venv”):
 | Job queue       | Queued → Running → Completed / Failed / Cancelled |
 | Runtime manager | Lifecycle + health of installed engines           |
 | Model manager   | Paths, versions, shared cache                     |
+| Recipe compiler | `arch` + settings → Comfy API JSON                |
 | Plugin loader   | `plugin.json` + dynamic runtime adapters          |
 
 ### Job record (conceptual)
@@ -375,73 +329,53 @@ Tables are **machine-local**. Catalog Blueprints are not authoritative rows here
 - **settings** — directories, GPU preference, update prefs, Official catalog repo URL
 - **catalog_cache** (optional) — last-fetched GitHub index snapshot for offline browse
 
-Migrations live in the Rust host (e.g. sqlx / refinery / simple versioned SQL).
+Migrations live in the Rust host (versioned SQL / rusqlite).
 
 ---
 
 ## Development roadmap
 
-### Phase 1 — Core foundation
+### Done (image foundation)
 
-- Keep Next as UI (static export OK); Tauri shell
-- SQLite in Rust + migrations; minimal tables: settings, jobs, gallery_items
-- Tauri commands + events for list/create job, settings, gallery
-- Rust: GPU detect (NVIDIA), process manager stub, downloader (resume/checksum)
-- UI: shell + job/gallery views driven by IPC/events (no real inference yet)
+- Next UI + Tauri shell; SQLite in Rust; IPC + events
+- ComfyUI Windows Portable install + supervisor + shared models
+- Recipe Official Blueprints + runtime graph compiler (`src-tauri/src/recipe/`)
+- Creator recipe form; My blueprints; generate recipe-only
+- LoRA library + Refine (SR / USDU / SUPIR)
+- Tools: Image to Prompt + Prompt Enhance (QwenVL via Comfy)
 
-### Phase 2 — Runtime framework
+### Next — ControlNet & polish
 
-- Runtime trait (`install` / `start` / `stop` / `health` / `run`)
-- **ComfyUI Windows Portable** installer (GPU-matched release asset + 7z extract)
-- **Auto-install on app startup** (background thread; UI stays responsive)
-- Process supervisor for `python_embeded\python.exe` + HTTP health on managed port
-- `extra_model_paths.yaml` → shared models directory
-- Persist `runtime_installs` in SQLite
+- ControlNet group (capability-gated)
+- Batch gen, auto-update, Official catalog polish
 
-### Phase 3 — Image generation (first complete product)
-
-- Load Official Blueprints from `blueprints/official/` (bundled)
-- Ensure Comfy runtime installed + models from manifest
-- User Mode form from manifest `controls` → patch `workflow.api.json` → Comfy `/prompt`
-- Gallery + history + live job status via events
-
-### Phase 4 — Creator Mode & Blueprint publishing
-
-- Embed managed ComfyUI in a Creator webview (`app.graphToPrompt` capture)
-- Light packaging: suggest models + User Mode controls from the API workflow
-- **Save only to the user folder** `%APPDATA%/…/blueprints/user/<id>/` (same `manifest.json` + `workflow.api.json` shape as Official)
-- **Never write Official** — promoting a user pack into `blueprints/official/` is a manual copy
-- Picker lists **My blueprints** alongside Official; generate resolves user first by id
-- **Superseding proposal:** recipe Blueprints + dynamic compile — [`PLAN-RECIPE-BLUEPRINTS.md`](./PLAN-RECIPE-BLUEPRINTS.md)
-
-### Phase 5 — Audio
+### Later — Audio
 
 - Whisper, Kokoro (+ optional MusicGen) on the same abstractions
 
-### Phase 6 — Video
+### Later — Video
 
 - Wan, CogVideoX, HunyuanVideo
 - VRAM-aware scheduling / resource locks
 
-### Phase 7 — 3D generation (after audio & video)
+### Later — 3D generation (after audio & video)
 
 - Runtime/plugin for **Trellis2** (and similar image/text → 3D models)
-- Official Blueprints under Registry → **3D** (still GitHub manifests)
+- Official Blueprints under Registry → **3D**
 - Gallery support for mesh outputs (e.g. GLB / OBJ) + simple 3D preview in User Mode
-- Same install / job / Blueprint abstractions; no special-case host rewrite
 
-### Phase 8 — Advanced
+### Later — Advanced
 
-- Batch gen, LoRAs, ControlNet, auto-update
 - Community catalog (second GitHub source)
 - Remote execution, scripting / REST for power users
+- Optional static-workflow packaging for power users only (not the default path)
 
 ---
 
 ## Success criteria (near term)
 
-1. Fresh machine → install Official **FLUX Dev** Blueprint (from GitHub catalog) → generate an image without touching a terminal.
-2. Creator can open embedded ComfyUI, package a Blueprint, and land it in the Official GitHub repo; User Mode renders its controls automatically.
+1. Fresh machine → install an Official image Blueprint (e.g. Z-Image Turbo) → generate without touching a terminal.
+2. Creator can author a shareable recipe (arch + model slots) into My blueprints; User Mode synthesizes controls from the recipe.
 3. Rust owns local SQLite; UI stays live via Tauri IPC/events as jobs update (no ZenStack / Next data API).
 
 ---
@@ -452,8 +386,9 @@ Migrations live in the Rust host (e.g. sqlx / refinery / simple versioned SQL).
 - Hosted marketplace / public cloud database for presets
 - Training pipelines
 - CPU-only inference as a first-class path for heavy models
-- Fully open community uploads before Official GitHub catalog + publish pipeline are solid
+- Fully open community uploads before Official catalog + publish pipeline are solid
 - Replacing ComfyUI with a custom node editor
+- Shipping frozen `workflow.api.json` as the primary Blueprint format
 
 ---
 

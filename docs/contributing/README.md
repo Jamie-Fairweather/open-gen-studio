@@ -1,6 +1,6 @@
 # Contributing guides
 
-Practical how-tos for extending Open Gen AI. Product/design background lives in [`docs/PLAN.md`](../PLAN.md) and [`docs/PLAN-RECIPE-BLUEPRINTS.md`](../PLAN-RECIPE-BLUEPRINTS.md) (design history — prefer these guides + `RecipeArch::ALL` / Creator `ARCHES` as source of truth).
+Practical how-tos for extending Open Gen AI. Product/design background lives in [`docs/PLAN.md`](../PLAN.md) (design history — prefer these guides + `RecipeArch::ALL` / Creator `ARCHES` as source of truth).
 
 | Guide                                                          | When to use it                                                                                     |
 | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |

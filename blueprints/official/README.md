@@ -1,6 +1,6 @@
 # Official Blueprints (built into the app)
 
-Recipe packages that ship with the desktop build. See [`docs/PLAN-RECIPE-BLUEPRINTS.md`](../../docs/PLAN-RECIPE-BLUEPRINTS.md).
+Recipe packages that ship with the desktop build. Product background: [`docs/PLAN.md`](../../docs/PLAN.md).
 
 Adding a new `arch` (compiler + Creator + LoRAs + prompt tools): [`docs/contributing/adding-model-architectures.md`](../../docs/contributing/adding-model-architectures.md).
 

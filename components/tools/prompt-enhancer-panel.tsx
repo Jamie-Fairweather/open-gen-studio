@@ -9,7 +9,11 @@ import {
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
-import { useStudio } from "@/components/studio/studio-provider"
+import {
+  selectActiveArch,
+  selectHasNegativePrompt,
+} from "@/components/studio/selectors"
+import { useStudioSelector, useStudioStore } from "@/components/studio/store"
 import {
   StudioPanel,
   StudioPanelBody,
@@ -42,16 +46,21 @@ import {
 
 export function PromptEnhancerPanel() {
   const router = useRouter()
-  const studio = useStudio()
+  const toolsHandoff = useStudioStore((s) => s.toolsHandoff)
+  const prompt = useStudioStore((s) => s.prompt)
+  const consumeToolsHandoff = useStudioStore((s) => s.consumeToolsHandoff)
+  const setPrompt = useStudioStore((s) => s.setPrompt)
+  const setControlValues = useStudioStore((s) => s.setControlValues)
+  const activeArch = useStudioSelector(selectActiveArch)
+  const hasNegativePrompt = useStudioSelector(selectHasNegativePrompt)
   const [input, setInput] = useState(() => {
-    const handoff = studio.toolsHandoff
-    if (handoff?.prompt?.trim()) return handoff.prompt.trim()
-    return studio.prompt.trim()
+    if (toolsHandoff?.prompt?.trim()) return toolsHandoff.prompt.trim()
+    return prompt.trim()
   })
   const [result, setResult] = useState("")
   const [negative, setNegative] = useState<string | null>(null)
   const [target, setTarget] = useState<PromptTargetId>(() =>
-    studio.activeArch ? targetFromArch(studio.activeArch) : "auto"
+    activeArch ? targetFromArch(activeArch) : "auto"
   )
   const [mode, setMode] = useState("expand")
   const [styleLook, setStyleLook] = useState("cinematic")
@@ -61,7 +70,7 @@ export function PromptEnhancerPanel() {
   const [jobId, setJobId] = useState<string | null>(null)
 
   useEffect(() => {
-    studio.consumeToolsHandoff()
+    consumeToolsHandoff()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- consume once
   }, [])
 
@@ -116,7 +125,7 @@ export function PromptEnhancerPanel() {
           runPromptEnhance({
             prompt,
             target,
-            arch: studio.activeArch,
+            arch: activeArch,
             mode: enhanceModePayload(mode, styleLook),
           }).then((job) => {
             currentJobId = job.id
@@ -140,9 +149,9 @@ export function PromptEnhancerPanel() {
   const useInStudio = () => {
     const prompt = (result || input).trim()
     if (!prompt) return
-    studio.setPrompt(prompt)
-    if (negative && studio.hasNegativePrompt) {
-      studio.setControlValues((prev) => ({ ...prev, negative }))
+    setPrompt(prompt)
+    if (negative && hasNegativePrompt) {
+      setControlValues((prev) => ({ ...prev, negative }))
     }
     router.push("/image")
   }

@@ -1,47 +1,45 @@
 "use client"
 
 import { DownloadsPanel } from "@/components/downloads-panel"
-import { useStudio } from "@/components/studio/studio-provider"
+import { useStudioStore } from "@/components/studio/store"
 import { notifyError } from "@/lib/notify"
 
 export default function DownloadsStudioPage() {
-  const s = useStudio()
+  const downloadSnapshot = useStudioStore((s) => s.downloadSnapshot)
+  const pauseDownload = useStudioStore((s) => s.pauseDownload)
+  const resumeDownload = useStudioStore((s) => s.resumeDownload)
+  const cancelDownload = useStudioStore((s) => s.cancelDownload)
+  const setPickerOpen = useStudioStore((s) => s.setPickerOpen)
 
   return (
     <div className="absolute inset-0 flex flex-col pt-14">
       <DownloadsPanel
-        snapshot={s.downloadSnapshot}
+        snapshot={downloadSnapshot}
         onPause={(jobId) => {
-          void s
-            .pauseDownload(jobId)
-            .catch((e) =>
-              notifyError(
-                e instanceof Error ? e.message : String(e),
-                "Could not pause"
-              )
+          void pauseDownload(jobId).catch((e) =>
+            notifyError(
+              e instanceof Error ? e.message : String(e),
+              "Could not pause"
             )
+          )
         }}
         onResume={(jobId) => {
-          void s
-            .resumeDownload(jobId)
-            .catch((e) =>
-              notifyError(
-                e instanceof Error ? e.message : String(e),
-                "Could not resume"
-              )
+          void resumeDownload(jobId).catch((e) =>
+            notifyError(
+              e instanceof Error ? e.message : String(e),
+              "Could not resume"
             )
+          )
         }}
         onCancel={(jobId) => {
-          void s
-            .cancelDownload(jobId)
-            .catch((e) =>
-              notifyError(
-                e instanceof Error ? e.message : String(e),
-                "Could not cancel"
-              )
+          void cancelDownload(jobId).catch((e) =>
+            notifyError(
+              e instanceof Error ? e.message : String(e),
+              "Could not cancel"
             )
+          )
         }}
-        onOpenBlueprints={() => s.setPickerOpen(true)}
+        onOpenBlueprints={() => setPickerOpen(true)}
       />
     </div>
   )

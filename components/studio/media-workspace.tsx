@@ -8,6 +8,7 @@ import {
   SlidersHorizontalIcon,
 } from "lucide-react"
 import { useState } from "react"
+import { useShallow } from "zustand/react/shallow"
 import { AdvancedControls } from "@/components/advanced-controls"
 import { AdvancedPanel } from "@/components/advanced-panel"
 import { GalleryPanel } from "@/components/gallery-panel"
@@ -15,7 +16,29 @@ import { ImageLightbox } from "@/components/image-lightbox"
 import { PromptBar } from "@/components/prompt-bar"
 import { SideRailHandle } from "@/components/side-rail"
 import { StageImage } from "@/components/stage-image"
-import { useStudio } from "@/components/studio/studio-provider"
+import {
+  selectActiveArch,
+  selectActiveLoraStack,
+  selectAdvancedControls,
+  selectCanGenerate,
+  selectHasNegativePrompt,
+  selectHasSizeControls,
+  selectLatestGallerySeed,
+  selectLoraInstallingKey,
+  selectPreviewItem,
+  selectSelected,
+  selectShowAdvancedRail,
+  selectShowGalleryRail,
+  selectSizeLabel,
+  selectStageDims,
+  selectStageInsetLeft,
+  selectStageInsetRight,
+  selectStudioLabel,
+  selectSupportsLoras,
+  selectTabGallery,
+  selectUpscaleInstallingId,
+} from "@/components/studio/selectors"
+import { useStudioSelector, useStudioStore } from "@/components/studio/store"
 import type { MediaCategory } from "@/lib/host"
 import { isRecipeArch } from "@/lib/arch"
 
@@ -24,56 +47,140 @@ type MediaWorkspaceProps = {
 }
 
 export function MediaWorkspace({ category }: MediaWorkspaceProps) {
-  const s = useStudio()
-  // Category is encoded in the route; provider derives studioTab from pathname.
+  // Category is encoded in the route; store derives studioTab from pathname.
   void category
 
-  const canGenerate = s.canGenerate
-  const showAdvancedRail = s.showAdvancedRail
-  const showGalleryRail = s.showGalleryRail
-  const pendingSrc = s.pendingPreviewSrc
+  const canGenerate = useStudioSelector(selectCanGenerate)
+  const showAdvancedRail = useStudioSelector(selectShowAdvancedRail)
+  const showGalleryRail = useStudioSelector(selectShowGalleryRail)
+  const studioLabel = useStudioSelector(selectStudioLabel)
+  const studioTab = useStudioStore((s) => s.studioTab)
+  const stageInsetLeft = useStudioSelector(selectStageInsetLeft)
+  const stageInsetRight = useStudioSelector(selectStageInsetRight)
+  const stageDims = useStudioSelector(selectStageDims)
+  const livePreviewSrc = useStudioStore((s) => s.livePreviewSrc)
+  const pendingPreviewSrc = useStudioStore((s) => s.pendingPreviewSrc)
+  const previewItem = useStudioSelector(selectPreviewItem)
+  const gallerySrc = useStudioStore((s) => s.gallerySrc)
+  const promotePendingPreview = useStudioStore((s) => s.promotePendingPreview)
+  const sideRailWidth = useStudioStore((s) => s.SIDE_RAIL_WIDTH)
+
+  const prompt = useStudioStore(
+    useShallow((s) => ({
+      value: s.prompt,
+      setPrompt: s.setPrompt,
+      controlValues: s.controlValues,
+      setControlValues: s.setControlValues,
+      generating: s.generating,
+      genStep: s.genStep,
+      aspectId: s.aspectId,
+      sideLength: s.sideLength,
+      applySize: s.applySize,
+      handleGenerate: s.handleGenerate,
+      handleCancel: s.handleCancel,
+      setPickerOpen: s.setPickerOpen,
+      openImageToPrompt: s.openImageToPrompt,
+      openPromptEnhancer: s.openPromptEnhancer,
+    }))
+  )
+  const hasNegativePrompt = useStudioSelector(selectHasNegativePrompt)
+  const hasSizeControls = useStudioSelector(selectHasSizeControls)
+  const sizeLabel = useStudioSelector(selectSizeLabel)
+  const selected = useStudioSelector(selectSelected)
+
+  const advanced = useStudioStore(
+    useShallow((s) => ({
+      open: s.advancedOpen,
+      setOpen: s.setAdvancedOpen,
+      controlValues: s.controlValues,
+      setControlValues: s.setControlValues,
+      loraPacks: s.loraPacks,
+      setLoraStack: s.setLoraStack,
+      setLoraPickerOpen: s.setLoraPickerOpen,
+      beginLoraInstall: s.beginLoraInstall,
+      generating: s.generating,
+      isInstalled: s.isInstalled,
+      upscaleEnabled: s.upscaleEnabled,
+      setUpscaleEnabled: s.setUpscaleEnabled,
+      upscaleModelId: s.upscaleModelId,
+      setUpscaleModelId: s.setUpscaleModelId,
+      usduEnabled: s.usduEnabled,
+      setUsduEnabled: s.setUsduEnabled,
+      usduScale: s.usduScale,
+      setUsduScale: s.setUsduScale,
+      usduSteps: s.usduSteps,
+      setUsduSteps: s.setUsduSteps,
+      usduDenoise: s.usduDenoise,
+      setUsduDenoise: s.setUsduDenoise,
+      upscaleModels: s.upscaleModels,
+      usduReady: s.usduReady,
+      beginUpscaleInstall: s.beginUpscaleInstall,
+      beginUsduInstall: s.beginUsduInstall,
+    }))
+  )
+  const advancedControls = useStudioSelector(selectAdvancedControls)
+  const latestGallerySeed = useStudioSelector(selectLatestGallerySeed)
+  const supportsLoras = useStudioSelector(selectSupportsLoras)
+  const activeArch = useStudioSelector(selectActiveArch)
+  const activeLoraStack = useStudioSelector(selectActiveLoraStack)
+  const loraInstallingKey = useStudioSelector(selectLoraInstallingKey)
+  const upscaleInstallingId = useStudioSelector(selectUpscaleInstallingId)
+
+  const gallery = useStudioStore(
+    useShallow((s) => ({
+      open: s.galleryOpen,
+      setOpen: s.setGalleryOpen,
+      selectedId: s.selectedGalleryId,
+      setSelectedId: s.setSelectedGalleryId,
+      onDelete: s.handleDeleteGalleryItem,
+      onReusePrompt: s.handleReuseGalleryPrompt,
+      onReuseSettings: s.handleReuseGallerySettings,
+      openImageToPrompt: s.openImageToPrompt,
+    }))
+  )
+  const tabGallery = useStudioSelector(selectTabGallery)
+
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const stageSrc =
-    s.livePreviewSrc ??
-    (s.previewItem ? s.gallerySrc(s.previewItem.path) : null)
+    livePreviewSrc ?? (previewItem ? gallerySrc(previewItem.path) : null)
 
   return (
     <>
       <div
         className="absolute inset-0 flex flex-col pt-14 transition-[left,right] duration-300 ease-out"
         style={{
-          left: s.stageInsetLeft,
-          right: s.stageInsetRight,
+          left: stageInsetLeft,
+          right: stageInsetRight,
         }}
       >
         <main className="relative flex min-h-0 flex-1 items-center justify-center px-5 py-4 md:px-10">
-          {s.livePreviewSrc || s.pendingPreviewSrc ? (
+          {livePreviewSrc || pendingPreviewSrc ? (
             <div className="[container-type:size] relative flex h-full min-h-0 w-full items-center justify-center">
-              {s.livePreviewSrc ? (
+              {livePreviewSrc ? (
                 <StageImage
-                  src={s.livePreviewSrc}
-                  width={s.stageDims.width}
-                  height={s.stageDims.height}
+                  src={livePreviewSrc}
+                  width={stageDims.width}
+                  height={stageDims.height}
                   onOpen={() => setLightboxOpen(true)}
                 />
               ) : null}
-              {pendingSrc ? (
+              {pendingPreviewSrc ? (
                 <StageImage
-                  key={pendingSrc}
-                  src={pendingSrc}
-                  width={s.stageDims.width}
-                  height={s.stageDims.height}
+                  key={pendingPreviewSrc}
+                  src={pendingPreviewSrc}
+                  width={stageDims.width}
+                  height={stageDims.height}
                   overlay
-                  onLoad={() => s.promotePendingPreview(pendingSrc)}
+                  onLoad={() => promotePendingPreview(pendingPreviewSrc)}
                 />
               ) : null}
             </div>
-          ) : s.previewItem ? (
+          ) : previewItem ? (
             <div className="[container-type:size] relative flex h-full min-h-0 w-full items-center justify-center">
               <StageImage
-                src={s.gallerySrc(s.previewItem.path)}
-                width={s.stageDims.width}
-                height={s.stageDims.height}
+                src={gallerySrc(previewItem.path)}
+                width={stageDims.width}
+                height={stageDims.height}
                 onOpen={() => setLightboxOpen(true)}
               />
             </div>
@@ -83,44 +190,44 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
                 <ImageIcon className="size-9 text-primary" />
               </div>
               <h1 className="font-heading text-4xl font-semibold tracking-tight uppercase md:text-5xl">
-                {s.studioLabel} Studio
+                {studioLabel} Studio
               </h1>
               <p className="mt-3 max-w-md text-sm text-muted-foreground">
                 {canGenerate
                   ? "Local blueprints on your GPU — install a model, describe a scene, generate."
-                  : `${s.studioLabel} blueprints are coming next. Switch to Image to generate now.`}
+                  : `${studioLabel} blueprints are coming next. Switch to Image to generate now.`}
               </p>
             </div>
           )}
         </main>
 
         <PromptBar
-          prompt={s.prompt}
-          onPromptChange={s.setPrompt}
-          showNegative={s.hasNegativePrompt}
-          negativePrompt={String(s.controlValues.negative ?? "")}
+          prompt={prompt.value}
+          onPromptChange={prompt.setPrompt}
+          showNegative={hasNegativePrompt}
+          negativePrompt={String(prompt.controlValues.negative ?? "")}
           onNegativeChange={(value) =>
-            s.setControlValues((prev) => ({
+            prompt.setControlValues((prev) => ({
               ...prev,
               negative: value,
             }))
           }
           canGenerate={canGenerate}
-          studioLabel={s.studioLabel}
-          generating={s.generating}
-          genStep={s.genStep}
-          blueprintName={s.selected?.name ?? null}
-          onOpenBlueprintPicker={() => s.setPickerOpen(true)}
-          hasSizeControls={s.hasSizeControls}
-          aspectId={s.aspectId}
-          sideLength={s.sideLength}
-          sizeLabel={s.sizeLabel}
-          onApplySize={s.applySize}
-          onGenerate={() => void s.handleGenerate()}
-          onCancel={() => void s.handleCancel()}
-          onOpenImageToPrompt={() => s.openImageToPrompt()}
+          studioLabel={studioLabel}
+          generating={prompt.generating}
+          genStep={prompt.genStep}
+          blueprintName={selected?.name ?? null}
+          onOpenBlueprintPicker={() => prompt.setPickerOpen(true)}
+          hasSizeControls={hasSizeControls}
+          aspectId={prompt.aspectId}
+          sideLength={prompt.sideLength}
+          sizeLabel={sizeLabel}
+          onApplySize={prompt.applySize}
+          onGenerate={() => void prompt.handleGenerate()}
+          onCancel={() => void prompt.handleCancel()}
+          onOpenImageToPrompt={() => prompt.openImageToPrompt()}
           onOpenPromptEnhancer={() =>
-            s.openPromptEnhancer({ prompt: s.prompt })
+            prompt.openPromptEnhancer({ prompt: prompt.value })
           }
         />
       </div>
@@ -129,71 +236,73 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
         <>
           <SideRailHandle
             side="left"
-            open={s.advancedOpen}
-            offset={s.SIDE_RAIL_WIDTH}
-            count={s.activeLoraStack.length}
+            open={advanced.open}
+            offset={sideRailWidth}
+            count={activeLoraStack.length}
             icon={<SlidersHorizontalIcon className="size-3.5 opacity-90" />}
-            onClick={() => s.setAdvancedOpen((open) => !open)}
-            aria-label={s.advancedOpen ? "Close advanced" : "Open advanced"}
-            tooltip={s.advancedOpen ? "Close advanced" : "Open advanced"}
+            onClick={() => advanced.setOpen((open) => !open)}
+            aria-label={advanced.open ? "Close advanced" : "Open advanced"}
+            tooltip={advanced.open ? "Close advanced" : "Open advanced"}
           >
-            {s.advancedOpen ? (
+            {advanced.open ? (
               <ChevronLeftIcon className="size-4 opacity-70" />
             ) : (
               <ChevronRightIcon className="size-4 opacity-70" />
             )}
           </SideRailHandle>
 
-          <AdvancedPanel open={s.advancedOpen}>
+          <AdvancedPanel open={advanced.open}>
             <AdvancedControls
-              controls={s.advancedControls}
-              controlValues={s.controlValues}
-              setControlValues={s.setControlValues}
-              latestGallerySeed={s.latestGallerySeed}
-              supportsLoras={s.supportsLoras}
-              activeArch={s.activeArch}
-              loraPacks={s.loraPacks}
-              loraStack={s.activeLoraStack}
-              onLoraStackChange={s.setLoraStack}
-              loraInstallingKey={s.loraInstallingKey}
-              generating={s.generating}
-              onOpenLoraLibrary={() => s.setLoraPickerOpen(true)}
+              controls={advancedControls}
+              controlValues={advanced.controlValues}
+              setControlValues={advanced.setControlValues}
+              latestGallerySeed={latestGallerySeed}
+              supportsLoras={supportsLoras}
+              activeArch={activeArch}
+              loraPacks={advanced.loraPacks}
+              loraStack={activeLoraStack}
+              onLoraStackChange={advanced.setLoraStack}
+              loraInstallingKey={loraInstallingKey}
+              generating={advanced.generating}
+              onOpenLoraLibrary={() => advanced.setLoraPickerOpen(true)}
               onInstallLoraVariant={(id, arch) => {
                 if (!isRecipeArch(arch)) return
-                void s.beginLoraInstall(id, arch)
+                void advanced.beginLoraInstall(id, arch)
               }}
               showInstallHint={Boolean(
-                s.selected && !s.isInstalled(s.selected)
+                selected && !advanced.isInstalled(selected)
               )}
-              showRefine={s.studioTab === "image"}
-              upscaleEnabled={s.upscaleEnabled}
-              onUpscaleEnabledChange={s.setUpscaleEnabled}
-              upscaleModelId={s.upscaleModelId}
+              showRefine={studioTab === "image"}
+              upscaleEnabled={advanced.upscaleEnabled}
+              onUpscaleEnabledChange={advanced.setUpscaleEnabled}
+              upscaleModelId={advanced.upscaleModelId}
               onUpscaleModelIdChange={(id) => {
-                s.setUpscaleModelId(id)
-                const next = s.upscaleModels.find((m) => m.id === id)
-                if (next?.kind === "supir") s.setUsduEnabled(false)
+                advanced.setUpscaleModelId(id)
+                const next = advanced.upscaleModels.find((m) => m.id === id)
+                if (next?.kind === "supir") advanced.setUsduEnabled(false)
               }}
-              usduEnabled={s.usduEnabled}
-              onUsduEnabledChange={s.setUsduEnabled}
-              usduScale={s.usduScale}
-              onUsduScaleChange={s.setUsduScale}
-              usduSteps={s.usduSteps}
-              onUsduStepsChange={s.setUsduSteps}
-              usduDenoise={s.usduDenoise}
-              onUsduDenoiseChange={s.setUsduDenoise}
-              upscaleModels={s.upscaleModels}
-              usduReady={s.usduReady}
-              upscaleInstallingId={s.upscaleInstallingId}
+              usduEnabled={advanced.usduEnabled}
+              onUsduEnabledChange={advanced.setUsduEnabled}
+              usduScale={advanced.usduScale}
+              onUsduScaleChange={advanced.setUsduScale}
+              usduSteps={advanced.usduSteps}
+              onUsduStepsChange={advanced.setUsduSteps}
+              usduDenoise={advanced.usduDenoise}
+              onUsduDenoiseChange={advanced.setUsduDenoise}
+              upscaleModels={advanced.upscaleModels}
+              usduReady={advanced.usduReady}
+              upscaleInstallingId={upscaleInstallingId}
               onInstallUpscaler={(id) => {
-                void s.beginUpscaleInstall(id)
+                void advanced.beginUpscaleInstall(id)
               }}
               onEnsureUsdu={() => {
-                void s.beginUsduInstall()
+                void advanced.beginUsduInstall()
               }}
-              refineWidth={Number(s.controlValues.width) || s.stageDims.width}
+              refineWidth={
+                Number(advanced.controlValues.width) || stageDims.width
+              }
               refineHeight={
-                Number(s.controlValues.height) || s.stageDims.height
+                Number(advanced.controlValues.height) || stageDims.height
               }
             />
           </AdvancedPanel>
@@ -204,15 +313,15 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
         <>
           <SideRailHandle
             side="right"
-            open={s.galleryOpen}
-            offset={s.SIDE_RAIL_WIDTH}
-            count={s.tabGallery.length}
+            open={gallery.open}
+            offset={sideRailWidth}
+            count={tabGallery.length}
             icon={<ImagesIcon className="size-3.5 opacity-90" />}
-            onClick={() => s.setGalleryOpen((open) => !open)}
-            aria-label={s.galleryOpen ? "Close gallery" : "Open gallery"}
-            tooltip={s.galleryOpen ? "Close gallery" : "Open gallery"}
+            onClick={() => gallery.setOpen((open) => !open)}
+            aria-label={gallery.open ? "Close gallery" : "Open gallery"}
+            tooltip={gallery.open ? "Close gallery" : "Open gallery"}
           >
-            {s.galleryOpen ? (
+            {gallery.open ? (
               <ChevronRightIcon className="size-4 opacity-70" />
             ) : (
               <ChevronLeftIcon className="size-4 opacity-70" />
@@ -220,16 +329,16 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
           </SideRailHandle>
 
           <GalleryPanel
-            open={s.galleryOpen}
-            title={`${s.studioLabel} Gallery`}
-            items={s.tabGallery}
-            selectedId={s.selectedGalleryId}
-            onSelect={s.setSelectedGalleryId}
-            onDelete={s.handleDeleteGalleryItem}
-            onReusePrompt={s.handleReuseGalleryPrompt}
-            onReuseSettings={s.handleReuseGallerySettings}
+            open={gallery.open}
+            title={`${studioLabel} Gallery`}
+            items={tabGallery}
+            selectedId={gallery.selectedId}
+            onSelect={gallery.setSelectedId}
+            onDelete={gallery.onDelete}
+            onReusePrompt={gallery.onReusePrompt}
+            onReuseSettings={gallery.onReuseSettings}
             onImageToPrompt={(item) =>
-              s.openImageToPrompt({ imagePath: item.path })
+              gallery.openImageToPrompt({ imagePath: item.path })
             }
           />
         </>
@@ -242,8 +351,8 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
           onOpenChange={setLightboxOpen}
           src={stageSrc}
           onImageToPrompt={
-            s.previewItem
-              ? () => s.openImageToPrompt({ imagePath: s.previewItem!.path })
+            previewItem
+              ? () => gallery.openImageToPrompt({ imagePath: previewItem.path })
               : undefined
           }
         />

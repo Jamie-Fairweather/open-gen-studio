@@ -1,15 +1,13 @@
 "use client"
 
-import {
-  useEffect,
-  type Dispatch,
-  type MutableRefObject,
-  type SetStateAction,
-} from "react"
+import { useEffect, useSyncExternalStore, type ReactNode } from "react"
+import { usePathname, useRouter } from "next/navigation"
 import {
   comfyuiStatus,
   detectGpu,
   galleryItemCategory,
+  getOfficialBlueprint,
+  isTauri,
   listBlueprints,
   listDownloads,
   listGallery,
@@ -35,17 +33,20 @@ import {
   onUpscaleProgress,
   onUpscalersUpdated,
   usduNodeReady,
-  type Blueprint,
-  type DownloadSnapshot,
-  type GalleryItem,
-  type GpuInfo,
-  type LoraPack,
-  type RuntimeInstall,
-  type StudioTab,
   type UpscaleModelInfo,
 } from "@/lib/host"
-import { pickDefaultBlueprintId } from "@/lib/blueprint-helpers"
+import {
+  applyReuseAllSettings,
+  lorasFromRecipe,
+  pickDefaultBlueprintId,
+  upscaleFromRecipe,
+} from "@/lib/blueprint-helpers"
 import { formatBytes, formatDuration } from "@/lib/format"
+import {
+  SIDE_LENGTH_DEFAULT,
+  sizeFromAspectAndSide,
+  syncSizeControls,
+} from "@/lib/image-size"
 import {
   notifyDismiss,
   notifyError,
@@ -53,71 +54,149 @@ import {
   notifyProgress,
   notifySuccess,
 } from "@/lib/notify"
+import { EMPTY_DOWNLOAD_SNAPSHOT } from "@/components/studio/slices/downloads"
+import { SETTING_SELECTED_BLUEPRINT } from "@/components/studio/slices/helpers"
+import {
+  selectActiveSelectedId,
+  selectTabGallery,
+} from "@/components/studio/selectors"
+import { useStudioSelector, useStudioStore } from "@/components/studio/store"
+import { studioRefs } from "@/components/studio/studio-refs"
+import { tabFromPath } from "@/components/studio/studio-tabs"
 
-const SETTING_SELECTED_BLUEPRINT = "selected_blueprint_id"
+const subscribeNoop = () => () => {}
 
-export const EMPTY_DOWNLOAD_SNAPSHOT: DownloadSnapshot = {
-  active: null,
-  queued: [],
-  history: [],
-}
-
-export type StudioBootstrapDeps = {
-  desktop: boolean
-  preferredBlueprintIdRef: MutableRefObject<string | null>
-  navigateTabRef: MutableRefObject<(tab: StudioTab) => void>
-  clearLivePreview: () => void
-  queueLivePreview: (path: string) => void
-  setSizesProbing: Dispatch<SetStateAction<boolean>>
-  setBlueprints: Dispatch<SetStateAction<Blueprint[]>>
-  setSelectedId: Dispatch<SetStateAction<string | null>>
-  setGpu: Dispatch<SetStateAction<GpuInfo | null>>
-  setRuntimes: Dispatch<SetStateAction<RuntimeInstall[]>>
-  setBlueprintsLoaded: Dispatch<SetStateAction<boolean>>
-  setLoraPacks: Dispatch<SetStateAction<LoraPack[]>>
-  setUpscaleModels: Dispatch<SetStateAction<UpscaleModelInfo[]>>
-  setUsduReady: Dispatch<SetStateAction<boolean>>
-  setGallery: Dispatch<SetStateAction<GalleryItem[]>>
-  setComfyHealthy: Dispatch<SetStateAction<boolean>>
-  setRuntimeBusy: Dispatch<SetStateAction<boolean>>
-  setRuntimeMessage: Dispatch<SetStateAction<string | null>>
-  setDownloadSnapshot: Dispatch<SetStateAction<DownloadSnapshot>>
-  setGenerating: Dispatch<SetStateAction<boolean>>
-  setActiveJobId: Dispatch<SetStateAction<string | null>>
-  setGenStep: Dispatch<SetStateAction<{ step: number; max: number } | null>>
-  setSelectedGalleryId: Dispatch<SetStateAction<string | null>>
-}
-
-/** Wire Tauri event listeners + initial desktop loads. Re-runs only when `desktop` flips. */
-export function useStudioBootstrap(deps: StudioBootstrapDeps) {
-  const {
-    desktop,
-    preferredBlueprintIdRef,
-    navigateTabRef,
-    clearLivePreview,
-    queueLivePreview,
-    setSizesProbing,
-    setBlueprints,
-    setSelectedId,
-    setGpu,
-    setRuntimes,
-    setBlueprintsLoaded,
-    setLoraPacks,
-    setUpscaleModels,
-    setUsduReady,
-    setGallery,
-    setComfyHealthy,
-    setRuntimeBusy,
-    setRuntimeMessage,
-    setDownloadSnapshot,
-    setGenerating,
-    setActiveJobId,
-    setGenStep,
-    setSelectedGalleryId,
-  } = deps
+/**
+ * Mounts once under the studio layout: wires Next router into studioRefs,
+ * hydrates host data, and keeps store in sync with Tauri events.
+ */
+export function StudioBootstrap({ children }: { children: ReactNode }) {
+  const desktop = useSyncExternalStore(subscribeNoop, isTauri, () => true)
+  const pathname = usePathname()
+  const router = useRouter()
+  const studioTab = tabFromPath(pathname)
 
   useEffect(() => {
+    useStudioStore.getState().setDesktop(desktop)
+  }, [desktop])
+
+  useEffect(() => {
+    useStudioStore.getState().setStudioTab(studioTab)
+  }, [studioTab])
+
+  useEffect(() => {
+    studioRefs.navigateTab = (tab) => {
+      router.push(`/${tab}`)
+    }
+    studioRefs.pushPath = (path) => {
+      router.push(path)
+    }
+  }, [router])
+
+  // Drop gallery selection that is not on the current tab.
+  const selectedGalleryId = useStudioStore((s) => s.selectedGalleryId)
+  const gallery = useStudioStore((s) => s.gallery)
+  useEffect(() => {
+    const tabGallery = selectTabGallery(useStudioStore.getState())
+    if (
+      selectedGalleryId != null &&
+      !tabGallery.some((item) => item.id === selectedGalleryId)
+    ) {
+      useStudioStore.getState().setSelectedGalleryId(null)
+    }
+  }, [selectedGalleryId, gallery, studioTab])
+
+  // Load blueprint detail when selection changes.
+  const activeSelectedId = useStudioSelector(selectActiveSelectedId)
+
+  useEffect(() => {
+    if (!activeSelectedId || !desktop) return
+    let cancelled = false
+    void getOfficialBlueprint(activeSelectedId)
+      .then((d) => {
+        if (cancelled) return
+        const store = useStudioStore.getState()
+        store.setDetail(d)
+        const recipe = studioRefs.pendingRecipe
+        studioRefs.pendingRecipe = null
+        const next: Record<string, unknown> = {}
+        for (const c of d.controls) {
+          if (c.default !== undefined) {
+            next[c.id] = c.default
+          }
+        }
+        let values = recipe ? applyReuseAllSettings(next, recipe) : next
+        if (recipe) {
+          store.setLoraStack(lorasFromRecipe(recipe, studioRefs.loraPacks))
+          const up = upscaleFromRecipe(recipe, d.arch)
+          store.setUpscaleEnabled(up.enabled)
+          store.setUpscaleModelId(up.modelId)
+          store.setUsduEnabled(up.usduEnabled)
+          store.setUsduScale(up.usduScale)
+          store.setUsduSteps(up.usduSteps)
+          store.setUsduDenoise(up.usduDenoise)
+        }
+        const hasW = d.controls.some((c) => c.id === "width")
+        const hasH = d.controls.some((c) => c.id === "height")
+        if (hasW && hasH) {
+          if (recipe) {
+            const width = Number(values.width)
+            const height = Number(values.height)
+            if (Number.isFinite(width) && Number.isFinite(height)) {
+              const synced = syncSizeControls(width, height)
+              store.setAspectId(synced.aspectId)
+              store.setSideLength(synced.sideLength)
+            }
+          } else {
+            const { width, height } = sizeFromAspectAndSide(
+              studioRefs.aspectId,
+              studioRefs.sideLength || SIDE_LENGTH_DEFAULT
+            )
+            values = { ...values, width, height }
+          }
+        }
+        store.setControlValues(values)
+        if (recipe?.prompt) {
+          store.setPrompt(recipe.prompt)
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          notifyError(e instanceof Error ? e.message : String(e))
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeSelectedId, desktop])
+
+  // Settings dialog: load tokens when opened.
+  const settingsOpen = useStudioStore((s) => s.settingsOpen)
+  useEffect(() => {
+    if (!settingsOpen || !isTauri()) return
+    let cancelled = false
+    void listSettings()
+      .then((settings) => {
+        if (cancelled) return
+        const store = useStudioStore.getState()
+        store.setHfToken(settings.huggingface_token ?? "")
+        store.setHfTokenDirty(false)
+        store.setCivitaiToken(settings.civitai_api_key ?? "")
+        store.setCivitaiTokenDirty(false)
+      })
+      .catch((e) =>
+        notifyError(e instanceof Error ? e.message : String(e), "Settings")
+      )
+    return () => {
+      cancelled = true
+    }
+  }, [settingsOpen])
+
+  // Tauri event listeners + initial load.
+  useEffect(() => {
     if (!desktop) return
+
+    const store = () => useStudioStore.getState()
 
     let unlistenRuntimes: (() => void) | undefined
     let unlistenProgress: (() => void) | undefined
@@ -137,7 +216,6 @@ export function useStudioBootstrap(deps: StudioBootstrapDeps) {
     let unlistenUpscaleProgress: (() => void) | undefined
     let unlistenPromptToolsProgress: (() => void) | undefined
 
-    /** Rolling window for runtime download speed (Comfy portable, etc.). */
     const SPEED_WINDOW_MS = 10_000
     const SPEED_MIN_MS = 3_000
     let speedSamples: { t: number; bytes: number; url: string }[] = []
@@ -146,14 +224,13 @@ export function useStudioBootstrap(deps: StudioBootstrapDeps) {
     async function load() {
       try {
         unlistenBlueprintProbe = await onBlueprintProbe((p) => {
-          if (p.stage === "start") setSizesProbing(true)
-          else setSizesProbing(false)
+          store().setSizesProbing(p.stage === "start")
         })
         unlistenBlueprintSizes = await onBlueprintSizes((bps) => {
-          setBlueprints(bps)
-          setSizesProbing(false)
-          setSelectedId((prev) =>
-            pickDefaultBlueprintId(bps, prev ?? preferredBlueprintIdRef.current)
+          store().setBlueprints(bps)
+          store().setSizesProbing(false)
+          store().setSelectedId((prev) =>
+            pickDefaultBlueprintId(bps, prev ?? studioRefs.preferredBlueprintId)
           )
         })
 
@@ -178,26 +255,27 @@ export function useStudioBootstrap(deps: StudioBootstrapDeps) {
           listUpscalers().catch(() => [] as UpscaleModelInfo[]),
           usduNodeReady().catch(() => false),
         ])
-        preferredBlueprintIdRef.current =
+        studioRefs.preferredBlueprintId =
           settings[SETTING_SELECTED_BLUEPRINT]?.trim() || null
-        setGpu(gpuInfo)
-        setRuntimes(rts)
-        setBlueprints(bps)
-        setBlueprintsLoaded(true)
-        setLoraPacks(loras)
-        setUpscaleModels(upscalers)
-        setUsduReady(usdu)
-        setGallery(items)
-        setComfyHealthy(status.healthy)
-        setSelectedId((prev) =>
-          pickDefaultBlueprintId(bps, prev ?? preferredBlueprintIdRef.current)
+        const s = store()
+        s.setGpu(gpuInfo)
+        s.setRuntimes(rts)
+        s.setBlueprints(bps)
+        s.setBlueprintsLoaded(true)
+        s.setLoraPacks(loras)
+        s.setUpscaleModels(upscalers)
+        s.setUsduReady(usdu)
+        s.setGallery(items)
+        s.setComfyHealthy(status.healthy)
+        s.setSelectedId((prev) =>
+          pickDefaultBlueprintId(bps, prev ?? studioRefs.preferredBlueprintId)
         )
         const installing = rts.some(
           (r) => r.engine === "comfyui" && r.status === "installing"
         )
-        setRuntimeBusy(installing)
+        s.setRuntimeBusy(installing)
         if (installing) {
-          setRuntimeMessage("Installing ComfyUI in the background…")
+          s.setRuntimeMessage("Installing ComfyUI in the background…")
           notifyProgress(
             "runtime",
             "Installing ComfyUI",
@@ -205,10 +283,10 @@ export function useStudioBootstrap(deps: StudioBootstrapDeps) {
           )
         }
         const snap = await listDownloads().catch(() => EMPTY_DOWNLOAD_SNAPSHOT)
-        setDownloadSnapshot(snap)
+        s.setDownloadSnapshot(snap)
       } catch (e) {
-        setSizesProbing(false)
-        setBlueprintsLoaded(true)
+        store().setSizesProbing(false)
+        store().setBlueprintsLoaded(true)
         notifyError(e instanceof Error ? e.message : String(e))
       }
     }
@@ -216,49 +294,49 @@ export function useStudioBootstrap(deps: StudioBootstrapDeps) {
     void load()
 
     void onDownloadManager((snap) => {
-      setDownloadSnapshot(snap)
+      store().setDownloadSnapshot(snap)
     }).then((u) => {
       unlistenDownloadManager = u
     })
 
     void onRuntimesUpdated((runtime) => {
-      setRuntimes((prev) => {
+      store().setRuntimes((prev) => {
         const i = prev.findIndex((x) => x.id === runtime.id)
         if (i === -1) return [runtime, ...prev]
         const next = [...prev]
         next[i] = runtime
         return next
       })
-      setRuntimeBusy(
+      store().setRuntimeBusy(
         runtime.status === "installing" || runtime.status === "starting"
       )
       if (runtime.status === "ready") {
-        setComfyHealthy(false)
-        setRuntimeMessage("Runtime ready")
-        setRuntimeBusy(false)
+        store().setComfyHealthy(false)
+        store().setRuntimeMessage("Runtime ready")
+        store().setRuntimeBusy(false)
       } else if (runtime.status === "running") {
-        setComfyHealthy(true)
-        setRuntimeMessage("Runtime is running")
-        setRuntimeBusy(false)
+        store().setComfyHealthy(true)
+        store().setRuntimeMessage("Runtime is running")
+        store().setRuntimeBusy(false)
         notifyProgress("runtime", "Runtime ready", "Running", true)
       } else if (runtime.status === "error" && runtime.error) {
         notifyError(runtime.error, "Runtime error")
-        setComfyHealthy(false)
-        setRuntimeBusy(false)
+        store().setComfyHealthy(false)
+        store().setRuntimeBusy(false)
       }
     }).then((u) => {
       unlistenRuntimes = u
     })
 
     void onRuntimeProgress((p) => {
-      setRuntimeMessage(`${p.stage}: ${p.message}`)
+      store().setRuntimeMessage(`${p.stage}: ${p.message}`)
       if (p.stage === "done" || p.stage === "ready") {
-        setRuntimeBusy(false)
-        if (p.stage === "ready") setComfyHealthy(true)
+        store().setRuntimeBusy(false)
+        if (p.stage === "ready") store().setComfyHealthy(true)
         notifyProgress("runtime", "Runtime ready", p.message, true)
       } else if (p.stage === "error") {
-        setRuntimeBusy(false)
-        setComfyHealthy(false)
+        store().setRuntimeBusy(false)
+        store().setComfyHealthy(false)
         notifyError(p.message, "Runtime error")
       } else if (p.stage === "start") {
         notifyProgress("runtime", "Starting runtime", p.message)
@@ -270,7 +348,6 @@ export function useStudioBootstrap(deps: StudioBootstrapDeps) {
     })
 
     void onDownloadProgress((p) => {
-      // Runtime / other non-manager status line only (manager owns install progress).
       const now = performance.now()
       const trackedBytes = p.downloaded
       if (p.done) {
@@ -322,7 +399,7 @@ export function useStudioBootstrap(deps: StudioBootstrapDeps) {
       const msg = p.done
         ? "Download complete"
         : `${formatBytes(p.downloaded)}${total}${pct}${etaSuffix}`
-      setRuntimeMessage(p.done ? msg : `Downloading… ${msg}`)
+      store().setRuntimeMessage(p.done ? msg : `Downloading… ${msg}`)
     }).then((u) => {
       unlistenDownload = u
     })
@@ -345,7 +422,7 @@ export function useStudioBootstrap(deps: StudioBootstrapDeps) {
 
     void onBlueprintsUpdated(() => {
       void listBlueprints()
-        .then(setBlueprints)
+        .then((bps) => store().setBlueprints(bps))
         .catch((e) => notifyError(e instanceof Error ? e.message : String(e)))
     }).then((u) => {
       unlistenBlueprintsUpdated = u
@@ -357,9 +434,9 @@ export function useStudioBootstrap(deps: StudioBootstrapDeps) {
         job.status === "failed" ||
         job.status === "cancelled"
       ) {
-        setGenerating(false)
-        setActiveJobId((id) => (id === job.id ? null : id))
-        clearLivePreview()
+        store().setGenerating(false)
+        store().setActiveJobId((id) => (id === job.id ? null : id))
+        store().clearLivePreview()
       }
       if (job.status === "failed" && job.error) {
         notifyError(job.error, "Generation failed")
@@ -377,28 +454,28 @@ export function useStudioBootstrap(deps: StudioBootstrapDeps) {
       }
       if (p.stage === "step") {
         if (p.step != null && p.max != null && p.max > 0) {
-          setGenStep({ step: p.step, max: p.max })
+          store().setGenStep({ step: p.step, max: p.max })
         }
         return
       }
       if (p.stage === "preview") {
-        if (p.previewPath) queueLivePreview(p.previewPath)
+        if (p.previewPath) store().queueLivePreview(p.previewPath)
         return
       }
       if (p.stage === "done") {
-        setGenerating(false)
-        setActiveJobId((id) => (id === p.jobId ? null : id))
-        clearLivePreview()
+        store().setGenerating(false)
+        store().setActiveJobId((id) => (id === p.jobId ? null : id))
+        store().clearLivePreview()
         notifySuccess("Generation complete", p.message)
       } else if (p.stage === "cancelled") {
-        setGenerating(false)
-        setActiveJobId((id) => (id === p.jobId ? null : id))
-        clearLivePreview()
+        store().setGenerating(false)
+        store().setActiveJobId((id) => (id === p.jobId ? null : id))
+        store().clearLivePreview()
         notifyInfo("Cancelled", p.message, "job")
       } else if (p.stage === "error") {
-        setGenerating(false)
-        setActiveJobId((id) => (id === p.jobId ? null : id))
-        clearLivePreview()
+        store().setGenerating(false)
+        store().setActiveJobId((id) => (id === p.jobId ? null : id))
+        store().clearLivePreview()
         notifyError(p.message, "Generation failed")
       } else if (p.stage === "start") {
         notifyProgress("runtime", "Starting runtime", p.message)
@@ -409,26 +486,28 @@ export function useStudioBootstrap(deps: StudioBootstrapDeps) {
 
     void onGalleryUpdated((item) => {
       const category = galleryItemCategory(item)
-      setGallery((prev) => {
+      store().setGallery((prev) => {
         if (prev.some((x) => x.id === item.id)) return prev
         return [item, ...prev]
       })
-      navigateTabRef.current(category)
-      setSelectedGalleryId(item.id)
+      studioRefs.navigateTab(category)
+      store().setSelectedGalleryId(item.id)
     }).then((u) => {
       unlistenGallery = u
     })
 
     void onGalleryDeleted((id) => {
-      setGallery((prev) => prev.filter((item) => item.id !== id))
-      setSelectedGalleryId((current) => (current === id ? null : current))
+      store().setGallery((prev) => prev.filter((item) => item.id !== id))
+      store().setSelectedGalleryId((current) =>
+        current === id ? null : current
+      )
     }).then((u) => {
       unlistenGalleryDeleted = u
     })
 
     void onLorasUpdated(() => {
       void listLoras()
-        .then(setLoraPacks)
+        .then((packs) => store().setLoraPacks(packs))
         .catch((e) =>
           notifyError(e instanceof Error ? e.message : String(e), "LoRAs")
         )
@@ -438,10 +517,10 @@ export function useStudioBootstrap(deps: StudioBootstrapDeps) {
 
     void onUpscalersUpdated(() => {
       void listUpscalers()
-        .then(setUpscaleModels)
+        .then((models) => store().setUpscaleModels(models))
         .catch(() => {})
       void usduNodeReady()
-        .then(setUsduReady)
+        .then((ready) => store().setUsduReady(ready))
         .catch(() => {})
     }).then((u) => {
       unlistenUpscalersUpdated = u
@@ -461,10 +540,10 @@ export function useStudioBootstrap(deps: StudioBootstrapDeps) {
                 : "Upscale model ready"
         )
         void listUpscalers()
-          .then(setUpscaleModels)
+          .then((models) => store().setUpscaleModels(models))
           .catch(() => {})
         void usduNodeReady()
-          .then(setUsduReady)
+          .then((ready) => store().setUsduReady(ready))
           .catch(() => {})
       }
     }).then((u) => {
@@ -485,7 +564,7 @@ export function useStudioBootstrap(deps: StudioBootstrapDeps) {
       } else if (p.stage === "done") {
         notifySuccess("LoRA ready", `${p.loraId} · ${p.arch}`)
         void listLoras()
-          .then(setLoraPacks)
+          .then((packs) => store().setLoraPacks(packs))
           .catch(() => {})
       }
     }).then((u) => {
@@ -511,7 +590,7 @@ export function useStudioBootstrap(deps: StudioBootstrapDeps) {
       unlistenUpscaleProgress?.()
       unlistenPromptToolsProgress?.()
     }
-    // Same as pre-peel: setters/refs/preview helpers are stable enough; only rebind on desktop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional desktop-only
   }, [desktop])
+
+  return children
 }

@@ -21,7 +21,11 @@ import {
   type ChangeEvent,
   type DragEvent,
 } from "react"
-import { useStudio } from "@/components/studio/studio-provider"
+import {
+  selectActiveArch,
+  selectHasNegativePrompt,
+} from "@/components/studio/selectors"
+import { useStudioSelector, useStudioStore } from "@/components/studio/store"
 import {
   StudioPanel,
   StudioPanelBody,
@@ -111,19 +115,25 @@ function SessionHistoryList({
 
 export function ImageToPromptPanel() {
   const router = useRouter()
-  const studio = useStudio()
+  const toolsHandoff = useStudioStore((s) => s.toolsHandoff)
+  const gallery = useStudioStore((s) => s.gallery)
+  const consumeToolsHandoff = useStudioStore((s) => s.consumeToolsHandoff)
+  const setPrompt = useStudioStore((s) => s.setPrompt)
+  const setControlValues = useStudioStore((s) => s.setControlValues)
+  const activeArch = useStudioSelector(selectActiveArch)
+  const hasNegativePrompt = useStudioSelector(selectHasNegativePrompt)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [imagePath, setImagePath] = useState<string | null>(
-    () => studio.toolsHandoff?.imagePath ?? null
+    () => toolsHandoff?.imagePath ?? null
   )
   const [previewUrl, setPreviewUrl] = useState<string | null>(() => {
-    const path = studio.toolsHandoff?.imagePath
+    const path = toolsHandoff?.imagePath
     return path ? gallerySrc(path) : null
   })
   const [format, setFormat] = useState<PromptFormatId>("general")
   const [target, setTarget] = useState<PromptTargetId>(() =>
-    studio.activeArch ? targetFromArch(studio.activeArch) : "auto"
+    activeArch ? targetFromArch(activeArch) : "auto"
   )
   const [result, setResult] = useState("")
   const [negative, setNegative] = useState<string | null>(null)
@@ -140,12 +150,12 @@ export function ImageToPromptPanel() {
   const hint = formatTargetHint(format, target)
   const showStructured =
     format === "structured" || format === "json" || format === "graphicDesign"
-  const imageGallery = studio.gallery.filter(
+  const imageGallery = gallery.filter(
     (item) => galleryItemCategory(item) === "image"
   )
 
   useEffect(() => {
-    const path = studio.consumeToolsHandoff()?.imagePath
+    const path = consumeToolsHandoff()?.imagePath
     if (!path) return
     let cancelled = false
     void readImageEmbeddedPrompt(path)
@@ -313,7 +323,7 @@ export function ImageToPromptPanel() {
             imagePath,
             format,
             target,
-            arch: studio.activeArch,
+            arch: activeArch,
           }).then((job) => {
             currentJobId = job.id
             setJobId(job.id)
@@ -336,9 +346,9 @@ export function ImageToPromptPanel() {
   const useInStudio = () => {
     const prompt = displayPrompt.trim()
     if (!prompt) return
-    studio.setPrompt(prompt)
-    if (negative && studio.hasNegativePrompt) {
-      studio.setControlValues((prev) => ({ ...prev, negative }))
+    setPrompt(prompt)
+    if (negative && hasNegativePrompt) {
+      setControlValues((prev) => ({ ...prev, negative }))
     }
     router.push("/image")
   }

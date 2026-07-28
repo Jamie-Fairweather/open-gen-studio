@@ -1,13 +1,13 @@
 "use client"
 
 import type { ReactNode } from "react"
+import { StudioBootstrap } from "@/components/studio/studio-bootstrap"
 import { StudioChrome } from "@/components/studio/studio-chrome"
-import { StudioProvider } from "@/components/studio/studio-provider"
 
 export default function StudioLayout({ children }: { children: ReactNode }) {
   return (
-    <StudioProvider>
+    <StudioBootstrap>
       <StudioChrome>{children}</StudioChrome>
-    </StudioProvider>
+    </StudioBootstrap>
   )
 }

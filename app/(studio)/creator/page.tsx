@@ -3,10 +3,12 @@
 import { Suspense, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { CreatorPanel } from "@/components/creator-panel"
-import { useStudio } from "@/components/studio/studio-provider"
+import { useStudioStore } from "@/components/studio/store"
 
 function CreatorStudioBody() {
-  const { editBlueprintId, setEditBlueprintId, refreshBlueprints } = useStudio()
+  const editBlueprintId = useStudioStore((s) => s.editBlueprintId)
+  const setEditBlueprintId = useStudioStore((s) => s.setEditBlueprintId)
+  const refreshBlueprints = useStudioStore((s) => s.refreshBlueprints)
   const router = useRouter()
   const searchParams = useSearchParams()
   const editFromQuery = searchParams.get("edit")

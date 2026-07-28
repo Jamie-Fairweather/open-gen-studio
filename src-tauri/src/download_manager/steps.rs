@@ -14,14 +14,61 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use super::api::emit_snapshot;
 
+/// Fill missing `bytes_total` on http steps so overall job % can include waiting files.
+pub(crate) fn seed_http_totals(app: &AppHandle, job_id: &str) {
+    let steps = {
+        let state = app.state::<AppState>();
+        let Ok(db) = state.db.lock() else {
+            return;
+        };
+        db.list_download_steps(job_id).unwrap_or_default()
+    };
+    let mut changed = false;
+    for step in steps {
+        if step.step_kind != "http" || step.bytes_total.is_some() {
+            continue;
+        }
+        let spec: Value = serde_json::from_str(&step.spec_json).unwrap_or(json!({}));
+        let Some(url) = spec.get("url").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let dest = spec.get("dest").and_then(|v| v.as_str()).map(PathBuf::from);
+        let total = blueprints::probe_remote_size(url).or_else(|| {
+            dest.as_ref()
+                .and_then(|p| p.metadata().ok().map(|m| m.len()))
+                .filter(|&n| n > 0)
+        });
+        let Some(total) = total else {
+            continue;
+        };
+        let state = app.state::<AppState>();
+        if let Ok(db) = state.db.lock() {
+            let _ = db.update_download_step_status(
+                &step.id,
+                &step.status,
+                None,
+                None,
+                Some(total as i64),
+            );
+            changed = true;
+        };
+    }
+    if changed {
+        emit_snapshot(app);
+    }
+}
+
 pub(crate) fn run_step(
     app: &AppHandle,
-    _job_id: &str,
+    job_id: &str,
     step: &DownloadStepRow,
 ) -> Result<(), String> {
     let spec: Value = serde_json::from_str(&step.spec_json).unwrap_or(json!({}));
     match step.step_kind.as_str() {
         "http" => {
+            // Ensure sibling file sizes are known for combined job progress.
+            seed_http_totals(app, job_id);
+
             let url = spec
                 .get("url")
                 .and_then(|v| v.as_str())
@@ -32,18 +79,26 @@ pub(crate) fn run_step(
                     .ok_or("http step missing dest")?,
             );
             if download::local_file_complete(&dest) {
-                if let Ok(len) = dest.metadata().map(|m| m.len() as i64) {
+                let len = dest.metadata().map(|m| m.len()).unwrap_or(0);
+                // When remote size is known, only skip if the file fully matches
+                // (avoids treating a partial .7z / binary as done).
+                let remote = download::remote_content_length(url).ok().flatten();
+                let complete = match remote {
+                    Some(r) => len == r,
+                    None => true,
+                };
+                if complete {
                     let state = app.state::<AppState>();
                     let db = state.db.lock().map_err(|e| e.to_string())?;
                     let _ = db.update_download_step_status(
                         &step.id,
                         "running",
                         None,
-                        Some(len),
-                        Some(len),
+                        Some(len as i64),
+                        Some(len as i64),
                     );
+                    return Ok(());
                 }
-                return Ok(());
             }
 
             // Probe size up front so the UI can show "done / total" and %.
@@ -91,7 +146,12 @@ pub(crate) fn run_step(
                 }
             });
 
-            let result = download::download_file(app, url, &dest, None);
+            let result = download::download_file(
+                app,
+                url,
+                &dest,
+                spec.get("sha256").and_then(|v| v.as_str()),
+            );
             stop.store(true, Ordering::SeqCst);
             let _ = tick.join();
             result?;
@@ -136,6 +196,14 @@ pub(crate) fn run_step(
                         .ok_or("blueprint id missing")?;
                     blueprints::install_models(app, id)
                 }
+                "blueprint_nodes" => {
+                    let id = spec
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .ok_or("blueprint id missing")?;
+                    let (_dir, manifest) = blueprints::load_manifest(app, id)?;
+                    blueprints::install_custom_nodes(app, &manifest.custom_nodes)
+                }
                 "lora" => {
                     let id = spec
                         .get("id")
@@ -160,7 +228,7 @@ pub(crate) fn run_step(
                         upscale::install_upscaler(app, id)
                     }
                 }
-                "runtime" => {
+                "runtime" | "runtime_install" => {
                     let engine = spec
                         .get("engine")
                         .and_then(|v| v.as_str())
@@ -173,7 +241,12 @@ pub(crate) fn run_step(
                         let db = state.db.lock().map_err(|e| e.to_string())?;
                         db.get_runtime_by_engine(comfy::ENGINE)?
                     };
-                    let runtime = comfy::install_portable(app, existing.as_ref(), false)?;
+                    // Full "runtime" keeps the old monolithic path for any stale jobs.
+                    let runtime = if action == "runtime" {
+                        comfy::install_portable(app, existing.as_ref(), false)?
+                    } else {
+                        comfy::install_portable_core(app, existing.as_ref(), false)?
+                    };
                     {
                         let state = app.state::<AppState>();
                         let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -181,6 +254,16 @@ pub(crate) fn run_step(
                     }
                     let _ = app.emit("runtimes://updated", &runtime);
                     Ok(())
+                }
+                "runtime_extensions" => {
+                    let engine = spec
+                        .get("engine")
+                        .and_then(|v| v.as_str())
+                        .ok_or("runtime engine missing")?;
+                    if engine != comfy::ENGINE {
+                        return Err(format!("unknown engine: {engine}"));
+                    }
+                    upscale::ensure_managed_nodes(app)
                 }
                 other => Err(format!("unknown action: {other}")),
             }

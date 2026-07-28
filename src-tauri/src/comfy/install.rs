@@ -200,30 +200,81 @@ pub(crate) fn extract_7z(app: &AppHandle, archive: &Path, dest: &Path) -> Result
     extract_with_rust(app, archive, dest)
 }
 
-/// Install or migrate to the pinned ComfyUI portable.
-/// `force` reinstalls even when the pin already matches (Settings → Reinstall).
-pub fn install_portable(
-    app: &AppHandle,
-    existing: Option<&RuntimeInstall>,
-    force: bool,
-) -> Result<RuntimeInstall, String> {
-    let gpu = gpu::detect_nvidia();
-    let url = resolve_portable_url(&gpu)?;
-    let base = super::paths::runtimes_dir(app)?;
-    let archive = crate::app_paths::app_data_dir(app)?
+pub fn portable_archive_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(crate::app_paths::app_data_dir(app)?
         .join("downloads")
         .join(format!(
             "ComfyUI_windows_portable_nvidia_{COMFY_PINNED_VERSION}.7z"
-        ));
-    let extract_to = base.join("portable");
-    let models = super::paths::models_dir(app)?;
+        )))
+}
 
+pub fn archive_looks_complete(archive: &Path) -> bool {
+    archive.is_file()
+        && fs::metadata(archive)
+            .map(|m| m.len() > 1_500_000_000)
+            .unwrap_or(false)
+}
+
+/// Download the pinned portable archive when missing/incomplete.
+pub fn download_portable_archive(app: &AppHandle) -> Result<PathBuf, String> {
+    let gpu = gpu::detect_nvidia();
+    let url = resolve_portable_url(&gpu)?;
+    let archive = portable_archive_path(app)?;
+    if archive_looks_complete(&archive) {
+        super::paths::emit_progress(
+            app,
+            "download",
+            &format!(
+                "Pinned archive {COMFY_PINNED_VERSION} already downloaded - skipping download"
+            ),
+        );
+        return Ok(archive);
+    }
+    super::paths::emit_progress(
+        app,
+        "download",
+        &format!("Downloading ComfyUI {COMFY_PINNED_VERSION} Windows Portable…"),
+    );
+    download::download_file(app, url, &archive, None)?;
+    Ok(archive)
+}
+
+fn runtime_row_ids(existing: Option<&RuntimeInstall>) -> (String, i64) {
     let id = existing
         .map(|r| r.id.clone())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let created_at = existing
         .map(|r| r.created_at)
         .unwrap_or_else(super::paths::now_secs);
+    (id, created_at)
+}
+
+fn ready_runtime(id: String, created_at: i64, root: &Path) -> RuntimeInstall {
+    RuntimeInstall {
+        id,
+        engine: super::paths::ENGINE.into(),
+        version: COMFY_PINNED_VERSION.into(),
+        install_path: root.display().to_string(),
+        port: Some(super::paths::DEFAULT_PORT as i64),
+        status: "ready".into(),
+        error: None,
+        created_at,
+        updated_at: super::paths::now_secs(),
+    }
+}
+
+/// Extract + configure pinned portable (assumes archive already downloaded).
+/// Does not install managed custom-node extensions.
+pub fn install_portable_core(
+    app: &AppHandle,
+    existing: Option<&RuntimeInstall>,
+    force: bool,
+) -> Result<RuntimeInstall, String> {
+    let base = super::paths::runtimes_dir(app)?;
+    let archive = portable_archive_path(app)?;
+    let extract_to = base.join("portable");
+    let models = super::paths::models_dir(app)?;
+    let (id, created_at) = runtime_row_ids(existing);
 
     let mut custom_nodes_backup: Option<PathBuf> = None;
 
@@ -238,18 +289,7 @@ pub fn install_portable(
                 super::paths::write_extra_model_paths(&root, &models)?;
                 super::manager::ensure_comfy_manager(app, &root)?;
                 super::paths::write_pin_marker(&root)?;
-                let _ = crate::upscale::ensure_managed_nodes(app);
-                return Ok(RuntimeInstall {
-                    id,
-                    engine: super::paths::ENGINE.into(),
-                    version: COMFY_PINNED_VERSION.into(),
-                    install_path: root.display().to_string(),
-                    port: Some(super::paths::DEFAULT_PORT as i64),
-                    status: "ready".into(),
-                    error: None,
-                    created_at,
-                    updated_at: super::paths::now_secs(),
-                });
+                return Ok(ready_runtime(id, created_at, &root));
             }
 
             super::paths::emit_progress(
@@ -267,25 +307,11 @@ pub fn install_portable(
         }
     }
 
-    let archive_ok = archive.is_file()
-        && fs::metadata(&archive)
-            .map(|m| m.len() > 1_500_000_000)
-            .unwrap_or(false);
-    if archive_ok {
-        super::paths::emit_progress(
-            app,
-            "download",
-            &format!(
-                "Pinned archive {COMFY_PINNED_VERSION} already downloaded - skipping download"
-            ),
-        );
-    } else {
-        super::paths::emit_progress(
-            app,
-            "download",
-            &format!("Downloading ComfyUI {COMFY_PINNED_VERSION} Windows Portable…"),
-        );
-        download::download_file(app, url, &archive, None)?;
+    if !archive_looks_complete(&archive) {
+        return Err(format!(
+            "ComfyUI archive missing or incomplete at {}",
+            archive.display()
+        ));
     }
 
     if extract_to.exists() {
@@ -315,24 +341,25 @@ pub fn install_portable(
         }
     }
     super::paths::write_pin_marker(&root)?;
+    Ok(ready_runtime(id, created_at, &root))
+}
+
+/// Install or migrate to the pinned ComfyUI portable.
+/// `force` reinstalls even when the pin already matches (Settings → Reinstall).
+pub fn install_portable(
+    app: &AppHandle,
+    existing: Option<&RuntimeInstall>,
+    force: bool,
+) -> Result<RuntimeInstall, String> {
+    let _ = download_portable_archive(app)?;
+    let runtime = install_portable_core(app, existing, force)?;
     super::paths::emit_progress(
         app,
         "configure",
         "Ensuring managed custom nodes match app pins…",
     );
     crate::upscale::ensure_managed_nodes(app)?;
-
-    Ok(RuntimeInstall {
-        id,
-        engine: super::paths::ENGINE.into(),
-        version: COMFY_PINNED_VERSION.into(),
-        install_path: root.display().to_string(),
-        port: Some(super::paths::DEFAULT_PORT as i64),
-        status: "ready".into(),
-        error: None,
-        created_at,
-        updated_at: super::paths::now_secs(),
-    })
+    Ok(runtime)
 }
 
 /// Status for Settings: expected pin vs installed marker / DB version.

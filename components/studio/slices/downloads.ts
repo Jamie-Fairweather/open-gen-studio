@@ -17,7 +17,10 @@ export const EMPTY_DOWNLOAD_SNAPSHOT: DownloadSnapshot = {
 
 export type DownloadsSlice = {
   downloadSnapshot: DownloadSnapshot
+  /** Smoothed transfer rate (bytes/sec) for the active download. */
+  downloadSpeedBps: number
   setDownloadSnapshot: Dispatch<SetStateAction<DownloadSnapshot>>
+  setDownloadSpeedBps: (bps: number) => void
   pauseDownload: (jobId: string) => Promise<void>
   resumeDownload: (jobId: string) => Promise<void>
   cancelDownload: (jobId: string) => Promise<void>
@@ -30,9 +33,12 @@ export const createDownloadsSlice: StateCreator<
   DownloadsSlice
 > = (set) => ({
   downloadSnapshot: EMPTY_DOWNLOAD_SNAPSHOT,
+  downloadSpeedBps: 0,
 
   setDownloadSnapshot: (next) =>
     set((s) => ({ downloadSnapshot: applySet(s.downloadSnapshot, next) })),
+
+  setDownloadSpeedBps: (bps) => set({ downloadSpeedBps: bps }),
 
   pauseDownload: hostPauseDownload,
   resumeDownload: hostResumeDownload,

@@ -29,6 +29,10 @@ fn emit_kind_success(app: &AppHandle, kind: &str, job_key: &str) {
             );
             let _ = app.emit("loras://updated", id);
         }
+    } else if kind == "blueprint" {
+        if let Some(id) = job_key.strip_prefix("blueprint:") {
+            let _ = app.emit("blueprints://updated", id);
+        }
     }
 }
 
@@ -42,6 +46,19 @@ fn emit_kind_failure(app: &AppHandle, kind: &str, job_key: &str, err: &str) {
                     "arch": arch,
                     "stage": "error",
                     "message": err,
+                }),
+            );
+        }
+    } else if kind == "blueprint" {
+        if let Some(id) = job_key.strip_prefix("blueprint:") {
+            let _ = app.emit(
+                "blueprints://progress",
+                json!({
+                    "blueprintId": id,
+                    "stage": "error",
+                    "message": err,
+                    "modelIndex": 0,
+                    "modelTotal": 0,
                 }),
             );
         }
@@ -79,6 +96,18 @@ pub fn start_worker(app: AppHandle) {
         }
         emit_snapshot(&app);
         loop {
+            // Keep combined % accurate for jobs that started before sizes were known.
+            {
+                let state = app.state::<AppState>();
+                if let Ok(db) = state.db.lock() {
+                    if let Ok(running) = db.list_download_jobs_by_status(&["running", "paused"]) {
+                        drop(db);
+                        for job in running {
+                            super::steps::seed_http_totals(&app, &job.id);
+                        }
+                    }
+                };
+            }
             run_next_job(&app);
             let w = wake();
             let Ok(guard) = w.lock.lock() else {
@@ -124,6 +153,9 @@ pub(crate) fn run_next_job(app: &AppHandle) {
         };
         db.list_download_steps(&job.id).unwrap_or_default()
     };
+
+    // Probe waiting http sizes once so the UI can show combined job progress.
+    super::steps::seed_http_totals(app, &job.id);
 
     for step in steps {
         if matches!(step.status.as_str(), "done" | "cancelled") {

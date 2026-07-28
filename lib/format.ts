@@ -15,3 +15,18 @@ export function formatDuration(secs: number): string {
   const rm = m % 60
   return rm > 0 ? `${h}h ${rm}m` : `${h}h`
 }
+
+/** Coarser buckets so download ETAs don't flicker every tick. */
+export function formatEta(secs: number): string {
+  if (!Number.isFinite(secs) || secs < 0) return "-"
+  if (secs < 90) {
+    const bucket = Math.max(5, Math.ceil(secs / 5) * 5)
+    return `~${bucket}s`
+  }
+  if (secs < 60 * 50) {
+    return `~${Math.max(1, Math.round(secs / 60))}m`
+  }
+  const h = Math.floor(secs / 3600)
+  const m = Math.round((secs % 3600) / 60)
+  return m > 0 ? `~${h}h ${m}m` : `~${h}h`
+}

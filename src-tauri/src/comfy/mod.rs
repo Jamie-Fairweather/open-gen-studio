@@ -4,7 +4,10 @@ mod paths;
 mod process;
 
 #[allow(unused_imports)]
-pub use install::{comfy_pin_status, install_portable, pinned_version, resolve_portable_url};
+pub use install::{
+    comfy_pin_status, download_portable_archive, install_portable, install_portable_core,
+    pinned_version, portable_archive_path, resolve_portable_url,
+};
 #[allow(unused_imports)]
 pub use paths::{
     find_portable_root, models_dir, portable_pin_matches, read_pin_marker, runtimes_dir,

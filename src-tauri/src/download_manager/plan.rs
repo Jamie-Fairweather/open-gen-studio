@@ -48,7 +48,7 @@ pub(crate) fn spec_title(spec: &DownloadSpec) -> String {
         DownloadSpec::Lora { id, arch } => format!("LoRA {id} ({arch})"),
         DownloadSpec::Upscale { id } => format!("Upscale {id}"),
         DownloadSpec::PromptTools { .. } => "Qwen3-VL-8B (Prompt Tools)".into(),
-        DownloadSpec::Runtime { engine } => format!("Runtime {engine}"),
+        DownloadSpec::Runtime { engine } => format!("Install {engine}"),
     }
 }
 
@@ -112,6 +112,32 @@ pub(crate) struct PlannedStep {
     step_kind: String,
     label: String,
     spec: Value,
+    bytes_total: Option<i64>,
+}
+
+fn http_step(
+    label: String,
+    url: &str,
+    dest: &std::path::Path,
+    sha256: Option<&str>,
+) -> PlannedStep {
+    let bytes_total = crate::blueprints::probe_remote_size(url)
+        .or_else(|| {
+            // Offline / probe failed: use local size when the file is already complete.
+            dest.metadata().ok().map(|m| m.len()).filter(|&n| n > 0)
+        })
+        .map(|n| n as i64);
+    PlannedStep {
+        step_kind: "http".into(),
+        label,
+        spec: json!({
+            "url": url,
+            "dest": dest.to_string_lossy(),
+            "filename": dest.file_name().and_then(|n| n.to_str()).unwrap_or(""),
+            "sha256": sha256,
+        }),
+        bytes_total,
+    }
 }
 
 pub(crate) fn plan_steps(app: &AppHandle, spec: &DownloadSpec) -> Result<Vec<PlannedStep>, String> {
@@ -122,53 +148,104 @@ pub(crate) fn plan_steps(app: &AppHandle, spec: &DownloadSpec) -> Result<Vec<Pla
                     step_kind: "git_node".into(),
                     label: "ComfyUI-QwenVL custom node".into(),
                     spec: json!({ "pinId": "qwenvl" }),
+                    bytes_total: None,
                 },
                 PlannedStep {
                     step_kind: "pip".into(),
                     label: "QwenVL Python dependencies".into(),
                     spec: json!({ "action": "qwenvl_deps" }),
+                    bytes_total: None,
                 },
             ];
             for (filename, url, dest) in prompt_tools::qwenvl_http_files(app)? {
+                steps.push(http_step(filename, &url, &dest, None));
+            }
+            Ok(steps)
+        }
+        DownloadSpec::Blueprint { id } => {
+            let (_dir, manifest) = blueprints::load_manifest(app, id)?;
+            let models_root = comfy::models_dir(app)?;
+            let mut steps = Vec::new();
+            if !manifest.custom_nodes.is_empty() {
                 steps.push(PlannedStep {
-                    step_kind: "http".into(),
-                    label: filename.clone(),
-                    spec: json!({
-                        "url": url,
-                        "dest": dest.to_string_lossy(),
-                        "filename": filename,
-                    }),
+                    step_kind: "action".into(),
+                    label: "Install custom nodes".into(),
+                    spec: json!({ "action": "blueprint_nodes", "id": id }),
+                    bytes_total: None,
+                });
+            }
+            for model in &manifest.models {
+                if model.url.trim().is_empty() {
+                    continue;
+                }
+                if model.filename.is_empty()
+                    || model.path.is_empty()
+                    || model.filename.contains("..")
+                    || model.path.contains("..")
+                    || model.filename.contains('/')
+                    || model.filename.contains('\\')
+                    || std::path::Path::new(&model.path).is_absolute()
+                {
+                    return Err(format!("invalid model entry: {}", model.filename));
+                }
+                let dest = models_root.join(&model.path).join(&model.filename);
+                steps.push(http_step(
+                    model.filename.clone(),
+                    &model.url,
+                    &dest,
+                    model.sha256.as_deref(),
+                ));
+            }
+            if steps.is_empty() {
+                // Local-only manifests still need the legacy install path.
+                steps.push(PlannedStep {
+                    step_kind: "action".into(),
+                    label: format!("Install blueprint {id}"),
+                    spec: json!({ "action": "blueprint", "id": id }),
+                    bytes_total: None,
                 });
             }
             Ok(steps)
         }
-        DownloadSpec::Blueprint { id } => Ok(vec![PlannedStep {
-            step_kind: "action".into(),
-            label: format!("Install blueprint {id}"),
-            spec: json!({ "action": "blueprint", "id": id }),
-        }]),
         DownloadSpec::Lora { id, arch } => {
             let plan = loras::variant_download(app, id, arch.as_str())?;
-            Ok(vec![PlannedStep {
-                step_kind: "http".into(),
-                label: plan.filename.clone(),
-                spec: json!({
-                    "url": plan.url,
-                    "dest": plan.dest.to_string_lossy(),
-                    "filename": plan.filename,
-                }),
-            }])
+            Ok(vec![http_step(
+                plan.filename.clone(),
+                &plan.url,
+                &plan.dest,
+                None,
+            )])
         }
         DownloadSpec::Upscale { id } => Ok(vec![PlannedStep {
             step_kind: "action".into(),
             label: format!("Install {id}"),
             spec: json!({ "action": "upscale", "id": id }),
+            bytes_total: None,
         }]),
-        DownloadSpec::Runtime { engine } => Ok(vec![PlannedStep {
-            step_kind: "action".into(),
-            label: format!("Install {engine}"),
-            spec: json!({ "action": "runtime", "engine": engine }),
-        }]),
+        DownloadSpec::Runtime { engine } => {
+            if engine != comfy::ENGINE {
+                return Err(format!("unknown runtime engine: {engine}"));
+            }
+            let gpu = crate::gpu::detect_nvidia();
+            let url = comfy::resolve_portable_url(&gpu)?;
+            let dest = comfy::portable_archive_path(app)?;
+            let ver = comfy::pinned_version();
+            Ok(vec![
+                http_step(format!("Download ComfyUI {ver}"), url, &dest, None),
+                PlannedStep {
+                    step_kind: "action".into(),
+                    label: "Install ComfyUI".into(),
+                    spec: json!({ "action": "runtime_install", "engine": engine }),
+                    bytes_total: None,
+                },
+                PlannedStep {
+                    step_kind: "action".into(),
+                    label: "Install extensions".into(),
+                    spec: json!({ "action": "runtime_extensions", "engine": engine }),
+                    bytes_total: None,
+                },
+            ])
+        }
     }
 }
 
@@ -239,7 +316,7 @@ pub(crate) fn enqueue_job(app: &AppHandle, spec: &DownloadSpec) -> Result<String
                 spec_json: step.spec.to_string(),
                 status: "queued".into(),
                 bytes_done: 0,
-                bytes_total: None,
+                bytes_total: step.bytes_total,
                 error: None,
                 updated_at: ts,
             })?;

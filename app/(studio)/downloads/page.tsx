@@ -6,6 +6,7 @@ import { notifyError } from "@/lib/notify"
 
 export default function DownloadsStudioPage() {
   const downloadSnapshot = useStudioStore((s) => s.downloadSnapshot)
+  const downloadSpeedBps = useStudioStore((s) => s.downloadSpeedBps)
   const pauseDownload = useStudioStore((s) => s.pauseDownload)
   const resumeDownload = useStudioStore((s) => s.resumeDownload)
   const cancelDownload = useStudioStore((s) => s.cancelDownload)
@@ -15,6 +16,7 @@ export default function DownloadsStudioPage() {
     <div className="absolute inset-0 flex flex-col pt-14">
       <DownloadsPanel
         snapshot={downloadSnapshot}
+        speedBps={downloadSpeedBps}
         onPause={(jobId) => {
           void pauseDownload(jobId).catch((e) =>
             notifyError(

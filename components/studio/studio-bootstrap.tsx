@@ -41,7 +41,7 @@ import {
   pickDefaultBlueprintId,
   upscaleFromRecipe,
 } from "@/lib/blueprint-helpers"
-import { formatBytes, formatDuration } from "@/lib/format"
+import { formatBytes, formatEta } from "@/lib/format"
 import {
   SIDE_LENGTH_DEFAULT,
   sizeFromAspectAndSide,
@@ -216,10 +216,11 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
     let unlistenUpscaleProgress: (() => void) | undefined
     let unlistenPromptToolsProgress: (() => void) | undefined
 
-    const SPEED_WINDOW_MS = 10_000
-    const SPEED_MIN_MS = 3_000
+    const SPEED_WINDOW_MS = 20_000
+    const SPEED_MIN_MS = 5_000
     let speedSamples: { t: number; bytes: number; url: string }[] = []
     let emaSpeed = 0
+    let publishedSpeed = 0
 
     async function load() {
       try {
@@ -353,10 +354,12 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
       if (p.done) {
         speedSamples = []
         emaSpeed = 0
+        publishedSpeed = 0
+        store().setDownloadSpeedBps(0)
       } else if (p.total != null && p.total > trackedBytes) {
+        // Keep EMA across files so overall ETA doesn't collapse between steps.
         if (speedSamples.length > 0 && speedSamples[0]!.url !== p.url) {
           speedSamples = []
-          emaSpeed = 0
         }
         speedSamples.push({ t: now, bytes: trackedBytes, url: p.url })
         const cutoff = now - SPEED_WINDOW_MS
@@ -376,7 +379,17 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
           if (dtMs >= SPEED_MIN_MS) {
             const windowSpeed = ((newest.bytes - oldest.bytes) / dtMs) * 1000
             emaSpeed =
-              emaSpeed > 0 ? emaSpeed * 0.88 + windowSpeed * 0.12 : windowSpeed
+              emaSpeed > 0 ? emaSpeed * 0.95 + windowSpeed * 0.05 : windowSpeed
+            // Only publish meaningful changes - cuts UI thrash from tiny speed noise.
+            const delta = Math.abs(emaSpeed - publishedSpeed)
+            if (
+              publishedSpeed === 0 ||
+              delta / publishedSpeed > 0.06 ||
+              delta > 256 * 1024
+            ) {
+              publishedSpeed = emaSpeed
+              store().setDownloadSpeedBps(emaSpeed)
+            }
           }
         }
       }
@@ -394,7 +407,7 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
         emaSpeed > 8 * 1024
       ) {
         const remain = p.total - p.downloaded
-        etaSuffix = ` · ${formatBytes(emaSpeed)}/s · ETA ${formatDuration(remain / emaSpeed)}`
+        etaSuffix = ` · ${formatBytes(emaSpeed)}/s · ETA ${formatEta(remain / emaSpeed)}`
       }
       const msg = p.done
         ? "Download complete"

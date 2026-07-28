@@ -15,11 +15,13 @@ import {
 } from "@/components/ui/progress"
 import { Spinner } from "@/components/ui/spinner"
 import { WithTooltip } from "@/components/ui/tooltip"
-import { formatBytes } from "@/lib/format"
+import { formatBytes, formatEta } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 type DownloadsPanelProps = {
   snapshot: DownloadSnapshot
+  /** Smoothed bytes/sec for the active transfer (0 when unknown). */
+  speedBps?: number
   onPause: (jobId: string) => void
   onResume: (jobId: string) => void
   onCancel: (jobId: string) => void
@@ -62,22 +64,33 @@ function TransferRail({ value, idle }: { value: number; idle?: boolean }) {
 
 function jobPct(job: DownloadJobView): number | null {
   if (job.total != null && job.total > 0) {
-    return Math.min(100, Math.round((job.downloaded / job.total) * 100))
+    return Math.min(100, (job.downloaded / job.total) * 100)
   }
   const active = job.steps.find(
     (s) => s.status === "running" || s.status === "paused"
   )
   if (active?.bytesTotal && active.bytesTotal > 0) {
-    return Math.min(
-      100,
-      Math.round((active.bytesDone / active.bytesTotal) * 100)
-    )
+    return Math.min(100, (active.bytesDone / active.bytesTotal) * 100)
   }
+  // Non-transfer steps (extract/configure) stay indeterminate.
+  if (active && active.stepKind !== "http") return null
   return null
+}
+
+function formatPct(pct: number): string {
+  return `${Math.min(100, pct).toFixed(2)}%`
+}
+
+function stepStatusIcon(status: string) {
+  if (status === "done") return "✓"
+  if (status === "error") return "!"
+  if (status === "running" || status === "paused") return "●"
+  return "○"
 }
 
 export function DownloadsPanel({
   snapshot,
+  speedBps = 0,
   onPause,
   onResume,
   onCancel,
@@ -104,8 +117,16 @@ export function DownloadsPanel({
   const activeStep = active?.steps.find(
     (s) => s.status === "running" || s.status === "paused"
   )
-  const bytesDone = activeStep?.bytesDone ?? active?.downloaded ?? 0
-  const bytesTotal = activeStep?.bytesTotal ?? active?.total ?? null
+  const bytesDone =
+    active?.total != null ? active.downloaded : (activeStep?.bytesDone ?? 0)
+  const bytesTotal = active?.total ?? activeStep?.bytesTotal ?? null
+  const remain =
+    bytesTotal != null && bytesTotal > bytesDone ? bytesTotal - bytesDone : 0
+  const showEta =
+    active?.status === "running" && speedBps > 8 * 1024 && remain > 0
+  const etaLabel = showEta
+    ? ` · ${formatBytes(speedBps)}/s · ETA ${formatEta(remain / speedBps)}`
+    : ""
 
   return (
     <StudioPanel>
@@ -170,16 +191,13 @@ export function DownloadsPanel({
             {active ? (
               <li className="overflow-hidden rounded-2xl border border-primary/30 bg-card/80">
                 <div className="space-y-4 p-4 md:p-5">
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate font-mono text-sm font-medium">
-                        {active.activeLabel ?? active.title}
-                      </p>
-                      <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <p className="flex items-center gap-1.5 truncate font-mono text-sm font-medium">
                         {active.status === "paused" ? (
-                          <PauseIcon className="size-3.5 text-primary" />
+                          <PauseIcon className="size-3.5 shrink-0 text-primary" />
                         ) : (
-                          <Spinner className="size-3.5 text-primary" />
+                          <Spinner className="size-3.5 shrink-0 text-primary" />
                         )}
                         {active.title}
                         {pendingCount > 1
@@ -229,16 +247,71 @@ export function DownloadsPanel({
                     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 font-mono text-[11px] text-muted-foreground tabular-nums">
                       <span>
                         {bytesTotal != null
-                          ? `${formatBytes(bytesDone)} / ${formatBytes(bytesTotal)}`
+                          ? `${formatBytes(bytesDone)} / ${formatBytes(bytesTotal)}${etaLabel}`
                           : bytesDone > 0
-                            ? formatBytes(bytesDone)
-                            : "Preparing…"}
+                            ? `${formatBytes(bytesDone)}${etaLabel}`
+                            : activeStep?.stepKind === "http"
+                              ? "Preparing…"
+                              : "Working…"}
                       </span>
                       <span className="text-foreground/85">
-                        {pct != null ? `${pct}%` : "-"}
+                        {pct != null ? formatPct(pct) : "-"}
                       </span>
                     </div>
                   </div>
+
+                  {active.steps.length > 1 ? (
+                    <ul className="space-y-1.5 border-t border-border/50 pt-3">
+                      {active.steps.map((step) => {
+                        const isActive =
+                          step.status === "running" || step.status === "paused"
+                        const stepPct =
+                          step.bytesTotal &&
+                          step.bytesTotal > 0 &&
+                          (isActive ||
+                            step.status === "done" ||
+                            step.bytesDone > 0)
+                            ? Math.min(
+                                100,
+                                (step.bytesDone / step.bytesTotal) * 100
+                              )
+                            : null
+                        return (
+                          <li
+                            key={step.id}
+                            className={cn(
+                              "flex items-center justify-between gap-3 font-mono text-[11px]",
+                              isActive
+                                ? "text-foreground"
+                                : step.status === "done"
+                                  ? "text-muted-foreground"
+                                  : "text-muted-foreground/70"
+                            )}
+                          >
+                            <span className="min-w-0 truncate">
+                              <span className="mr-2 inline-block w-3 text-center">
+                                {stepStatusIcon(step.status)}
+                              </span>
+                              {step.label}
+                            </span>
+                            <span className="shrink-0 tabular-nums">
+                              {step.bytesTotal != null && step.bytesTotal > 0
+                                ? isActive || step.bytesDone > 0
+                                  ? `${formatBytes(step.bytesDone)} / ${formatBytes(step.bytesTotal)}`
+                                  : formatBytes(step.bytesTotal)
+                                : null}
+                              {step.bytesTotal != null && step.bytesTotal > 0
+                                ? " · "
+                                : null}
+                              {stepPct != null
+                                ? formatPct(stepPct)
+                                : statusLabel(step.status)}
+                            </span>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  ) : null}
                 </div>
               </li>
             ) : null}

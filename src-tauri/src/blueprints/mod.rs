@@ -6,11 +6,13 @@ mod models_fs;
 mod paths;
 mod types;
 
+pub(crate) use cache::probe_remote_size;
 #[allow(unused_imports)]
 pub use cache::{clear_remote_size_cache, load_remote_size_cache};
 pub(crate) use crud::load_manifest;
 #[allow(unused_imports)]
 pub use crud::{delete_user_blueprint, get_detail, save_user_blueprint};
+pub(crate) use install::install_custom_nodes;
 #[allow(unused_imports)]
 pub use install::install_models;
 #[allow(unused_imports)]

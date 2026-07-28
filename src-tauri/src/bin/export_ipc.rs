@@ -1,4 +1,4 @@
-//! Regenerate `lib/generated/bindings.ts` — run via `npm run ipc:types`.
+//! Regenerate `lib/generated/bindings.ts` - run via `npm run ipc:types`.
 
 fn main() {
     if let Err(e) = app_lib::ipc::export_typescript_bindings() {

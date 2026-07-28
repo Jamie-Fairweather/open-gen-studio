@@ -1,12 +1,12 @@
-# Adding a model architecture
+﻿# Adding a model architecture
 
-An **architecture** (`arch`) is a graph family the recipe compiler knows how to build at generate time — for example `z-image`, `flux`, or `sdxl`. Blueprints (recipes) pick an `arch`; the Rust compiler emits Comfy API JSON from that recipe plus live User Mode settings.
+An **architecture** (`arch`) is a graph family the recipe compiler knows how to build at generate time - for example `z-image`, `flux`, or `sdxl`. Blueprints (recipes) pick an `arch`; the Rust compiler emits Comfy API JSON from that recipe plus live User Mode settings.
 
 **Closed id set:** `RecipeArch` in Rust (`src-tauri/src/recipe/arch_id.rs`), exported to TypeScript via Specta (`lib/generated/bindings.ts`). Manifests still store a string; parse with `RecipeArch::parse` / `isRecipeArch`.
 
-**Creator metadata** (slots, default URLs, capabilities) is separate — still authored in `ARCHES` inside [`lib/creator-arches.ts`](../../lib/creator-arches.ts). That is product data, not an IPC DTO. See [Coding standards](./coding-standards.md).
+**Creator metadata** (slots, default URLs, capabilities) is separate - still authored in `ARCHES` inside [`lib/creator-arches.ts`](../../lib/creator-arches.ts). That is product data, not an IPC DTO. See [Coding standards](./coding-standards.md).
 
-**Best copy target:** `z-image` — compiler `src-tauri/src/recipe/arch/z_image.rs`, official recipe `blueprints/official/z-image-turbo/`, Creator entry in `lib/creator-arches.ts`.
+**Best copy target:** `z-image` - compiler `src-tauri/src/recipe/arch/z_image.rs`, official recipe `blueprints/official/z-image-turbo/`, Creator entry in `lib/creator-arches.ts`.
 
 Related: [`PLAN.md`](../PLAN.md), [`blueprints/official/README.md`](../../blueprints/official/README.md), [`loras/official/README.md`](../../loras/official/README.md).
 
@@ -19,7 +19,7 @@ Related: [`PLAN.md`](../PLAN.md), [`blueprints/official/README.md`](../../bluepr
 | **`RecipeArch`**           | Closed allowlist (Rust enum → generated TS union)             |
 | **Manifest `arch` string** | On-disk / IPC field; must parse as `RecipeArch` to generate   |
 | **Rust compiler**          | `recipe::compile` matches on `RecipeArch`                     |
-| **Creator `ARCHES`**       | Per-arch UI metadata — slots, defaults, capabilities          |
+| **Creator `ARCHES`**       | Per-arch UI metadata - slots, defaults, capabilities          |
 | **`lib/arch.ts`**          | Re-exports generated `RECIPE_ARCHES` for pickers              |
 | **Official blueprint**     | Optional package under `blueprints/official/<id>/`            |
 | **LoRA variants**          | Packs declare per-arch files; stack filtered by active `arch` |
@@ -48,7 +48,7 @@ Flow type is `txt2img` only for v1.
 **Minimum viable (generate works):** steps 2–4 + any user/official manifest with that `arch`.  
 **Product-complete:** all of 1–11.
 
-LoRA “Add pack” uses `RECIPE_ARCHES` — no separate `ARCH_OPTIONS` list.
+LoRA “Add pack” uses `RECIPE_ARCHES` - no separate `ARCH_OPTIONS` list.
 
 ---
 
@@ -56,12 +56,12 @@ LoRA “Add pack” uses `RECIPE_ARCHES` — no separate `ARCH_OPTIONS` list.
 
 Before writing code, freeze:
 
-- **Loaders** — UNET + CLIP + VAE, DualCLIP, Checkpoint, custom sampling, etc.
-- **Model roles** — strings the compiler looks up via `model_by_role` (e.g. `unet`, `text_encoder`, `vae`, `t5`/`clip_l`, `checkpoint`). Prefer roles over raw Comfy class names in the manifest.
-- **Conditioning** — positive-only + `ConditioningZeroOut`, real negative text, Flux guidance, etc.
-- **Sampler path** — classic `KSampler` vs custom guider / scheduler nodes (Flux.2, Ideogram 4).
-- **Capabilities** — `negative`, `loras`, `controlnet`, `upscale` flags on the recipe.
-- **Custom nodes** — prefer Comfy core. If you need a pack, list it in manifest `customNodes[]` so install clones it.
+- **Loaders** - UNET + CLIP + VAE, DualCLIP, Checkpoint, custom sampling, etc.
+- **Model roles** - strings the compiler looks up via `model_by_role` (e.g. `unet`, `text_encoder`, `vae`, `t5`/`clip_l`, `checkpoint`). Prefer roles over raw Comfy class names in the manifest.
+- **Conditioning** - positive-only + `ConditioningZeroOut`, real negative text, Flux guidance, etc.
+- **Sampler path** - classic `KSampler` vs custom guider / scheduler nodes (Flux.2, Ideogram 4).
+- **Capabilities** - `negative`, `loras`, `controlnet`, `upscale` flags on the recipe.
+- **Custom nodes** - prefer Comfy core. If you need a pack, list it in manifest `customNodes[]` so install clones it.
 
 Official role cheat sheet: [`blueprints/official/README.md`](../../blueprints/official/README.md).
 
@@ -109,20 +109,20 @@ If the arch uses a **guider** path for Ultimate SD Upscale, set `UpscaleWiring.g
 
 ### Register
 
-**`src-tauri/src/recipe/arch/mod.rs`** — `mod` + `pub(crate) use`.
+**`src-tauri/src/recipe/arch/mod.rs`** - `mod` + `pub(crate) use`.
 
-**`src-tauri/src/recipe/mod.rs`** — match on `RecipeArch` (error string comes from `RecipeArch::supported_list()`).
+**`src-tauri/src/recipe/mod.rs`** - match on `RecipeArch` (error string comes from `RecipeArch::supported_list()`).
 
 ### Controls and sampler fallbacks
 
 **`src-tauri/src/recipe/controls.rs`**
 
-- `synthetic_controls` — Flux-like arches use **Guidance** instead of CFG. Extend if your arch is guidance-based.
-- `default_steps` / `default_cfg` — add match arms for sensible fallbacks.
+- `synthetic_controls` - Flux-like arches use **Guidance** instead of CFG. Extend if your arch is guidance-based.
+- `default_steps` / `default_cfg` - add match arms for sensible fallbacks.
 
 **`src-tauri/src/recipe/values.rs`**
 
-- `sampler_name` / `scheduler_name` — fallbacks when the manifest leaves them empty.
+- `sampler_name` / `scheduler_name` - fallbacks when the manifest leaves them empty.
 
 Only touch `lib/comfy-samplers.ts` if Comfy exposes a **new** sampler/scheduler name the UI must list.
 
@@ -142,7 +142,7 @@ Creator Mode authors recipes without embedding Comfy.
 
 **`lib/creator-arches.ts`**
 
-1. `ArchId` is already `RecipeArch` — no union edit once the generated type + `RECIPE_ARCHES` are updated.
+1. `ArchId` is already `RecipeArch` - no union edit once the generated type + `RECIPE_ARCHES` are updated.
 2. Add a full `ArchDef` to `ARCHES`:
 
 | Field                   | Purpose                                                                                   |
@@ -151,10 +151,10 @@ Creator Mode authors recipes without embedding Comfy.
 | `slots[]`               | Model inputs: `role`, `path` (library folder), `label`, `required`, optional `defaultUrl` |
 | `sampler` / `scheduler` | Written into the saved manifest                                                           |
 | `capabilities`          | `negative`, `loras`, `controlnet`, `upscale`                                              |
-| `usesGuidance`          | Optional — Flux-style guidance UI                                                         |
+| `usesGuidance`          | Optional - Flux-style guidance UI                                                         |
 | `defaults`              | Size, steps, cfg/guidance, plus arch keys (`clipType`, `auraShift`, `mu`, …)              |
 
-`creator-panel.tsx` only hosts the form — usually no change. Slots/roles must match what the Rust compiler expects.
+`creator-panel.tsx` only hosts the form - usually no change. Slots/roles must match what the Rust compiler expects.
 
 ---
 
@@ -163,7 +163,7 @@ Creator Mode authors recipes without embedding Comfy.
 Ship a package under `blueprints/official/<blueprint-id>/`:
 
 ```
-manifest.json    # required — includes "arch": "your-arch"
+manifest.json    # required - includes "arch": "your-arch"
 thumbnail.png    # optional
 ```
 
@@ -192,9 +192,9 @@ Enable `capabilities.loras: true` on recipes that should show the LoRA stack.
 
 Keep TS and Rust mappings in sync.
 
-**`lib/prompt-tools.ts`** — `targetFromArch` (ids are generated `PromptTarget`).
+**`lib/prompt-tools.ts`** - `targetFromArch` (ids are generated `PromptTarget`).
 
-**`src-tauri/src/prompt_tools/types.rs`** — `PromptTarget::resolve` (prefer matching on `RecipeArch::parse`).
+**`src-tauri/src/prompt_tools/types.rs`** - `PromptTarget::resolve` (prefer matching on `RecipeArch::parse`).
 
 If the arch needs a **new dialect**, add a `PromptTarget` variant + `#[derive(Type)]`, dialect text in `prompts.rs`, UI labels in `PROMPT_TARGETS`, then `bun run ipc:types`. If it fits an existing dialect, only extend the arch→target maps.
 
@@ -207,16 +207,16 @@ Panels already call `targetFromArch(studio.activeArch)`.
 | File                                   | What                                                               |
 | -------------------------------------- | ------------------------------------------------------------------ |
 | `src-tauri/src/recipe/upscale_tail.rs` | `usdu_denoise` / `usdu_steps`; guider wiring                       |
-| `lib/host/upscale.ts`                  | `defaultUsduSteps` / `defaultUsduDenoise` — keep aligned with Rust |
+| `lib/host/upscale.ts`                  | `defaultUsduSteps` / `defaultUsduDenoise` - keep aligned with Rust |
 | `components/refine-controls.tsx`       | `turboArch` caution; `guiderUsdu` for custom-sampling arches       |
 
 ---
 
 ## 8. Tests and docs
 
-**`src-tauri/src/recipe/tests.rs`** — add `compiles_<arch>_graph` (and USDU/guider cases if applicable).
+**`src-tauri/src/recipe/tests.rs`** - add `compiles_<arch>_graph` (and USDU/guider cases if applicable).
 
-Keep README / PLAN tables in sync. No database migration — recipes and LoRA packs are files.
+Keep README / PLAN tables in sync. No database migration - recipes and LoRA packs are files.
 
 ---
 
@@ -252,7 +252,7 @@ Keep README / PLAN tables in sync. No database migration — recipes and LoRA pa
 | Upscale         | Denoise 0.15, steps cap 8                           |
 | Tests           | `compiles_z_image_graph`                            |
 
-**Secondary reference:** `flux` — DualCLIP, `usesGuidance: true`, PromptTarget `Flux`.
+**Secondary reference:** `flux` - DualCLIP, `usesGuidance: true`, PromptTarget `Flux`.
 
 ---
 

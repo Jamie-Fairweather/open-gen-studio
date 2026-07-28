@@ -41,7 +41,7 @@ pub(crate) fn emit_progress(
 
 fn portable_root(app: &AppHandle) -> Result<PathBuf, String> {
     comfy::find_portable_root(&comfy::runtimes_dir(app)?.join("portable")).map_err(|_| {
-        "ComfyUI portable not found — install the runtime before Prompt Tools".to_string()
+        "ComfyUI portable not found - install the runtime before Prompt Tools".to_string()
     })
 }
 
@@ -251,7 +251,7 @@ pub(crate) fn ensure_comfy_with_nodes(
         .collect();
     if !still_missing.is_empty() {
         return Err(format!(
-            "ComfyUI is missing required nodes: {}. Custom node may have failed to import — check Comfy logs.",
+            "ComfyUI is missing required nodes: {}. Custom node may have failed to import - check Comfy logs.",
             still_missing.join(", ")
         ));
     }
@@ -292,7 +292,7 @@ fn ensure_qwenvl_weights(app: &AppHandle) -> Result<bool, String> {
         download::download_file(app, &hf_resolve_url(filename), &dest, None)?;
         if !download::local_file_complete(&dest) {
             return Err(format!(
-                "download incomplete for {filename} — reopen Downloads / retry Image→Prompt to resume"
+                "download incomplete for {filename} - reopen Downloads / retry Image→Prompt to resume"
             ));
         }
         changed = true;
@@ -312,7 +312,7 @@ pub fn install_qwenvl_python_deps(app: &AppHandle) -> Result<bool, String> {
     }
     let python = root.join("python_embeded").join("python.exe");
     if !python.is_file() {
-        return Err("ComfyUI portable python.exe missing — cannot install QwenVL deps".into());
+        return Err("ComfyUI portable python.exe missing - cannot install QwenVL deps".into());
     }
     let reqs = root
         .join("ComfyUI")

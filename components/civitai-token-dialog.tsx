@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input"
 import { openExternalUrl } from "@/lib/host"
 import { notifyError } from "@/lib/notify"
 
-/** Account page — user scrolls to API Keys (CivitAI has no deep link). */
+/** Account page - user scrolls to API Keys (CivitAI has no deep link). */
 const CIVITAI_ACCOUNT_URL = "https://civitai.com/user/account"
 
 type CivitaiTokenDialogProps = {

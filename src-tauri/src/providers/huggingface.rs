@@ -38,7 +38,7 @@ pub fn auth_header() -> Option<String> {
     None
 }
 
-/// HF resolve URLs are already direct file links — pass through.
+/// HF resolve URLs are already direct file links - pass through.
 pub fn resolve(url: &str) -> Result<ResolvedModelUrl, String> {
     Ok(ResolvedModelUrl {
         provider: ProviderKind::HuggingFace,

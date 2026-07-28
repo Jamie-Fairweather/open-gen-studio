@@ -1,4 +1,4 @@
-# Official Blueprints (built into the app)
+﻿# Official Blueprints (built into the app)
 
 Recipe packages that ship with the desktop build. Product background: [`docs/PLAN.md`](../../docs/PLAN.md).
 
@@ -89,4 +89,4 @@ Default `0` = random each generate.
 
 - Keep ids stable (`z-image-turbo`)
 - Folder names starting with `_` are ignored (e.g. `_example`)
-- **Creator Mode** uses the recipe form (arch + models) — no Comfy capture required
+- **Creator Mode** uses the recipe form (arch + models) - no Comfy capture required

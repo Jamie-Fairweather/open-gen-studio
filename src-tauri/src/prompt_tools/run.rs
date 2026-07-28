@@ -29,7 +29,7 @@ fn reject_model_error_text(text: &str) -> Result<String, String> {
         || lower.contains("qwen3vlchathandler")
     {
         return Err(format!(
-            "QwenVL failed to load: {t}. Dependencies were installed — if this persists, restart ComfyUI from Settings and retry."
+            "QwenVL failed to load: {t}. Dependencies were installed - if this persists, restart ComfyUI from Settings and retry."
         ));
     }
     Ok(t.to_string())
@@ -45,7 +45,7 @@ fn refuse_if_generate_running(db: &Mutex<Db>) -> Result<(), String> {
         .any(|j| j.kind == "generate" && (j.status == "running" || j.status == "queued"))
     {
         return Err(
-            "A generate job is running — wait for it to finish before using Prompt Tools".into(),
+            "A generate job is running - wait for it to finish before using Prompt Tools".into(),
         );
     }
     Ok(())
@@ -172,7 +172,7 @@ pub fn run_prompt_enhance(
     refuse_if_generate_running(db)?;
     let prompt = args.prompt.trim();
     if prompt.is_empty() {
-        return Err("Prompt is empty — use Image to Prompt or type an idea first".into());
+        return Err("Prompt is empty - use Image to Prompt or type an idea first".into());
     }
     let target = PromptTarget::from_str(&args.target)?.resolve(args.arch.as_deref());
     let mode = args.mode.as_deref().unwrap_or("expand");

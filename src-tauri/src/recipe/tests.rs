@@ -361,7 +361,7 @@ fn compiles_krea2_with_supir() {
     }));
     let mut values = HashMap::new();
     values.insert("prompt".into(), json!("portrait"));
-    // Above numpy/lightning u32 max — must wrap for SUPIR.
+    // Above numpy/lightning u32 max - must wrap for SUPIR.
     values.insert("seed".into(), json!(4_745_625_442_457_469i64));
     values.insert(
         "upscale".into(),

@@ -32,31 +32,31 @@ pub fn resolve_for_generate(
         usdu = false;
         if !super::nodes::supir_installed(app) {
             return Err(
-                "SUPIR custom node is not installed — install a SUPIR model from Refine first"
+                "SUPIR custom node is not installed - install a SUPIR model from Refine first"
                     .into(),
             );
         }
         if !super::catalog::sdxl_ready(&models_root) {
             return Err(format!(
-                "SUPIR companion SDXL ({SUPIR_SDXL_FILENAME}) is not installed — install SUPIR from Refine"
+                "SUPIR companion SDXL ({SUPIR_SDXL_FILENAME}) is not installed - install SUPIR from Refine"
             ));
         }
         if !super::catalog::file_ready(&models_root, entry) {
             return Err(format!(
-                "SUPIR model '{}' is not installed — install it from Refine or the Models library",
+                "SUPIR model '{}' is not installed - install it from Refine or the Models library",
                 entry.name
             ));
         }
     } else if !super::catalog::file_ready(&models_root, entry) {
         return Err(format!(
-            "Upscale model '{}' is not installed — install it from Refine or the Models library",
+            "Upscale model '{}' is not installed - install it from Refine or the Models library",
             entry.name
         ));
     }
 
     if usdu && !super::nodes::usdu_installed(app) {
         return Err(
-            "Ultimate SD Upscale is not installed — turn on the toggle to install, or install from Refine"
+            "Ultimate SD Upscale is not installed - turn on the toggle to install, or install from Refine"
                 .into(),
         );
     }

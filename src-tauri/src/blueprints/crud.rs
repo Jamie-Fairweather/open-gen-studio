@@ -17,7 +17,7 @@ pub fn get_detail(app: &AppHandle, blueprint_id: &str) -> Result<BlueprintDetail
     let (_dir, manifest) = load_manifest(app, blueprint_id)?;
     if manifest.arch.trim().is_empty() {
         return Err(format!(
-            "Blueprint '{blueprint_id}' is missing arch — only recipe blueprints are supported"
+            "Blueprint '{blueprint_id}' is missing arch - only recipe blueprints are supported"
         ));
     }
     let models_ready = manifest
@@ -104,7 +104,7 @@ fn official_has_id(app: &AppHandle, blueprint_id: &str) -> bool {
 }
 
 /// Save a user recipe blueprint. Never writes to Official. Rejects Official id collisions.
-/// Does not write `controls` or `workflow.api.json` — UI controls are synthesized from `arch`.
+/// Does not write `controls` or `workflow.api.json` - UI controls are synthesized from `arch`.
 pub fn save_user_blueprint(
     app: &AppHandle,
     id: &str,
@@ -129,7 +129,7 @@ pub fn save_user_blueprint(
     }
     if official_has_id(app, id) {
         return Err(format!(
-            "id '{id}' is reserved by an Official blueprint — choose another id"
+            "id '{id}' is reserved by an Official blueprint - choose another id"
         ));
     }
     let mut models = models;

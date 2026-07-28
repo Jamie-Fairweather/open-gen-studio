@@ -1,14 +1,14 @@
-# Open Gen AI — Product & Architecture Plan
+﻿# Open Gen AI - Product & Architecture Plan
 
-> **Design history + product direction.** For how-tos and source of truth, prefer [`docs/contributing/`](./contributing/) — especially `RecipeArch::ALL` / generated `RECIPE_ARCHES` and Creator `ARCHES` in `lib/creator-arches.ts`.
+> **Design history + product direction.** For how-tos and source of truth, prefer [`docs/contributing/`](./contributing/) - especially `RecipeArch::ALL` / generated `RECIPE_ARCHES` and Creator `ARCHES` in `lib/creator-arches.ts`.
 
 ## Vision
 
-Build a **local AI runtime platform** — not “another ComfyUI frontend.”
+Build a **local AI runtime platform** - not “another ComfyUI frontend.”
 
 Think **Steam / Docker Desktop for local generative AI**: the app installs runtimes, models, and dependencies; queues jobs; manages the GPU; and exposes a simple UI. Inference always happens in external engines (ComfyUI, Whisper, Kokoro, Wan, Trellis2, vLLM/llama.cpp, etc.). Media modalities: **image → audio → video → 3D** (in that product order).
 
-**Day-one promise:** pick an Official Blueprint (e.g. Z-Image Turbo) → one-click install → generate. End users never touch GitHub, Python, or node packing by hand. (We may _host_ Official Blueprint manifests on GitHub for the app to fetch — that is an implementation detail, not a user workflow.)
+**Day-one promise:** pick an Official Blueprint (e.g. Z-Image Turbo) → one-click install → generate. End users never touch GitHub, Python, or node packing by hand. (We may _host_ Official Blueprint manifests on GitHub for the app to fetch - that is an implementation detail, not a user workflow.)
 
 ---
 
@@ -16,10 +16,10 @@ Think **Steam / Docker Desktop for local generative AI**: the app installs runti
 
 1. **The app never performs inference.** It orchestrates: install, start/stop services, queue jobs, unify results.
 2. **Runtimes are plugins.** ComfyUI, Whisper, Kokoro, etc. implement a common interface.
-3. **Publish Blueprints, not workflows.** Image Blueprints are **recipes** (arch + models + sampler + capabilities). The host **compiles** a Comfy API graph at generate time — we do not ship frozen `workflow.api.json` as the product path.
-4. **Two data planes — never mix them.** Local app state (jobs, installs, gallery) vs Blueprint catalog (read-only manifests; Official ships in-repo today).
+3. **Publish Blueprints, not workflows.** Image Blueprints are **recipes** (arch + models + sampler + capabilities). The host **compiles** a Comfy API graph at generate time - we do not ship frozen `workflow.api.json` as the product path.
+4. **Two data planes - never mix them.** Local app state (jobs, installs, gallery) vs Blueprint catalog (read-only manifests; Official ships in-repo today).
 5. **No hosted marketplace database.** Official/community presets are files the app reads; not a public cloud DB.
-6. **99% User Mode, 1% Creator Mode.** Most people never see a node graph. Creator authors **recipes** via a form — the app never embeds ComfyUI; people who want the node graph use ComfyUI itself.
+6. **99% User Mode, 1% Creator Mode.** Most people never see a node graph. Creator authors **recipes** via a form - the app never embeds ComfyUI; people who want the node graph use ComfyUI itself.
 
 ---
 
@@ -49,7 +49,7 @@ Keep these mentally and in code as **two different systems**:
 | **Local store**       | Jobs, gallery, installed presets, runtime installs, model assets, settings, download progress | **SQLite owned by Rust**                 | Rust writes natively; UI via Tauri IPC / events  |
 | **Blueprint catalog** | Official (later community) Blueprint manifests, model download URLs/hashes                    | **In-repo Official** today; GitHub later | App **reads** only; authors publish via git / PR |
 
-Do **not** put marketplace/catalog rows into the local SQLite as source of truth. Optional: cache a fetched catalog snapshot locally for offline browsing — still clearly “cache of GitHub,” not the registry itself.
+Do **not** put marketplace/catalog rows into the local SQLite as source of truth. Optional: cache a fetched catalog snapshot locally for offline browsing - still clearly “cache of GitHub,” not the registry itself.
 
 There is **no** hosted Open Gen AI database for presets/marketplace.
 
@@ -57,9 +57,9 @@ There is **no** hosted Open Gen AI database for presets/marketplace.
 
 ZenStack is a poor fit here and is **not used**:
 
-- Single-user desktop — access policies add nothing.
+- Single-user desktop - access policies add nothing.
 - Rust is the orchestrator and must write job/download/runtime state directly; putting the DB behind Next/ZenStack forces an extra localhost HTTP hop and an always-on Node data server for no real gain.
-- Catalog is files, not an ORM-backed multi-tenant DB — ZenStack’s strengths never apply.
+- Catalog is files, not an ORM-backed multi-tenant DB - ZenStack’s strengths never apply.
 - UI can get live updates via **Tauri events** + IPC queries; no need for a Next CRUD layer.
 
 Revisit only if we later build a real multi-user cloud product. Not for the local store.
@@ -125,9 +125,9 @@ Simple form synthesized from the recipe’s **arch + capabilities** (not a froze
 
 - Prompt / negative prompt (when capable)
 - Size, seed, steps, CFG / guidance
-- LoRA stack + Refine (shared libraries — not per-blueprint models)
+- LoRA stack + Refine (shared libraries - not per-blueprint models)
 - Generate → job queue → Gallery
-- **Tools** (Image to Prompt, Prompt Enhancer) — Comfy utility jobs (QwenVL) that write back into Image Studio
+- **Tools** (Image to Prompt, Prompt Enhancer) - Comfy utility jobs (QwenVL) that write back into Image Studio
 
 No graph. No nodes.
 
@@ -135,11 +135,11 @@ No graph. No nodes.
 
 **Recipe authoring form:** choose arch → fill model slots → sampler/defaults/capabilities → save to My blueprints (`%APPDATA%/…/blueprints/user/<id>/`). No Comfy UI or capture in-app.
 
-Promoting a user pack into `blueprints/official/` is a manual copy / PR — the app never writes Official.
+Promoting a user pack into `blueprints/official/` is a manual copy / PR - the app never writes Official.
 
 ---
 
-## Image Blueprints (recipes) — current path
+## Image Blueprints (recipes) - current path
 
 A Blueprint is an immutable, versioned package. For **image / txt2img**, the payload is a **recipe**, not a frozen Comfy graph.
 
@@ -156,7 +156,7 @@ Blueprint (recipe)
 └── Tests             (compile smoke tests in Rust)
 ```
 
-Supported arches (v1): `z-image`, `krea2`, `flux`, `flux2`, `ideogram4`, `sdxl`, `sd15` — see [`blueprints/official/README.md`](../blueprints/official/README.md) and [`adding-model-architectures.md`](./contributing/adding-model-architectures.md).
+Supported arches (v1): `z-image`, `krea2`, `flux`, `flux2`, `ideogram4`, `sdxl`, `sd15` - see [`blueprints/official/README.md`](../blueprints/official/README.md) and [`adding-model-architectures.md`](./contributing/adding-model-architectures.md).
 
 Official packs today: `z-image-turbo`, `krea2-turbo`, `ideogram4`.
 
@@ -175,20 +175,20 @@ Official packs today: `z-image-turbo`, `krea2-turbo`, `ideogram4`.
 }
 ```
 
-Install lands files in the shared library: `app_data/models/<path>/<filename>` (wired into Comfy via `extra_model_paths.yaml`). Completeness = local file size vs remote `Content-Length` (HEAD/Range probe) — not hardcoded sizes in the manifest. Optional `sha256` for verify.
+Install lands files in the shared library: `app_data/models/<path>/<filename>` (wired into Comfy via `extra_model_paths.yaml`). Completeness = local file size vs remote `Content-Length` (HEAD/Range probe) - not hardcoded sizes in the manifest. Optional `sha256` for verify.
 
 ### Shared libraries (not blueprint `models[]`)
 
 | Library   | Location                           | Notes                                 |
 | --------- | ---------------------------------- | ------------------------------------- |
 | LoRAs     | `loras/official` + user packs      | Arch-filtered stack at generate       |
-| Upscalers | `models/upscale_models/` (+ SUPIR) | Refine UI: SR / USDU / SUPIR — shared |
+| Upscalers | `models/upscale_models/` (+ SUPIR) | Refine UI: SR / USDU / SUPIR - shared |
 
 ---
 
 ## Registry / Official Blueprints
 
-UI still feels like a Registry. **Official Blueprints ship inside the app** — not a hosted marketplace DB.
+UI still feels like a Registry. **Official Blueprints ship inside the app** - not a hosted marketplace DB.
 
 ```
 blueprints/official/<id>/
@@ -243,9 +243,9 @@ How we ship/install ComfyUI under the host (researched against current Comfy-Org
 | Option                                                                                    | What it is                                                                                                                                                                                                                                                                                 | Verdict for Open Gen AI                                          |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
 | **Official Windows Portable**                                                             | Self-contained folder: `python_embeded` + `ComfyUI` + run/update scripts. Published on [ComfyUI releases](https://github.com/comfyanonymous/ComfyUI/releases) / [portable docs](https://docs.comfy.org/installation/comfyui_portable_windows). GPU-specific builds (NVIDIA / AMD / Intel). | **Primary choice on Windows**                                    |
-| **Comfy Desktop** ([Comfy-Org/Comfy-Desktop](https://github.com/Comfy-Org/Comfy-Desktop)) | Official multi-install _launcher_ app; provisions “standalone” envs. Explicitly not for headless/server use.                                                                                                                                                                               | **Do not depend on it** — we _are_ the launcher                  |
+| **Comfy Desktop** ([Comfy-Org/Comfy-Desktop](https://github.com/Comfy-Org/Comfy-Desktop)) | Official multi-install _launcher_ app; provisions “standalone” envs. Explicitly not for headless/server use.                                                                                                                                                                               | **Do not depend on it** - we _are_ the launcher                  |
 | **comfy-cli / git + venv**                                                                | Scriptable clone + pip/uv into a venv                                                                                                                                                                                                                                                      | Fallback for Linux/macOS; more CUDA/pip failure modes on Windows |
-| **Community mega-portables** (e.g. preloaded custom-node packs)                           | Third-party fat archives                                                                                                                                                                                                                                                                   | Avoid as default — size, trust, version drift                    |
+| **Community mega-portables** (e.g. preloaded custom-node packs)                           | Third-party fat archives                                                                                                                                                                                                                                                                   | Avoid as default - size, trust, version drift                    |
 
 ### Decision
 
@@ -276,14 +276,14 @@ Why portable (not “build our own venv”):
 
 **Linux / macOS (later):** prefer **git clone + isolated venv (uv/pip)** or, if stable enough, reuse Comfy-Org [Standalone Environments](https://github.com/Comfy-Org/ComfyUI-Standalone-Environments) (what Comfy Desktop provisions). Same Runtime trait; different `install()` implementation per OS.
 
-**Not bundling Comfy inside our installer by default** — too large; install on demand when the user (or a Blueprint) needs the Comfy runtime.
+**Not bundling Comfy inside our installer by default** - too large; install on demand when the user (or a Blueprint) needs the Comfy runtime.
 
 ### Host implications
 
 - Downloader must support **`.7z` extract** (portable is 7z, not zip). Pure Rust via **sevenz-rust2** (always works); optional system 7-Zip CLI when present for a faster path.
 - Process manager launches `python_embeded\python.exe`, not `run_nvidia_gpu.bat` (bats are for humans; we pass flags ourselves).
 - Shared **model library** outside the portable tree via `extra_model_paths.yaml` so Blueprint installs don’t duplicate multi‑GB weights per Comfy copy.
-- Comfy HTTP is for the host/recipe runner only — not exposed as an in-app node editor.
+- Comfy HTTP is for the host/recipe runner only - not exposed as an in-app node editor.
 
 ---
 
@@ -319,13 +319,13 @@ Internally route to the right runtime; UI never talks to Comfy HTTP directly for
 
 Tables are **machine-local**. Catalog Blueprints are not authoritative rows here.
 
-- **installed_presets** — local install of a Blueprint (id, version, source URL, install path, status)
-- **runtime_installs** — installed engine instances
-- **model_assets** — downloaded files, hashes, paths
-- **jobs** — queue + status + params + links to outputs
-- **gallery_items** — outputs + thumbnails + generation metadata
-- **settings** — directories, GPU preference, update prefs, Official catalog repo URL
-- **catalog_cache** (optional) — last-fetched GitHub index snapshot for offline browse
+- **installed_presets** - local install of a Blueprint (id, version, source URL, install path, status)
+- **runtime_installs** - installed engine instances
+- **model_assets** - downloaded files, hashes, paths
+- **jobs** - queue + status + params + links to outputs
+- **gallery_items** - outputs + thumbnails + generation metadata
+- **settings** - directories, GPU preference, update prefs, Official catalog repo URL
+- **catalog_cache** (optional) - last-fetched GitHub index snapshot for offline browse
 
 Migrations live in the Rust host (versioned SQL / rusqlite).
 
@@ -342,27 +342,27 @@ Migrations live in the Rust host (versioned SQL / rusqlite).
 - LoRA library + Refine (SR / USDU / SUPIR)
 - Tools: Image to Prompt + Prompt Enhance (QwenVL via Comfy)
 
-### Next — ControlNet & polish
+### Next - ControlNet & polish
 
 - ControlNet group (capability-gated)
 - Batch gen, auto-update, Official catalog polish
 
-### Later — Audio
+### Later - Audio
 
 - Whisper, Kokoro (+ optional MusicGen) on the same abstractions
 
-### Later — Video
+### Later - Video
 
 - Wan, CogVideoX, HunyuanVideo
 - VRAM-aware scheduling / resource locks
 
-### Later — 3D generation (after audio & video)
+### Later - 3D generation (after audio & video)
 
 - Runtime/plugin for **Trellis2** (and similar image/text → 3D models)
 - Official Blueprints under Registry → **3D**
 - Gallery support for mesh outputs (e.g. GLB / OBJ) + simple 3D preview in User Mode
 
-### Later — Advanced
+### Later - Advanced
 
 - Community catalog (second GitHub source)
 - Remote execution, scripting / REST for power users
@@ -392,4 +392,4 @@ Migrations live in the Rust host (versioned SQL / rusqlite).
 
 ## Source
 
-Planning conversation: [ChatGPT — AI Runtime Platform Plan](https://chatgpt.com/share/6a5e4420-b980-83eb-8c01-e7e3c60146ff)
+Planning conversation: [ChatGPT - AI Runtime Platform Plan](https://chatgpt.com/share/6a5e4420-b980-83eb-8c01-e7e3c60146ff)

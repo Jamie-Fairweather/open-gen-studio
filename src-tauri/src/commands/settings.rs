@@ -23,7 +23,7 @@ pub fn set_setting(
     db.set_setting(&key, &value)?;
     if key == download::SETTING_HF_TOKEN {
         download::set_stored_hf_token(Some(value));
-        // Gated sizes often fail HEAD before a token exists — re-probe with auth.
+        // Gated sizes often fail HEAD before a token exists - re-probe with auth.
         blueprints::clear_remote_size_cache();
         blueprints::enqueue_size_probe(&app);
     } else if key == download::SETTING_CIVITAI_TOKEN {

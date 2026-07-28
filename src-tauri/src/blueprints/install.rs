@@ -77,7 +77,7 @@ pub fn install_models(app: &AppHandle, blueprint_id: &str) -> Result<(), String>
         validate_model_paths_allow_empty_url(model)?;
         let dest = models_root.join(&model.path).join(&model.filename);
 
-        // Local-only entries (no URL) — skip download; just report presence.
+        // Local-only entries (no URL) - skip download; just report presence.
         if model.url.trim().is_empty() {
             let local = download::local_file_len(&dest).unwrap_or(0);
             bytes_done += local;
@@ -89,7 +89,7 @@ pub fn install_models(app: &AppHandle, blueprint_id: &str) -> Result<(), String>
                     format!("Local model present: {}", model.filename)
                 } else {
                     format!(
-                        "No URL for {} — place file in models/{}/",
+                        "No URL for {} - place file in models/{}/",
                         model.filename, model.path
                     )
                 },
@@ -125,11 +125,11 @@ pub fn install_models(app: &AppHandle, blueprint_id: &str) -> Result<(), String>
                 );
                 continue;
             }
-            // Size matched but file is HTML/corrupt (classic HF resume bug) — re-download.
+            // Size matched but file is HTML/corrupt (classic HF resume bug) - re-download.
             if local == expected && !download::local_file_usable(&dest) {
                 let _ = fs::remove_file(&dest);
             }
-            // Offset before this file — UI adds live per-file downloaded on top.
+            // Offset before this file - UI adds live per-file downloaded on top.
             emit_progress(
                 app,
                 blueprint_id,
@@ -208,7 +208,7 @@ pub(crate) fn install_custom_nodes(app: &AppHandle, nodes: &[CustomNodeDep]) -> 
     }
     let portable =
         comfy::find_portable_root(&comfy::runtimes_dir(app)?.join("portable")).map_err(|_| {
-            "ComfyUI portable not found — install the runtime before custom nodes".to_string()
+            "ComfyUI portable not found - install the runtime before custom nodes".to_string()
         })?;
     let custom_dir = portable.join("ComfyUI").join("custom_nodes");
     fs::create_dir_all(&custom_dir).map_err(|e| e.to_string())?;

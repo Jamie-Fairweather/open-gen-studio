@@ -23,22 +23,22 @@ pub(crate) fn target_dialect_hint(target: PromptTarget) -> &'static str {
 /// Checklist so captions are dense enough to recreate the image as closely as text allows.
 fn recreation_detail_instruction() -> &'static str {
     "Goal: a prompt that could recreate this image as closely as possible. Describe only what is \
-visible — do not invent props, logos, or celebrity names. Cover all of the following when present:\n\
-1) Medium & style — photo, illustration, anime, 3D render, painting, etc.; art style or look.\n\
-2) Subjects — count and who/what; for people: apparent age range, gender presentation, body type, \
+visible - do not invent props, logos, or celebrity names. Cover all of the following when present:\n\
+1) Medium & style - photo, illustration, anime, 3D render, painting, etc.; art style or look.\n\
+2) Subjects - count and who/what; for people: apparent age range, gender presentation, body type, \
 hair (color, length, style), facial features, expression, skin tone, distinctive marks; for objects: \
 shape, material, color, condition.\n\
-3) Pose & action — facing direction (toward camera, away, left, right, three-quarter), body pose, \
+3) Pose & action - facing direction (toward camera, away, left, right, three-quarter), body pose, \
 hand positions, gaze, what they are doing. Never say only \"a person\".\n\
-4) Clothing & accessories — garments, colors, materials/textures, jewelry, bags, glasses, hats.\n\
-5) Composition — where subjects sit in frame (left/center/right, foreground/mid/background), \
+4) Clothing & accessories - garments, colors, materials/textures, jewelry, bags, glasses, hats.\n\
+5) Composition - where subjects sit in frame (left/center/right, foreground/mid/background), \
 relative positions, framing, aspect (portrait/landscape/square).\n\
-6) Camera — shot type (extreme close-up through extreme wide), angle, vantage height (eye-level, \
+6) Camera - shot type (extreme close-up through extreme wide), angle, vantage height (eye-level, \
 low, high, bird's-eye), depth of field (background sharp or blurred).\n\
-7) Setting — environment, architecture, props, weather, time of day, indoor/outdoor.\n\
-8) Lighting — direction, hard/soft, color temperature, key shadows, rim/backlight, reflections.\n\
-9) Color & texture — dominant palette, contrast, notable materials (metal, fabric, skin, glass).\n\
-10) Text — quote any readable text, logos, or signage exactly; omit if none."
+7) Setting - environment, architecture, props, weather, time of day, indoor/outdoor.\n\
+8) Lighting - direction, hard/soft, color temperature, key shadows, rim/backlight, reflections.\n\
+9) Color & texture - dominant palette, contrast, notable materials (metal, fabric, skin, glass).\n\
+10) Text - quote any readable text, logos, or signage exactly; omit if none."
 }
 
 pub(crate) fn general_custom_prompt(target: PromptTarget) -> String {
@@ -58,7 +58,7 @@ pub(crate) fn structured_custom_prompt(target: PromptTarget) -> String {
         "Analyze this image for near-1:1 recreation. Output ONLY these labeled sections, one per line, \
 using exactly these labels:\n\
 Medium: …\n\
-Subject: … (appearance, count, expression — never vague)\n\
+Subject: … (appearance, count, expression - never vague)\n\
 Pose: … (facing, body, hands, gaze, action)\n\
 Clothing: …\n\
 Composition: … (placement in frame, foreground/mid/background, aspect)\n\
@@ -158,7 +158,7 @@ and setting; make shot geometry explicit."
             }
             "concrete" => {
                 "Replace vague adjectives (beautiful, nice, amazing) with specific materials, \
-colors, props, textures, and countable details. Do not invent a new subject or location — \
+colors, props, textures, and countable details. Do not invent a new subject or location - \
 only sharpen what is already implied."
             }
             _ => {
@@ -168,7 +168,7 @@ Add useful sensory/scene specifics without changing the core subject."
         }
     };
     let style_override = if style_look.is_some() {
-        " Style mode: you MUST change the visual medium/look as instructed — do not lightly paraphrase. \
+        " Style mode: you MUST change the visual medium/look as instructed - do not lightly paraphrase. \
 If the input says photograph/realistic/cinematic photo, override that to match the requested look."
     } else {
         ""

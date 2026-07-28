@@ -76,7 +76,7 @@ fn push_from_root(
 /// Kick a background size probe; emits `blueprints://probe` + `blueprints://sizes`.
 pub fn enqueue_size_probe(app: &AppHandle) {
     if SIZE_PROBE_BUSY.swap(true, Ordering::SeqCst) {
-        // Another probe is running (e.g. token saved mid-check) — rerun when it finishes.
+        // Another probe is running (e.g. token saved mid-check) - rerun when it finishes.
         SIZE_PROBE_PENDING.store(true, Ordering::SeqCst);
         return;
     }
@@ -198,7 +198,7 @@ fn read_blueprint(dir: &Path, models_root: &Path, probe_remote: bool) -> Option<
                 models_ready += 1;
             }
         } else if local > 0 && download::local_file_usable(&dest) {
-            // No cached remote size yet — still treat a usable local file as ready
+            // No cached remote size yet - still treat a usable local file as ready
             // so Generate works before the background size probe finishes.
             models_ready += 1;
         }

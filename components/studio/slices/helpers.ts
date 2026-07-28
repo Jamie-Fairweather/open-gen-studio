@@ -6,7 +6,7 @@ export function applySet<T>(prev: T, next: SetStateAction<T>): T {
   return typeof next === "function" ? (next as (p: T) => T)(prev) : next
 }
 
-/** Mirrors StudioProvider's `tabBlueprints` memo — blueprints scoped to the active tab. */
+/** Mirrors StudioProvider's `tabBlueprints` memo - blueprints scoped to the active tab. */
 export function computeTabBlueprints(
   blueprints: Blueprint[],
   studioTab: StudioTab
@@ -21,7 +21,7 @@ export function computeTabBlueprints(
   return blueprints.filter((bp) => bp.category.toLowerCase() === studioTab)
 }
 
-/** Mirrors StudioProvider's `activeSelectedId` — falls back to the first installed blueprint. */
+/** Mirrors StudioProvider's `activeSelectedId` - falls back to the first installed blueprint. */
 export function computeActiveSelectedId(
   tabBlueprints: Blueprint[],
   selectedId: string | null
@@ -31,7 +31,7 @@ export function computeActiveSelectedId(
     : (tabBlueprints.find(isInstalled)?.id ?? tabBlueprints[0]?.id ?? null)
 }
 
-/** Mirrors StudioProvider's `activeDetail` — only valid when it matches the active selection. */
+/** Mirrors StudioProvider's `activeDetail` - only valid when it matches the active selection. */
 export function computeActiveDetail(
   detail: BlueprintDetail | null,
   activeSelectedId: string | null

@@ -129,7 +129,7 @@ pub(crate) fn write_extra_model_paths(portable_root: &Path, models: &Path) -> Re
 
     let models_posix = models.to_string_lossy().replace('\\', "/");
     let yaml = format!(
-        r#"# Managed by Open Gen AI — shared model library
+        r#"# Managed by Open Gen AI - shared model library
 open_gen_ai:
   base_path: {models_posix}
   is_default: true

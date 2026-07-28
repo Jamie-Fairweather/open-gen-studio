@@ -41,7 +41,7 @@ pub fn resolve_download_url(url: &str) -> Result<String, String> {
 }
 
 /// Probe remote object size via HEAD (Content-Length), with a Range GET fallback.
-/// Accepts page URLs (e.g. CivitAI model pages) — resolves first.
+/// Accepts page URLs (e.g. CivitAI model pages) - resolves first.
 pub fn remote_content_length(url: &str) -> Result<Option<u64>, String> {
     let download_url = resolve_download_url(url).unwrap_or_else(|_| url.trim().to_string());
     remote_content_length_direct(&download_url)
@@ -62,7 +62,7 @@ pub(crate) fn remote_content_length_direct(url: &str) -> Result<Option<u64>, Str
         }
     }
 
-    // Some CDNs omit Content-Length on HEAD — ask for one byte and read Content-Range.
+    // Some CDNs omit Content-Length on HEAD - ask for one byte and read Content-Range.
     let ranged = apply_auth(client.get(url).header("Range", "bytes=0-0"), url)
         .send()
         .map_err(|e| e.to_string())?;

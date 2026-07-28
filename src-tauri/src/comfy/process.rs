@@ -20,7 +20,7 @@ pub fn start(
         return Err("ComfyUI portable install is incomplete".into());
     }
 
-    // Existing installs from before Manager support — install on first start.
+    // Existing installs from before Manager support - install on first start.
     super::manager::ensure_comfy_manager(app, &root)?;
     // Keep shared model paths current (e.g. LLM for Prompt Tools / QwenVL).
     super::paths::write_extra_model_paths(&root, &super::paths::models_dir(app)?)?;
@@ -46,7 +46,7 @@ pub fn start(
             "127.0.0.1",
             "--port",
             &port.to_string(),
-            // Latent previews over /ws — taesd is sharper; preview-size lifts the pixel cap.
+            // Latent previews over /ws - taesd is sharper; preview-size lifts the pixel cap.
             "--preview-method",
             "taesd",
             "--preview-size",
@@ -72,7 +72,7 @@ pub fn start(
 pub fn stop(processes: &Mutex<ProcessState>) -> Result<(), String> {
     let mut guard = processes.lock().map_err(|e| e.to_string())?;
     if let Some(mut child) = guard.child.take() {
-        // Comfy spawns worker children — kill the whole tree on Windows.
+        // Comfy spawns worker children - kill the whole tree on Windows.
         #[cfg(windows)]
         {
             let pid = child.id();

@@ -1,4 +1,4 @@
-# Research: Prompt / Style Library (deferred)
+﻿# Research: Prompt / Style Library (deferred)
 
 > Status: **deferred** (2026-07-26)  
 > Follow-up later. Image→prompt + prompt enhance already ship under Tools (QwenVL / `prompt_tools`).  
@@ -10,7 +10,7 @@
 
 **Prompt / style library:** multi-select reusable prompt fragments; append (or `{prompt}`-wrap) when the user presses Generate. Forge / A1111 “Styles” UX.
 
-No Comfy / no inference — pure app UI + local packs.
+No Comfy / no inference - pure app UI + local packs.
 
 ---
 
@@ -21,7 +21,7 @@ No Comfy / no inference — pure app UI + local packs.
 Earlier research surveyed existing packs (twri MIT, Fooocus GPL, Forge AGPL) as a shortcut. That path is **not** the plan for Official content. Third-party lists remain useful only as:
 
 - UX / schema inspiration (`name`, `prompt` with `{prompt}`, `negative_prompt`)
-- Optional **user import** formats later (JSON / Forge CSV) — not Official catalog source
+- Optional **user import** formats later (JSON / Forge CSV) - not Official catalog source
 
 ---
 
@@ -47,7 +47,7 @@ finalNegative = join(userNegative, style.negativePrompt)
 
 Multi-select: selection order; recommend **only the first selected style may use `{prompt}`**, others append.
 
-Do **not** confuse with LoRA `triggerWords` — styles compose with LoRAs.
+Do **not** confuse with LoRA `triggerWords` - styles compose with LoRAs.
 
 Negative-only styles only matter when blueprint `capabilities.negative` is true.
 
@@ -69,7 +69,7 @@ Missing `prompt` → negative-only append.
 
 ---
 
-## Prior art (reference only — not Official sources)
+## Prior art (reference only - not Official sources)
 
 | Source                                                                                                                      | Format         | Approx count | License  | Notes                                              |
 | --------------------------------------------------------------------------------------------------------------------------- | -------------- | ------------ | -------- | -------------------------------------------------- |
@@ -94,6 +94,6 @@ Missing `prompt` → negative-only append.
 | Item             | Status                                           |
 | ---------------- | ------------------------------------------------ |
 | Feature          | Deferred                                         |
-| Official content | **Write our own** — no third-party credit burden |
+| Official content | **Write our own** - no third-party credit burden |
 | Implementation   | App-side shared library; same pattern as LoRAs   |
 | Shipped already  | Tools → Image to Prompt + Prompt Enhance         |

@@ -160,7 +160,7 @@ pub struct RunPromptEnhanceArgs {
     pub mode: Option<String>,
 }
 
-/// `restart_comfy` — caller should bounce the runtime so new pip packages / nodes load.
+/// `restart_comfy` - caller should bounce the runtime so new pip packages / nodes load.
 pub struct EnsureOutcome {
     pub restart_comfy: bool,
 }

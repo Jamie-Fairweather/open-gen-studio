@@ -40,7 +40,7 @@ fn resolve_random_seeds(values: &mut HashMap<String, Value>) {
     values.insert("seed".into(), json!(random));
 }
 
-/// Full generate pipeline (blocking) — call from a background thread.
+/// Full generate pipeline (blocking) - call from a background thread.
 pub fn run_generate(
     app: &AppHandle,
     db: &Mutex<Db>,

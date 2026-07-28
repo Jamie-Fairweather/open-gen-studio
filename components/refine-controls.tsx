@@ -44,7 +44,7 @@ type RefineControlsProps = {
   width?: number
   height?: number
   disabled?: boolean
-  /** Blueprint arch — turbo arches get a stronger USDU caution. */
+  /** Blueprint arch - turbo arches get a stronger USDU caution. */
   arch?: string | null
 }
 
@@ -218,7 +218,7 @@ export function RefineControls({
                     </p>
                     <p className="text-[10px] text-muted-foreground">
                       {turboArch
-                        ? "Tiled diffusion refine. Caution with turbo — keep denoise low."
+                        ? "Tiled diffusion refine. Caution with turbo - keep denoise low."
                         : "Tiled diffusion refine after enlarge."}
                       {!usduReady ? " Node not installed yet." : null}
                     </p>

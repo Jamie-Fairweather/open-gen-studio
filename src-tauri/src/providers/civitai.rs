@@ -107,7 +107,7 @@ pub fn resolve(url: &str) -> Result<ResolvedModelUrl, String> {
     let version_id = parse_version_id(url)?
         .or_else(|| fetch_latest_version_id(url).ok())
         .ok_or_else(|| {
-            "could not find a CivitAI model version — open a model page with ?modelVersionId=… \
+            "could not find a CivitAI model version - open a model page with ?modelVersionId=… \
 or pick a specific version on the site"
                 .to_string()
         })?;

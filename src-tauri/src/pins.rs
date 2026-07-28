@@ -27,7 +27,7 @@ pub struct NodePin {
     pub commit: &'static str,
 }
 
-/// App-managed custom nodes. Checkout these SHAs only — never default-branch tip.
+/// App-managed custom nodes. Checkout these SHAs only - never default-branch tip.
 pub const MANAGED_NODES: &[NodePin] = &[
     NodePin {
         id: "usdu",

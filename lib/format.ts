@@ -6,7 +6,7 @@ export function formatBytes(n: number): string {
 }
 
 export function formatDuration(secs: number): string {
-  if (!Number.isFinite(secs) || secs < 0) return "—"
+  if (!Number.isFinite(secs) || secs < 0) return "-"
   if (secs < 60) return `${Math.max(1, Math.ceil(secs))}s`
   const m = Math.floor(secs / 60)
   const s = Math.ceil(secs % 60)

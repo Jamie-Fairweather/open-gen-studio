@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils"
 
 /**
  * Largest box with this aspect that fits a size container (needs container-type: size
- * so both cqi and cqb resolve — inline-size alone breaks portrait).
+ * so both cqi and cqb resolve - inline-size alone breaks portrait).
  */
 export function stageFrameStyle(width: number, height: number): CSSProperties {
   return {
@@ -36,7 +36,7 @@ export function StageImage({
   /** Opens fullscreen inspect when the stage image is activated. */
   onOpen?: () => void
 }) {
-  // Prefer decoded pixels over control/recipe size — wrong stage aspect letterboxes
+  // Prefer decoded pixels over control/recipe size - wrong stage aspect letterboxes
   // with object-contain and makes wide images look sharp-cornered.
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null)
   const [prevSrc, setPrevSrc] = useState(src)

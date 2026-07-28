@@ -49,7 +49,7 @@ pub(crate) fn download_once(
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
 
-    // Don't Range-resume over an HTML / corrupt partial — that yields size-correct junk.
+    // Don't Range-resume over an HTML / corrupt partial - that yields size-correct junk.
     let existing = if allow_resume && dest.exists() {
         if super::local::local_file_usable(dest) {
             fs::metadata(dest).map(|m| m.len()).unwrap_or(0)

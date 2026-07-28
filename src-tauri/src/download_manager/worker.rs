@@ -99,7 +99,7 @@ pub(crate) fn run_next_job(app: &AppHandle) {
         let Ok(db) = state.db.lock() else {
             return;
         };
-        // Prefer paused? No — only queued. Paused waits for resume.
+        // Prefer paused? No - only queued. Paused waits for resume.
         let queued = db.list_download_jobs_by_status(&["queued"]).ok();
         queued.and_then(|v| v.into_iter().next())
     };

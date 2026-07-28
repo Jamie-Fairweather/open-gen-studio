@@ -114,7 +114,7 @@ export function lorasFromRecipe(
       out.push({ id: row.id, strength })
       continue
     }
-    // Older gallery items only stored resolved filename — map back to pack id.
+    // Older gallery items only stored resolved filename - map back to pack id.
     if (typeof row.filename === "string" && row.filename) {
       const pack = packs.find((p) =>
         p.variants.some((v) => v.filename === row.filename)

@@ -194,7 +194,7 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
               </h1>
               <p className="mt-3 max-w-md text-sm text-muted-foreground">
                 {canGenerate
-                  ? "Local blueprints on your GPU — install a model, describe a scene, generate."
+                  ? "Local blueprints on your GPU - install a model, describe a scene, generate."
                   : `${studioLabel} blueprints are coming next. Switch to Image to generate now.`}
               </p>
             </div>

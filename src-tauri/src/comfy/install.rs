@@ -20,7 +20,7 @@ pub fn resolve_portable_url(gpu: &GpuInfo) -> Result<&'static str, String> {
             .clone()
             .unwrap_or_else(|| "NVIDIA GPU required for default portable".into()));
     }
-    // Pinned NVIDIA portable — bump COMFY_PINNED_VERSION in pins.rs with app releases.
+    // Pinned NVIDIA portable - bump COMFY_PINNED_VERSION in pins.rs with app releases.
     Ok(COMFY_NVIDIA_PORTABLE_URL)
 }
 
@@ -28,7 +28,7 @@ pub fn pinned_version() -> &'static str {
     COMFY_PINNED_VERSION
 }
 
-/// Copy `custom_nodes` to `backup_parent` (must be **outside** the extract tree —
+/// Copy `custom_nodes` to `backup_parent` (must be **outside** the extract tree -
 /// nested portable roots used to put the backup under `portable/`, which we then delete).
 pub(crate) fn backup_custom_nodes(
     root: &Path,
@@ -53,7 +53,7 @@ pub(crate) fn backup_custom_nodes(
 pub(crate) fn restore_custom_nodes(root: &Path, backup: &Path) -> Result<(), String> {
     if !backup.is_dir() {
         return Err(format!(
-            "custom nodes backup missing at {} — managed nodes will be re-pinned",
+            "custom nodes backup missing at {} - managed nodes will be re-pinned",
             backup.display()
         ));
     }
@@ -187,7 +187,7 @@ pub(crate) fn extract_7z(app: &AppHandle, archive: &Path, dest: &Path) -> Result
                 super::paths::emit_progress(
                     app,
                     "extract",
-                    &format!("System 7-Zip failed ({err}) — falling back to Rust extractor…"),
+                    &format!("System 7-Zip failed ({err}) - falling back to Rust extractor…"),
                 );
                 if dest.exists() {
                     let _ = fs::remove_dir_all(dest);
@@ -236,7 +236,7 @@ pub fn install_portable(
                 super::paths::emit_progress(
                     app,
                     "configure",
-                    &format!("ComfyUI {COMFY_PINNED_VERSION} already installed — finishing setup…"),
+                    &format!("ComfyUI {COMFY_PINNED_VERSION} already installed - finishing setup…"),
                 );
                 super::paths::write_extra_model_paths(&root, &models)?;
                 super::manager::ensure_comfy_manager(app, &root)?;
@@ -259,12 +259,12 @@ pub fn install_portable(
                 app,
                 "extract",
                 if force {
-                    "Reinstalling pinned ComfyUI — backing up custom nodes…"
+                    "Reinstalling pinned ComfyUI - backing up custom nodes…"
                 } else {
-                    "Updating ComfyUI to the version required by this app — backing up custom nodes…"
+                    "Updating ComfyUI to the version required by this app - backing up custom nodes…"
                 },
             );
-            // `base` is runtimes/comfyui — never under extract_to/portable.
+            // `base` is runtimes/comfyui - never under extract_to/portable.
             custom_nodes_backup = backup_custom_nodes(&root, &base)?;
             fs::remove_dir_all(&extract_to).map_err(|e| e.to_string())?;
         }
@@ -279,7 +279,7 @@ pub fn install_portable(
             app,
             "download",
             &format!(
-                "Pinned archive {COMFY_PINNED_VERSION} already downloaded — skipping download"
+                "Pinned archive {COMFY_PINNED_VERSION} already downloaded - skipping download"
             ),
         );
     } else {
@@ -308,7 +308,7 @@ pub fn install_portable(
     if let Some(ref backup) = custom_nodes_backup {
         super::paths::emit_progress(app, "configure", "Restoring custom nodes…");
         if let Err(err) = restore_custom_nodes(&root, backup) {
-            // Don't fail the whole Comfy pin migrate — managed nodes are re-checked out next.
+            // Don't fail the whole Comfy pin migrate - managed nodes are re-checked out next.
             super::paths::emit_progress(
                 app,
                 "configure",

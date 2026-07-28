@@ -2,7 +2,7 @@
   "id": "ideogram4",
   "name": "Ideogram 4",
   "category": "image",
-  "description": "Ideogram 4.0 open weights — strong text rendering and layout control. Uses dual diffusion models + Qwen3-VL. Needs recent ComfyUI with Ideogram4Scheduler / DualModelGuider. ~16GB+ VRAM for FP8.",
+  "description": "Ideogram 4.0 open weights - strong text rendering and layout control. Uses dual diffusion models + Qwen3-VL. Needs recent ComfyUI with Ideogram4Scheduler / DualModelGuider. ~16GB+ VRAM for FP8.",
   "runtime": "comfyui",
   "minimumVramGb": 16,
   "flowType": "txt2img",

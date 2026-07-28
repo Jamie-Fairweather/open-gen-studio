@@ -324,7 +324,7 @@ pub fn variant_download(app: &AppHandle, id: &str, arch: &str) -> Result<Variant
     validate_variant(variant)?;
     if variant.url.trim().is_empty() {
         return Err(format!(
-            "LoRA '{}' ({arch}) has no download URL — place {} in models/loras/",
+            "LoRA '{}' ({arch}) has no download URL - place {} in models/loras/",
             id, variant.filename
         ));
     }
@@ -400,7 +400,7 @@ pub fn save_user_lora(app: &AppHandle, args: SaveUserLoraArgs) -> Result<LoraPac
     if let Ok(official) = official_dir(app) {
         if official.join(&args.id).join("manifest.json").is_file() {
             return Err(format!(
-                "id '{}' is reserved by an Official LoRA — pick another id",
+                "id '{}' is reserved by an Official LoRA - pick another id",
                 args.id
             ));
         }
@@ -480,7 +480,7 @@ pub fn resolve_stack_for_generate(
         let strength = item.get("strength").and_then(|v| v.as_f64()).unwrap_or(1.0);
         let id = item.get("id").and_then(|v| v.as_str());
 
-        // Already resolved (filename present) — keep id when available for gallery reuse.
+        // Already resolved (filename present) - keep id when available for gallery reuse.
         if let Some(filename) = item.get("filename").and_then(|v| v.as_str()) {
             if !filename.is_empty() {
                 let mut entry = json!({ "filename": filename, "strength": strength });
@@ -500,7 +500,7 @@ pub fn resolve_stack_for_generate(
         let variant = variant_for_arch(&manifest, arch)?;
         if !variant_ready(&models_root, variant) {
             return Err(format!(
-                "LoRA '{id}' ({arch}) is not installed — install it from the LoRA library first"
+                "LoRA '{id}' ({arch}) is not installed - install it from the LoRA library first"
             ));
         }
         // Keep pack id alongside filename so gallery metadata can restore the stack.

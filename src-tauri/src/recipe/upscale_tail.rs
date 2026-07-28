@@ -36,7 +36,7 @@ pub(crate) fn usdu_denoise(arch: Option<RecipeArch>) -> f64 {
     }
 }
 
-/// Default USDU enlarge when the UI does not send `usduScale` — prefer 2×.
+/// Default USDU enlarge when the UI does not send `usduScale` - prefer 2×.
 pub(crate) fn usdu_upscale_by_default() -> f64 {
     2.0
 }
@@ -81,7 +81,7 @@ pub(crate) fn finish_with_upscale(
         } else {
             format!("{prompt}, high quality, detailed")
         };
-        // SUPIR scale_by is a pre-resize; keep modest (2×) — full 4× is very VRAM-heavy.
+        // SUPIR scale_by is a pre-resize; keep modest (2×) - full 4× is very VRAM-heavy.
         let scale_by = (opts.scale as f64).clamp(1.0, 2.0);
         obj.insert(
             up_key.clone(),

@@ -35,7 +35,7 @@ pub fn comfy_needs_install(state: &AppState) -> Result<bool, String> {
                 && path.join("ComfyUI").is_dir()
                 && path.join("python_embeded").join("python.exe").is_file();
             let pin_ok = path_ok && comfy::portable_pin_matches(path);
-            // "installing" after a crash means a stalled job — retry.
+            // "installing" after a crash means a stalled job - retry.
             // Pin mismatch → migrate to the version this app release requires.
             Ok(!path_ok || !pin_ok || r.status == "error" || r.status == "installing")
         }
@@ -201,7 +201,7 @@ pub fn start_comfyui(app: AppHandle, state: State<'_, AppState>) -> Result<Runti
         || runtime.status == "error"
         || runtime.status == "installing"
     {
-        return Err("ComfyUI install is not ready — run install first".into());
+        return Err("ComfyUI install is not ready - run install first".into());
     }
     if (runtime.status == "starting" || runtime.status == "running")
         && comfy::is_process_alive(&state.processes)?

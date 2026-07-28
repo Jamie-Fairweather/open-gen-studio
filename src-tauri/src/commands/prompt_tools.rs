@@ -51,13 +51,13 @@ pub fn run_image_to_prompt(
     let runtime = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         db.get_runtime_by_engine(crate::comfy::ENGINE)?
-            .ok_or_else(|| "ComfyUI is not installed — open Settings to install".to_string())?
+            .ok_or_else(|| "ComfyUI is not installed - open Settings to install".to_string())?
     };
     if runtime.install_path.is_empty()
         || runtime.status == "error"
         || runtime.status == "installing"
     {
-        return Err("ComfyUI install is not ready — open Settings".into());
+        return Err("ComfyUI install is not ready - open Settings".into());
     }
 
     let params = serde_json::to_string(&args).unwrap_or_else(|_| "{}".into());
@@ -102,13 +102,13 @@ pub fn run_prompt_enhance(
     let runtime = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         db.get_runtime_by_engine(crate::comfy::ENGINE)?
-            .ok_or_else(|| "ComfyUI is not installed — open Settings to install".to_string())?
+            .ok_or_else(|| "ComfyUI is not installed - open Settings to install".to_string())?
     };
     if runtime.install_path.is_empty()
         || runtime.status == "error"
         || runtime.status == "installing"
     {
-        return Err("ComfyUI install is not ready — open Settings".into());
+        return Err("ComfyUI install is not ready - open Settings".into());
     }
 
     let params = serde_json::to_string(&args).unwrap_or_else(|_| "{}".into());

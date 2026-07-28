@@ -86,7 +86,7 @@ export function PromptBar({
     ASPECT_RATIOS.find((a) => a.id === aspectId) ?? ASPECT_RATIOS[0]
 
   // Creator unmounts the textarea; re-run when returning so height isn't stuck at rows={1}.
-  // Measure with overflow hidden — overflow-y:auto during measure can add a scrollbar, wrap the
+  // Measure with overflow hidden - overflow-y:auto during measure can add a scrollbar, wrap the
   // last line, and leave a blank row (common on near-full lines).
   useLayoutEffect(() => {
     const el = promptRef.current
@@ -128,7 +128,7 @@ export function PromptBar({
             <textarea
               value={negativePrompt}
               onChange={(e) => onNegativeChange(e.target.value)}
-              placeholder="Negative prompt — what to avoid"
+              placeholder="Negative prompt - what to avoid"
               disabled={!canGenerate}
               rows={2}
               className={cn(
@@ -141,7 +141,7 @@ export function PromptBar({
             />
           ) : null}
         </div>
-        {/* Same 1px as the old border — fill grows while sampling. */}
+        {/* Same 1px as the old border - fill grows while sampling. */}
         <div
           className="relative h-px w-full bg-white/8"
           role="progressbar"

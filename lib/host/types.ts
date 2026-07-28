@@ -53,7 +53,7 @@ export type ModelProvider = ProviderKind
 export type MediaCategory = "image" | "video" | "audio"
 export type StudioTab = MediaCategory | "creator" | "downloads" | "tools"
 
-/** In-memory handoff into Tools pages (not URL query — prompts can be large). */
+/** In-memory handoff into Tools pages (not URL query - prompts can be large). */
 export type ToolsHandoff = {
   imagePath?: string
   prompt?: string
@@ -69,23 +69,23 @@ export type GalleryRecipe = {
   values: Record<string, unknown>
 }
 
-/** Narrowing helper — IPC stores source as string. */
+/** Narrowing helper - IPC stores source as string. */
 export type BlueprintSource = "official" | "user"
 
-/** Selected LoRA for generate — host resolves id → filename for the blueprint arch. */
+/** Selected LoRA for generate - host resolves id → filename for the blueprint arch. */
 export type LoraStackEntry = {
   id: string
   strength: number
 }
 
-/** Generate refine payload — host resolves modelId → filename. */
+/** Generate refine payload - host resolves modelId → filename. */
 export type UpscaleGenerateValue = {
   modelId: string
   usdu: boolean
   filename?: string
   scale?: number
   kind?: UpscaleKind
-  /** USDU enlarge factor — 2 or 4. */
+  /** USDU enlarge factor - 2 or 4. */
   usduScale?: 2 | 4
   usduSteps?: number
   usduDenoise?: number

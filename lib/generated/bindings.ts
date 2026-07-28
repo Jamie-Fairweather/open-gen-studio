@@ -402,7 +402,7 @@ export type ModelEntry = {
   /**  Empty = local-only (no download). */
   url?: string
   sha256?: string | null
-  /**  Hugging Face gated repo — anonymous download returns 401. */
+  /**  Hugging Face gated repo - anonymous download returns 401. */
   gated?: boolean
   /**  Recipe role: `unet` | `unet_uncond` | `vae` | `text_encoder` | `checkpoint` | … */
   role?: string
@@ -561,7 +561,7 @@ export type SuggestedControl = {
   default?: any
   /**  Pre-checked in the Save dialog. */
   include: boolean
-  /**  Required for the blueprint — locked in the Save dialog (always saved). */
+  /**  Required for the blueprint - locked in the Save dialog (always saved). */
   fixed?: boolean
 }
 
@@ -593,7 +593,7 @@ export type UpscaleProgress = {
   filename?: string | null
 }
 
-/** Closed set of recipe arch ids — generated from `RecipeArch::ALL`. */
+/** Closed set of recipe arch ids - generated from `RecipeArch::ALL`. */
 export const RECIPE_ARCHES = [
   "z-image",
   "krea2",

@@ -117,18 +117,18 @@ export function SettingsDialog({
           <div className="rounded-xl border p-4">
             <p className="font-medium">ComfyUI</p>
             <div className="mt-2 space-y-1 font-mono text-xs text-muted-foreground">
-              <p>status: {comfy?.status ?? "—"}</p>
+              <p>status: {comfy?.status ?? "-"}</p>
               <p>healthy: {comfyHealthy ? "yes" : "no"}</p>
-              <p>port: {comfy?.port ?? "—"}</p>
+              <p>port: {comfy?.port ?? "-"}</p>
               <p>
-                expected: {pins?.comfy.expected ?? "—"}
+                expected: {pins?.comfy.expected ?? "-"}
                 {pins && !pins.comfy.matches ? " · update pending" : ""}
               </p>
-              <p>installed: {pins?.comfy.installed ?? comfy?.version ?? "—"}</p>
-              <p className="truncate">path: {comfy?.installPath || "—"}</p>
+              <p>installed: {pins?.comfy.installed ?? comfy?.version ?? "-"}</p>
+              <p className="truncate">path: {comfy?.installPath || "-"}</p>
               {pins?.nodes.map((node) => (
                 <p key={node.id}>
-                  {node.id}: {node.installed ?? "—"}
+                  {node.id}: {node.installed ?? "-"}
                   {node.matches ? "" : ` (app expects ${node.expected})`}
                 </p>
               ))}

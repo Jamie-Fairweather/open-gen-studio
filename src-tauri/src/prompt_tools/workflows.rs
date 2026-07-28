@@ -8,7 +8,7 @@ use super::types::{PromptFormat, PromptTarget, QWENVL_MODEL_NAME, QWENVL_QUANT};
 use serde_json::{json, Value};
 
 /// Comfy rejects graphs with no `OUTPUT_NODE`. Caption nodes return STRING but are not
-/// output nodes — terminate every utility graph with built-in PreviewAny.
+/// output nodes - terminate every utility graph with built-in PreviewAny.
 fn preview_any_node(source: (&str, usize)) -> Value {
     json!({
         "class_type": "PreviewAny",

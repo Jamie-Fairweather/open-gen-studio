@@ -317,7 +317,7 @@ fn wait_via_ws(
                 if msg_type == "progress" && (msg_prompt.is_empty() || msg_prompt == prompt_id) {
                     let value = data.get("value").and_then(|v| v.as_u64()).unwrap_or(0);
                     let max = data.get("max").and_then(|v| v.as_u64()).unwrap_or(0);
-                    // Throttle UI emits a bit — sampler can fire very fast.
+                    // Throttle UI emits a bit - sampler can fire very fast.
                     if last_step_emit.elapsed() >= Duration::from_millis(120) || value >= max {
                         last_step_emit = std::time::Instant::now();
                         let message = if max > 0 {
@@ -344,7 +344,7 @@ fn wait_via_ws(
                     && data.get("node").is_some_and(|v| v.is_null())
                 {
                     let _ = socket.close(None);
-                    // Done — pull final outputs from history.
+                    // Done - pull final outputs from history.
                     for _ in 0..40 {
                         if let Some(entry) = history_entry(port, prompt_id)? {
                             if let Some(images) = outputs_from_history_entry(&entry)? {

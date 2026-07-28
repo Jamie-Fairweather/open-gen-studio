@@ -50,7 +50,7 @@ pub fn run() {
     #[cfg(debug_assertions)]
     {
         // Avoid exporting into a path that Next.js hot-reloads on every keystroke
-        // during `tauri dev` — prefer `npm run ipc:types` / the unit test.
+        // during `tauri dev` - prefer `npm run ipc:types` / the unit test.
         // Uncomment to auto-export on each debug launch:
         // let _ = ipc::export_typescript_bindings();
     }
@@ -102,7 +102,7 @@ pub fn run() {
                 let _ = app.asset_protocol_scope().allow_directory(&canonical, true);
             }
 
-            // Auto-install ComfyUI portable in the background — most Blueprints need it.
+            // Auto-install ComfyUI portable in the background - most Blueprints need it.
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 std::thread::sleep(Duration::from_millis(800));

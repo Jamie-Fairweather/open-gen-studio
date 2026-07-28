@@ -197,7 +197,7 @@
 }
 
 .dark {
-  /* Image Studio — lime accent on near-black */
+  /* Image Studio - lime accent on near-black */
   --destructive-foreground: var(--color-red-400);
   --info: var(--color-blue-500);
   --info-foreground: var(--color-blue-400);

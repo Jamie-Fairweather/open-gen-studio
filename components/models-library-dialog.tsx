@@ -42,9 +42,9 @@ type ModelsLibraryDialogProps = {
   onOpenChange: (open: boolean) => void
   /** When set, Install buttons target this arch first. */
   preferArch?: string | null
-  /** Global download queue — LoRA install. */
+  /** Global download queue - LoRA install. */
   onInstallLora?: (id: string, arch: RecipeArch) => void
-  /** Global download queue — upscale model install. */
+  /** Global download queue - upscale model install. */
   onInstallUpscaler?: (id: string) => void
 }
 

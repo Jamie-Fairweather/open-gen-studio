@@ -1,4 +1,4 @@
-# Coding standards
+﻿# Coding standards
 
 Conventions for this repo. Prefer small diffs that match existing style; this doc only covers house rules that are easy to miss.
 
@@ -31,8 +31,8 @@ Related: [Contributing guides](./README.md), [Adding a model architecture](./add
 - Prefer a Rust enum over duplicated string unions when the set is closed (`RecipeArch`, `PromptFormat`, `UpscaleKind`, …).
 - Manifests on disk may still store free-form strings (e.g. `"arch": "flux"`); parse into the enum at the boundary (`RecipeArch::parse`).
 - Do not commit hand-edits to `lib/generated/bindings.ts` or `ipc.ts`.
-- `serde_json::Value` / open maps: mark with `#[specta(type = specta_typescript::Any)]` or use `JsonValue` / `JsonMap` — Specta will stack-overflow if it tries to inline recursive `Value`.
-- Specta is pinned to **2.0.0-rc.25** (+ tauri-specta) — when stable v2 ships, follow [Dev notes: Specta stable v2](./dev-notes-specta-v2.md).
+- `serde_json::Value` / open maps: mark with `#[specta(type = specta_typescript::Any)]` or use `JsonValue` / `JsonMap` - Specta will stack-overflow if it tries to inline recursive `Value`.
+- Specta is pinned to **2.0.0-rc.25** (+ tauri-specta) - when stable v2 ships, follow [Dev notes: Specta stable v2](./dev-notes-specta-v2.md).
 
 ### Adding a field or enum variant
 
@@ -44,7 +44,7 @@ Related: [Contributing guides](./README.md), [Adding a model architecture](./add
 
 ## Recipe architectures
 
-`RecipeArch` is the closed allowlist (Rust enum → generated TS union). Creator **metadata** (model slots, default URLs, capabilities) lives in [`lib/creator-arches.ts`](../../lib/creator-arches.ts) as `ARCHES` — that is product data, not an IPC DTO.
+`RecipeArch` is the closed allowlist (Rust enum → generated TS union). Creator **metadata** (model slots, default URLs, capabilities) lives in [`lib/creator-arches.ts`](../../lib/creator-arches.ts) as `ARCHES` - that is product data, not an IPC DTO.
 
 When adding an arch, follow [Adding a model architecture](./adding-model-architectures.md): compiler + `RecipeArch` variant + Creator `ARCHES` entry + regenerate IPC types.
 
@@ -53,7 +53,7 @@ When adding an arch, follow [Adding a model architecture](./adding-model-archite
 ```bash
 bun run check       # typecheck + lint
 bun run check:full  # also recipe Rust tests (see contributing README for Windows)
-bun run ipc:check   # after IPC/DTO changes — fail if generated bindings drift
+bun run ipc:check   # after IPC/DTO changes - fail if generated bindings drift
 ```
 
 ---
@@ -76,4 +76,4 @@ bun run ipc:check   # after IPC/DTO changes — fail if generated bindings drift
 ## Docs
 
 - Contributor how-tos under `docs/contributing/`.
-- Product/design background under `docs/PLAN.md` — update when arch lists or IPC conventions change.
+- Product/design background under `docs/PLAN.md` - update when arch lists or IPC conventions change.

@@ -151,7 +151,7 @@ export function DownloadsPanel({
                 Nothing in the queue
               </h2>
               <p className="text-sm leading-relaxed text-muted-foreground">
-                Installs persist across restarts. Pause anytime — partial files
+                Installs persist across restarts. Pause anytime - partial files
                 resume where they left off.
               </p>
               {onOpenBlueprints ? (

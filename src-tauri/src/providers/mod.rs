@@ -133,11 +133,11 @@ pub fn http_status_hint(status: reqwest::StatusCode, url: &str) -> Option<String
     }
     match detect(url) {
         ProviderKind::HuggingFace => Some(format!(
-            "download failed: HTTP {code} — gated Hugging Face model. \
+            "download failed: HTTP {code} - gated Hugging Face model. \
 Accept the license on the model page, then add your Hugging Face token in Settings and retry."
         )),
         ProviderKind::CivitAi => Some(format!(
-            "download failed: HTTP {code} — CivitAI API key required or invalid. \
+            "download failed: HTTP {code} - CivitAI API key required or invalid. \
 Create an API key at civitai.com/user/account (API Keys section), add it in Settings, and retry."
         )),
         ProviderKind::Direct => None,

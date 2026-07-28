@@ -169,7 +169,7 @@ pub struct ModelEntry {
     pub url: String,
     #[serde(default)]
     pub sha256: Option<String>,
-    /// Hugging Face gated repo — anonymous download returns 401.
+    /// Hugging Face gated repo - anonymous download returns 401.
     #[serde(default)]
     pub gated: bool,
     /// Recipe role: `unet` | `unet_uncond` | `vae` | `text_encoder` | `checkpoint` | …

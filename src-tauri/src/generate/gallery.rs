@@ -19,7 +19,7 @@ pub(crate) fn gallery_day_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(gallery_dir(app)?.join(day))
 }
 
-/// Sidecar JPEG for the gallery grid — keeps the rail from decoding full 2K–4K PNGs.
+/// Sidecar JPEG for the gallery grid - keeps the rail from decoding full 2K–4K PNGs.
 const GALLERY_THUMB_MAX: u32 = 384;
 
 fn gallery_thumbnail_path(image_path: &Path) -> PathBuf {

@@ -3,7 +3,7 @@
 import { useId, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 
-/** Bordered surface — same language as the Tools index list. */
+/** Bordered surface - same language as the Tools index list. */
 export function ToolSurface({
   children,
   className,
@@ -52,7 +52,7 @@ export function ToolFieldLabel({ children }: { children: ReactNode }) {
   )
 }
 
-/** Quiet chip row — selected uses border/tint, not solid neon fill. */
+/** Quiet chip row - selected uses border/tint, not solid neon fill. */
 export function ToolChipRow<T extends string>({
   label,
   options,

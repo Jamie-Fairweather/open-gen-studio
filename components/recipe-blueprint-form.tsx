@@ -78,7 +78,7 @@ function needsProviderResolve(url: string): boolean {
   const u = url.trim().toLowerCase()
   if (!u) return false
   if (u.includes("civitai.com") || u.includes("civitai.red")) {
-    // Direct API download already has a version id — still resolve for filename.
+    // Direct API download already has a version id - still resolve for filename.
     return true
   }
   const guessed = filenameFromUrl(url)
@@ -313,13 +313,13 @@ export function RecipeBlueprintForm({
         }
         if (!filename || filename.includes("/") || filename.includes("\\")) {
           notifyError(
-            `${slot.label}: could not read a filename from the URL — use a direct file link or a CivitAI model page with a version selected`
+            `${slot.label}: could not read a filename from the URL - use a direct file link or a CivitAI model page with a version selected`
           )
           return
         }
       } else if (url && !filename) {
         notifyError(
-          `${slot.label}: could not read a filename from the URL — use a direct file link or a CivitAI model page`
+          `${slot.label}: could not read a filename from the URL - use a direct file link or a CivitAI model page`
         )
         return
       }
@@ -341,7 +341,7 @@ export function RecipeBlueprintForm({
       })
       .filter((m) => m.url && m.filename)
 
-    // Size/seed are product defaults (arch size, seed always random=0) — not authorable here.
+    // Size/seed are product defaults (arch size, seed always random=0) - not authorable here.
     const defaults: Record<string, unknown> = {
       width: arch.defaults.width,
       height: arch.defaults.height,

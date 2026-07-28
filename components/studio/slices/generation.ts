@@ -105,7 +105,7 @@ export const createGenerationSlice: StateCreator<
       if (!state.blueprintsLoaded) {
         notifyInfo(
           "Loading blueprints",
-          "Almost ready — try Generate again in a moment.",
+          "Almost ready - try Generate again in a moment.",
           "generate"
         )
         return

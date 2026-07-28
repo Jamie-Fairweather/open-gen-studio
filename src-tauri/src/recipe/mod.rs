@@ -36,7 +36,7 @@ pub fn compile(manifest: &ManifestFile, values: &HashMap<String, Value>) -> Resu
     }
 
     if manifest.arch.is_empty() {
-        return Err("blueprint missing arch — only recipe blueprints are supported".into());
+        return Err("blueprint missing arch - only recipe blueprints are supported".into());
     }
 
     let Some(arch) = RecipeArch::parse(&manifest.arch) else {

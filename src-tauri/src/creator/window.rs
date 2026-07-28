@@ -21,13 +21,13 @@ pub fn ensure_comfy_url(
     let runtime = {
         let db = db.lock().map_err(|e| e.to_string())?;
         db.get_runtime_by_engine(comfy::ENGINE)?
-            .ok_or_else(|| "ComfyUI is not installed — open Settings to install".to_string())?
+            .ok_or_else(|| "ComfyUI is not installed - open Settings to install".to_string())?
     };
     if runtime.install_path.is_empty()
         || runtime.status == "error"
         || runtime.status == "installing"
     {
-        return Err("ComfyUI install is not ready — open Settings".into());
+        return Err("ComfyUI install is not ready - open Settings".into());
     }
 
     let port = runtime.port.unwrap_or(comfy::DEFAULT_PORT as i64) as u16;
@@ -69,7 +69,7 @@ pub async fn open_comfy_window(app: AppHandle, url: String) -> Result<(), String
         CREATOR_WINDOW_LABEL,
         WebviewUrl::External(url.parse().map_err(|e| format!("invalid url: {e}"))?),
     )
-    .title("Creator — ComfyUI")
+    .title("Creator - ComfyUI")
     .inner_size(1280.0, 800.0)
     .resizable(true)
     .build()
@@ -83,7 +83,7 @@ pub async fn open_comfy_window(app: AppHandle, url: String) -> Result<(), String
 pub async fn capture_workflow(app: AppHandle) -> Result<CapturedWorkflow, String> {
     let win = app
         .get_webview_window(CREATOR_WINDOW_LABEL)
-        .ok_or_else(|| "Creator Comfy window is not open — click Open Comfy first".to_string())?;
+        .ok_or_else(|| "Creator Comfy window is not open - click Open Comfy first".to_string())?;
     capture_workflow_bridge(win).await
 }
 
@@ -156,7 +156,7 @@ async fn capture_workflow_bridge(win: tauri::WebviewWindow) -> Result<CapturedWo
           try {{
             const app = window.app;
             if (!app || typeof app.graphToPrompt !== 'function') {{
-              throw new Error('ComfyUI is still loading — wait a moment and try again');
+              throw new Error('ComfyUI is still loading - wait a moment and try again');
             }}
             const collect = (graph, out) => {{
               if (!graph) return;
@@ -258,7 +258,7 @@ fn http_body_if_complete(buf: &[u8]) -> Option<String> {
         }
         return None;
     }
-    // No content-length — treat what we have as complete if connection likely done.
+    // No content-length - treat what we have as complete if connection likely done.
     if !body.is_empty() {
         Some(body.to_string())
     } else {

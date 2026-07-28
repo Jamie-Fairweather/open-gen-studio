@@ -18,13 +18,13 @@ pub fn generate_image(
     let runtime = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         db.get_runtime_by_engine(comfy::ENGINE)?
-            .ok_or_else(|| "ComfyUI is not installed — open Settings to install".to_string())?
+            .ok_or_else(|| "ComfyUI is not installed - open Settings to install".to_string())?
     };
     if runtime.install_path.is_empty()
         || runtime.status == "error"
         || runtime.status == "installing"
     {
-        return Err("ComfyUI install is not ready — open Settings".into());
+        return Err("ComfyUI install is not ready - open Settings".into());
     }
 
     let detail = blueprints::get_detail(&app, &blueprint_id)?;

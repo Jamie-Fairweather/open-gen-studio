@@ -52,7 +52,7 @@ pub fn official_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Err("Official blueprints directory not found".into())
 }
 
-/// User-created blueprints live under app data — never under Official.
+/// User-created blueprints live under app data - never under Official.
 pub fn user_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app
         .path()

@@ -534,7 +534,7 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
           p.modelId === "usdu"
             ? "Ultimate SD Upscale ready"
             : p.modelId === "supir"
-              ? "SUPIR node ready — restart Comfy if it was running"
+              ? "SUPIR node ready - restart Comfy if it was running"
               : p.modelId.startsWith("supir-")
                 ? "SUPIR weights ready"
                 : "Upscale model ready"

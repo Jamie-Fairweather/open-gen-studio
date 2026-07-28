@@ -14,7 +14,7 @@ pub(crate) fn ensure_comfy_manager(app: &AppHandle, root: &Path) -> Result<(), S
 
     let python = root.join("python_embeded").join("python.exe");
     if !python.is_file() {
-        return Err("ComfyUI portable python.exe missing — cannot install Manager".into());
+        return Err("ComfyUI portable python.exe missing - cannot install Manager".into());
     }
 
     let reqs = root.join("ComfyUI").join("manager_requirements.txt");

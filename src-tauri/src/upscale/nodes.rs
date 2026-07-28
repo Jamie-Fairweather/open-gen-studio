@@ -10,7 +10,7 @@ use tauri::{AppHandle, Emitter};
 pub(crate) fn custom_nodes_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let portable =
         comfy::find_portable_root(&comfy::runtimes_dir(app)?.join("portable")).map_err(|_| {
-            "ComfyUI portable not found — install the runtime before custom upscale nodes"
+            "ComfyUI portable not found - install the runtime before custom upscale nodes"
                 .to_string()
         })?;
     let custom_dir = portable.join("ComfyUI").join("custom_nodes");
@@ -20,7 +20,7 @@ pub(crate) fn custom_nodes_dir(app: &AppHandle) -> Result<PathBuf, String> {
 
 pub(crate) fn portable_root(app: &AppHandle) -> Result<PathBuf, String> {
     comfy::find_portable_root(&comfy::runtimes_dir(app)?.join("portable"))
-        .map_err(|_| "ComfyUI portable not found — install the runtime first".to_string())
+        .map_err(|_| "ComfyUI portable not found - install the runtime first".to_string())
 }
 
 pub fn usdu_installed(app: &AppHandle) -> bool {
@@ -128,7 +128,7 @@ pub fn managed_nodes_pin_status(app: &AppHandle) -> Vec<pins::PinStatus> {
 
 /// kijai SUPIR resolves relative yaml targets via `import_module(..., package=folder_name)`,
 /// then falls back to `package=absolute_path`. Folder names with hyphens fail, and absolute
-/// paths that contain dots (our `com.open-gen-ai` AppData dir) get split as packages —
+/// paths that contain dots (our `com.open-gen-ai` AppData dir) get split as packages -
 /// yielding `No module named 'C:\\Users\\...\\com'`. Comfy registers the node as
 /// `path.replace('.', '_x_')`; use that as the package for relative imports.
 pub(crate) fn patch_supir_import_hack(app: &AppHandle) -> Result<(), String> {
@@ -145,7 +145,7 @@ pub(crate) fn patch_supir_import_hack(app: &AppHandle) -> Result<(), String> {
     }
 
     const NEW: &str = r#"def get_obj_from_str(string, reload=False, invalidate_cache=True):
-    # OGA_SUPIR_IMPORT_FIX — see upscale::patch_supir_import_hack
+    # OGA_SUPIR_IMPORT_FIX - see upscale::patch_supir_import_hack
     import sys
     module, cls = string.rsplit(".", 1)
     if invalidate_cache:
@@ -181,7 +181,7 @@ pub(crate) fn patch_supir_import_hack(app: &AppHandle) -> Result<(), String> {
     };
     let Some(rel_end) = src[start..].find("\ndef append_zero") else {
         return Err(
-            "SUPIR sgm/util.py layout changed — cannot apply import path fix; update Open Gen AI"
+            "SUPIR sgm/util.py layout changed - cannot apply import path fix; update Open Gen AI"
                 .into(),
         );
     };
@@ -258,7 +258,7 @@ pub fn ensure_pinned_custom_node(app: &AppHandle, pin: &NodePin) -> Result<(), S
             .map_err(|e| format!("git fetch failed for {}: {e}", pin.folder))?;
         if !fetch2.success() {
             return Err(format!(
-                "git fetch {}@{short} failed — check network / git",
+                "git fetch {}@{short} failed - check network / git",
                 pin.folder
             ));
         }
@@ -296,7 +296,7 @@ pub fn ensure_pinned_custom_node(app: &AppHandle, pin: &NodePin) -> Result<(), S
             model_id: pin.id.into(),
             stage: "done".into(),
             message: format!(
-                "{} ready at {short} — restart ComfyUI if it was already running",
+                "{} ready at {short} - restart ComfyUI if it was already running",
                 pin.folder
             ),
             filename: None,
@@ -315,7 +315,7 @@ pub(crate) fn install_supir_python_deps(app: &AppHandle) -> Result<(), String> {
 
     let python = root.join("python_embeded").join("python.exe");
     if !python.is_file() {
-        return Err("ComfyUI portable python.exe missing — cannot install SUPIR deps".into());
+        return Err("ComfyUI portable python.exe missing - cannot install SUPIR deps".into());
     }
     let reqs = root
         .join("ComfyUI")

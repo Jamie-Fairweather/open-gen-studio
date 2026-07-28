@@ -212,7 +212,7 @@ pub(crate) fn enqueue_job(app: &AppHandle, spec: &DownloadSpec) -> Result<String
             if matches!(existing.status.as_str(), "queued" | "running" | "paused") {
                 return Ok(existing.id);
             }
-            // Terminal job with same key — allow re-enqueue by deleting old row.
+            // Terminal job with same key - allow re-enqueue by deleting old row.
             let _ = db.delete_download_job(&existing.id);
         }
         let sort = db.next_download_sort_order()?;

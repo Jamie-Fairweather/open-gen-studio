@@ -8,7 +8,7 @@ pub fn local_file_len(path: &Path) -> Option<u64> {
 
 /// True when a local model file looks like real weights (not an HTML error page).
 /// Size-only skip is unsafe: a resumed HF HTML gate + Range can match remote length.
-/// Note: truncated safetensors still pass — use [`local_file_complete`] before skipping downloads.
+/// Note: truncated safetensors still pass - use [`local_file_complete`] before skipping downloads.
 pub fn local_file_usable(path: &Path) -> bool {
     let Ok(mut file) = File::open(path) else {
         return false;
@@ -38,7 +38,7 @@ pub fn local_file_usable(path: &Path) -> bool {
     if !(2..=16 * 1024 * 1024).contains(&header_len) {
         return false;
     }
-    // JSON starts at byte 8 — already in `head` when we read ≥9 bytes.
+    // JSON starts at byte 8 - already in `head` when we read ≥9 bytes.
     if n > 8 {
         return head[8] == b'{';
     }

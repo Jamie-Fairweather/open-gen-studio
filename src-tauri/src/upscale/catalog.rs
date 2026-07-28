@@ -20,7 +20,7 @@ pub(crate) const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         id: "4x-ultrasharp",
         name: "4x UltraSharp",
-        description: "Crisp edges — default for AI-generated art",
+        description: "Crisp edges - default for AI-generated art",
         filename: "4x-UltraSharp.pth",
         url: "https://huggingface.co/Shandypur/ESRGAN-4x-UltraSharp/resolve/main/4x-UltraSharp.pth",
         scale: 4,
@@ -47,7 +47,7 @@ pub(crate) const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         id: "4x-nomos8k-sc",
         name: "4x Nomos8k SC",
-        description: "Photo ESRGAN — JPEG / light blur (Nomos8k)",
+        description: "Photo ESRGAN - JPEG / light blur (Nomos8k)",
         filename: "4xNomos8kSC.safetensors",
         url: "https://huggingface.co/Phips/4xNomos8kSC/resolve/main/4xNomos8kSC.safetensors",
         scale: 4,
@@ -56,7 +56,7 @@ pub(crate) const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         id: "4x-nomos8k-dat",
         name: "4x Nomos8k DAT",
-        description: "Photo DAT — realistic SR (Nomos8k)",
+        description: "Photo DAT - realistic SR (Nomos8k)",
         filename: "4xNomos8kDAT.safetensors",
         url: "https://huggingface.co/Phips/4xNomos8kDAT/resolve/main/4xNomos8kDAT.safetensors",
         scale: 4,
@@ -74,7 +74,7 @@ pub(crate) const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         id: "4x-nomos-uni-span",
         name: "4x NomosUni SPAN",
-        description: "Fast universal — JPEG + multiscale (NomosUni)",
+        description: "Fast universal - JPEG + multiscale (NomosUni)",
         filename: "4xNomosUni_span_multijpg.safetensors",
         url: "https://huggingface.co/Phips/4xNomosUni_span_multijpg/resolve/main/4xNomosUni_span_multijpg.safetensors",
         scale: 4,
@@ -83,7 +83,7 @@ pub(crate) const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         id: "supir-v0q",
         name: "SUPIR v0Q",
-        description: "Generative restoration — quality (needs SDXL + ~12GB VRAM; non-commercial)",
+        description: "Generative restoration - quality (needs SDXL + ~12GB VRAM; non-commercial)",
         filename: "SUPIR-v0Q_fp16.safetensors",
         url: "https://huggingface.co/Kijai/SUPIR_pruned/resolve/main/SUPIR-v0Q_fp16.safetensors",
         scale: 2,
@@ -92,7 +92,7 @@ pub(crate) const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         id: "supir-v0f",
         name: "SUPIR v0F",
-        description: "Generative restoration — fidelity (needs SDXL + ~12GB VRAM; non-commercial)",
+        description: "Generative restoration - fidelity (needs SDXL + ~12GB VRAM; non-commercial)",
         filename: "SUPIR-v0F_fp16.safetensors",
         url: "https://huggingface.co/Kijai/SUPIR_pruned/resolve/main/SUPIR-v0F_fp16.safetensors",
         scale: 2,

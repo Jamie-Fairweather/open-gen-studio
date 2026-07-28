@@ -27,7 +27,7 @@ export const useStudioStore = create<StudioStore>()((...a) => ({
 
 /**
  * Subscribe with shallow equality. Required for selectors that return
- * new arrays/objects each call — otherwise useSyncExternalStore loops.
+ * new arrays/objects each call - otherwise useSyncExternalStore loops.
  */
 export function useStudioSelector<T>(selector: (state: StudioStore) => T): T {
   return useStudioStore(useShallow(selector))

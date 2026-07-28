@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 fn comfy_input_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let portable = comfy::find_portable_root(&comfy::runtimes_dir(app)?.join("portable"))
-        .map_err(|_| "ComfyUI portable not found — install the runtime first".to_string())?;
+        .map_err(|_| "ComfyUI portable not found - install the runtime first".to_string())?;
     let dir = portable.join("ComfyUI").join("input");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)

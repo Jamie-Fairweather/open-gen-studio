@@ -57,7 +57,7 @@ const UI_SLOTS: &[UiSlot] = &[
         label: "Seed (0 = random)",
         group: "advanced",
         fixed: false,
-        always_emit: true, // common — emit unbound so user can map noise_seed
+        always_emit: true, // common - emit unbound so user can map noise_seed
         include_when_matched: true,
     },
     UiSlot {
@@ -202,7 +202,7 @@ pub fn suggest_controls_from_bindable(bindable: &[BindableInput]) -> Vec<Suggest
     let mut claimed: HashSet<String> = HashSet::new();
     let mut out = Vec::new();
 
-    // Prompt / negative — easy-use nodes, titled primitives, then CLIP encodes.
+    // Prompt / negative - easy-use nodes, titled primitives, then CLIP encodes.
     let mut text_inputs: Vec<&BindableInput> =
         bindable.iter().filter(|b| is_prompt_bindable(b)).collect();
     text_inputs.sort_by(|a, b| {

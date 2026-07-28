@@ -52,7 +52,7 @@ pub struct SuggestedControl {
     pub default: Option<Value>,
     /// Pre-checked in the Save dialog.
     pub include: bool,
-    /// Required for the blueprint — locked in the Save dialog (always saved).
+    /// Required for the blueprint - locked in the Save dialog (always saved).
     #[serde(default)]
     pub fixed: bool,
 }

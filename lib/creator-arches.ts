@@ -1,4 +1,4 @@
-/** Creator UI arch registry — product metadata (slots/defaults), not an IPC DTO. */
+/** Creator UI arch registry - product metadata (slots/defaults), not an IPC DTO. */
 
 import type { RecipeCapabilities } from "@/lib/generated/bindings"
 import { isRecipeArch, type RecipeArch } from "@/lib/arch"
@@ -20,7 +20,7 @@ type ArchDef = {
   slots: ModelSlotDef[]
   sampler: string
   scheduler: string
-  /** Local metadata — always fully specified (IPC RecipeCapabilities fields are optional). */
+  /** Local metadata - always fully specified (IPC RecipeCapabilities fields are optional). */
   capabilities: Required<RecipeCapabilities>
   /** Flux uses distilled guidance instead of CFG. */
   usesGuidance?: boolean

@@ -31,6 +31,7 @@ import {
   StudioPanelBody,
   StudioPanelHeader,
 } from "@/components/studio-panel"
+import { ToolModelGate } from "@/components/tools/tool-model-gate"
 import {
   ToolChipRow,
   ToolFieldLabel,
@@ -378,286 +379,297 @@ export function ImageToPromptPanel() {
         }
       />
       <StudioPanelBody className="gap-4">
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          className="sr-only"
-          onChange={onFileChange}
-        />
-
-        <ToolSurface>
-          <div className="flex flex-col gap-4 p-4">
-            <div className="flex flex-col gap-2">
-              <ToolFieldLabel>Source</ToolFieldLabel>
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault()
-                  setDragging(true)
-                }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={onDrop}
-                className={cn(
-                  "relative overflow-hidden rounded-lg border bg-muted/20 transition-colors",
-                  dragging ? "border-primary bg-primary/5" : "border-border",
-                  previewUrl ? "aspect-[16/9]" : "min-h-40"
-                )}
-              >
-                {previewUrl ? (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={previewUrl}
-                      alt="Reference"
-                      className="size-full object-contain"
-                    />
-                    <button
-                      type="button"
-                      onClick={clearImage}
-                      disabled={busy}
-                      className="absolute top-2 right-2 inline-flex size-8 items-center justify-center rounded-md border border-border/80 bg-background/90 text-foreground backdrop-blur-sm transition-colors hover:bg-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                      aria-label="Clear image"
-                    >
-                      <XIcon className="size-3.5" />
-                    </button>
-                  </>
-                ) : (
-                  <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 px-4 text-center">
-                    <ImageIcon className="size-6 text-muted-foreground/60" />
-                    <p className="text-sm text-muted-foreground">
-                      Drop, paste, upload, or pick from gallery
-                    </p>
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="min-h-9 gap-1.5"
-                  onClick={() => fileRef.current?.click()}
-                  disabled={busy}
-                >
-                  <UploadIcon className="size-3.5" />
-                  Upload
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={galleryOpen ? "default" : "secondary"}
-                  className="min-h-9 gap-1.5"
-                  onClick={() => setGalleryOpen((o) => !o)}
-                  disabled={busy}
-                >
-                  <ImagesIcon className="size-3.5" />
-                  Gallery
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="min-h-9 gap-1.5"
-                  disabled={busy}
-                  onClick={() =>
-                    notifySuccess("Press Ctrl+V to paste an image")
-                  }
-                >
-                  <ClipboardPasteIcon className="size-3.5" />
-                  Paste
-                </Button>
-              </div>
-            </div>
-
-            {galleryOpen ? (
-              <div className="h-40 rounded-lg border border-border">
-                <ScrollArea className="h-full" scrollbarGutter>
-                  <div className="p-1.5">
-                    {imageGallery.length === 0 ? (
-                      <p className="p-2 text-sm text-muted-foreground">
-                        No gallery images yet.
-                      </p>
-                    ) : (
-                      <ul className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
-                        {imageGallery.slice(0, 24).map((item) => (
-                          <li key={item.id}>
-                            <button
-                              type="button"
-                              className="aspect-square w-full overflow-hidden rounded-md bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                              onClick={() => pickGallery(item)}
-                            >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={gallerySrc(
-                                  item.thumbnailPath || item.path
-                                )}
-                                alt=""
-                                className="size-full object-cover"
-                              />
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </ScrollArea>
-              </div>
-            ) : null}
-
-            {embedded ? (
-              <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm text-muted-foreground">
-                  Embedded prompt found in this file.
-                </p>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="min-h-9 shrink-0"
-                  onClick={() => {
-                    applyResultText(embedded, format)
-                    setNegative(null)
-                  }}
-                >
-                  Use embedded prompt
-                </Button>
-              </div>
-            ) : null}
-
-            <ToolChipRow
-              label="Format"
-              options={PROMPT_FORMATS}
-              value={format}
-              onChange={setFormat}
-              disabled={busy}
-            />
-            <ToolChipRow
-              label="Target"
-              options={PROMPT_TARGETS}
-              value={target}
-              onChange={setTarget}
-              disabled={busy}
-            />
-
-            {hint ? (
-              <p className="text-xs leading-relaxed text-amber-600/90 dark:text-amber-400/85">
-                {hint}
-              </p>
-            ) : null}
-
-            <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-              <Button
-                type="button"
-                className="min-h-9 min-w-[9rem] gap-1.5"
-                disabled={busy || !imagePath}
-                onClick={() => void run()}
-              >
-                {busy ? (
-                  <Loader2Icon className="size-4 animate-spin" />
-                ) : (
-                  <SparklesIcon className="size-4" />
-                )}
-                Generate
-              </Button>
-              {busy && jobId ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="min-h-9"
-                  onClick={() => void cancelJob(jobId)}
-                >
-                  Cancel
-                </Button>
-              ) : null}
-              {status ? (
-                <p className="text-xs text-muted-foreground">{status}</p>
-              ) : null}
-            </div>
-            {error ? (
-              <p className="text-sm text-destructive" role="alert">
-                {error}
-              </p>
-            ) : null}
-          </div>
-        </ToolSurface>
-
-        <ToolSurface>
-          <ToolSurfaceHeader
-            title="Prompt"
-            actions={
-              <>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="min-h-9 gap-1.5"
-                  disabled={!displayPrompt.trim()}
-                  onClick={() => {
-                    void navigator.clipboard.writeText(displayPrompt)
-                    notifySuccess("Copied")
-                  }}
-                >
-                  <CopyIcon className="size-3.5" />
-                  Copy
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="min-h-9"
-                  disabled={!displayPrompt.trim()}
-                  onClick={useInStudio}
-                >
-                  Use in Studio
-                </Button>
-              </>
-            }
+        <ToolModelGate providerId="qwenvl" toolLabel="Image to Prompt">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="sr-only"
+            onChange={onFileChange}
           />
-          <div className="p-4">
-            {!hasResult && !busy ? (
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                Generated prompts appear here. Edit freely before sending to
-                Image Studio.
-              </p>
-            ) : fields && showStructured ? (
-              <div className="flex flex-col gap-3">
-                {STRUCTURED_FIELDS.map((key) => (
-                  <label key={key} className="flex flex-col gap-1.5">
-                    <ToolFieldLabel>{key}</ToolFieldLabel>
-                    <Textarea
-                      value={fields[key]}
-                      onChange={(e) =>
-                        setFields((prev) => ({
-                          ...(prev ?? emptyStructuredFields()),
-                          [key]: e.target.value,
-                        }))
-                      }
-                      rows={2}
-                      className="min-h-16 resize-y"
-                    />
-                  </label>
-                ))}
-              </div>
-            ) : (
-              <Textarea
-                value={result}
-                onChange={(e) => {
-                  setResult(e.target.value)
-                  setFields(null)
-                }}
-                placeholder={busy ? "Working…" : "Prompt output"}
-                rows={10}
-                className="min-h-48 resize-y"
-              />
-            )}
-          </div>
-        </ToolSurface>
 
-        {history.length > 0 ? (
           <ToolSurface>
-            <ToolSurfaceHeader title="This session" />
-            <div className={history.length > 3 ? "h-56" : undefined}>
-              {history.length > 3 ? (
-                <ScrollArea className="h-full" scrollbarGutter>
+            <div className="flex flex-col gap-4 p-4">
+              <div className="flex flex-col gap-2">
+                <ToolFieldLabel>Source</ToolFieldLabel>
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    setDragging(true)
+                  }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={onDrop}
+                  className={cn(
+                    "relative overflow-hidden rounded-lg border bg-muted/20 transition-colors",
+                    dragging ? "border-primary bg-primary/5" : "border-border",
+                    previewUrl ? "aspect-[16/9]" : "min-h-40"
+                  )}
+                >
+                  {previewUrl ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={previewUrl}
+                        alt="Reference"
+                        className="size-full object-contain"
+                      />
+                      <button
+                        type="button"
+                        onClick={clearImage}
+                        disabled={busy}
+                        className="absolute top-2 right-2 inline-flex size-8 items-center justify-center rounded-md border border-border/80 bg-background/90 text-foreground backdrop-blur-sm transition-colors hover:bg-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                        aria-label="Clear image"
+                      >
+                        <XIcon className="size-3.5" />
+                      </button>
+                    </>
+                  ) : (
+                    <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 px-4 text-center">
+                      <ImageIcon className="size-6 text-muted-foreground/60" />
+                      <p className="text-sm text-muted-foreground">
+                        Drop, paste, upload, or pick from gallery
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="min-h-9 gap-1.5"
+                    onClick={() => fileRef.current?.click()}
+                    disabled={busy}
+                  >
+                    <UploadIcon className="size-3.5" />
+                    Upload
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={galleryOpen ? "default" : "secondary"}
+                    className="min-h-9 gap-1.5"
+                    onClick={() => setGalleryOpen((o) => !o)}
+                    disabled={busy}
+                  >
+                    <ImagesIcon className="size-3.5" />
+                    Gallery
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="min-h-9 gap-1.5"
+                    disabled={busy}
+                    onClick={() =>
+                      notifySuccess("Press Ctrl+V to paste an image")
+                    }
+                  >
+                    <ClipboardPasteIcon className="size-3.5" />
+                    Paste
+                  </Button>
+                </div>
+              </div>
+
+              {galleryOpen ? (
+                <div className="h-40 rounded-lg border border-border">
+                  <ScrollArea className="h-full" scrollbarGutter>
+                    <div className="p-1.5">
+                      {imageGallery.length === 0 ? (
+                        <p className="p-2 text-sm text-muted-foreground">
+                          No gallery images yet.
+                        </p>
+                      ) : (
+                        <ul className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
+                          {imageGallery.slice(0, 24).map((item) => (
+                            <li key={item.id}>
+                              <button
+                                type="button"
+                                className="aspect-square w-full overflow-hidden rounded-md bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                onClick={() => pickGallery(item)}
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={gallerySrc(
+                                    item.thumbnailPath || item.path
+                                  )}
+                                  alt=""
+                                  className="size-full object-cover"
+                                />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </div>
+              ) : null}
+
+              {embedded ? (
+                <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    Embedded prompt found in this file.
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="min-h-9 shrink-0"
+                    onClick={() => {
+                      applyResultText(embedded, format)
+                      setNegative(null)
+                    }}
+                  >
+                    Use embedded prompt
+                  </Button>
+                </div>
+              ) : null}
+
+              <ToolChipRow
+                label="Format"
+                options={PROMPT_FORMATS}
+                value={format}
+                onChange={setFormat}
+                disabled={busy}
+              />
+              <ToolChipRow
+                label="Target"
+                options={PROMPT_TARGETS}
+                value={target}
+                onChange={setTarget}
+                disabled={busy}
+              />
+
+              {hint ? (
+                <p className="text-xs leading-relaxed text-amber-600/90 dark:text-amber-400/85">
+                  {hint}
+                </p>
+              ) : null}
+
+              <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
+                <Button
+                  type="button"
+                  className="min-h-9 min-w-[9rem] gap-1.5"
+                  disabled={busy || !imagePath}
+                  onClick={() => void run()}
+                >
+                  {busy ? (
+                    <Loader2Icon className="size-4 animate-spin" />
+                  ) : (
+                    <SparklesIcon className="size-4" />
+                  )}
+                  Generate
+                </Button>
+                {busy && jobId ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="min-h-9"
+                    onClick={() => void cancelJob(jobId)}
+                  >
+                    Cancel
+                  </Button>
+                ) : null}
+                {status ? (
+                  <p className="text-xs text-muted-foreground">{status}</p>
+                ) : null}
+              </div>
+              {error ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {error}
+                </p>
+              ) : null}
+            </div>
+          </ToolSurface>
+
+          <ToolSurface>
+            <ToolSurfaceHeader
+              title="Prompt"
+              actions={
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="min-h-9 gap-1.5"
+                    disabled={!displayPrompt.trim()}
+                    onClick={() => {
+                      void navigator.clipboard.writeText(displayPrompt)
+                      notifySuccess("Copied")
+                    }}
+                  >
+                    <CopyIcon className="size-3.5" />
+                    Copy
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="min-h-9"
+                    disabled={!displayPrompt.trim()}
+                    onClick={useInStudio}
+                  >
+                    Use in Studio
+                  </Button>
+                </>
+              }
+            />
+            <div className="p-4">
+              {!hasResult && !busy ? (
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  Generated prompts appear here. Edit freely before sending to
+                  Image Studio.
+                </p>
+              ) : fields && showStructured ? (
+                <div className="flex flex-col gap-3">
+                  {STRUCTURED_FIELDS.map((key) => (
+                    <label key={key} className="flex flex-col gap-1.5">
+                      <ToolFieldLabel>{key}</ToolFieldLabel>
+                      <Textarea
+                        value={fields[key]}
+                        onChange={(e) =>
+                          setFields((prev) => ({
+                            ...(prev ?? emptyStructuredFields()),
+                            [key]: e.target.value,
+                          }))
+                        }
+                        rows={2}
+                        className="min-h-16 resize-y"
+                      />
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <Textarea
+                  value={result}
+                  onChange={(e) => {
+                    setResult(e.target.value)
+                    setFields(null)
+                  }}
+                  placeholder={busy ? "Working…" : "Prompt output"}
+                  rows={10}
+                  className="min-h-48 resize-y"
+                />
+              )}
+            </div>
+          </ToolSurface>
+
+          {history.length > 0 ? (
+            <ToolSurface>
+              <ToolSurfaceHeader title="This session" />
+              <div className={history.length > 3 ? "h-56" : undefined}>
+                {history.length > 3 ? (
+                  <ScrollArea className="h-full" scrollbarGutter>
+                    <SessionHistoryList
+                      history={history}
+                      onSelect={(h) => {
+                        setFormat(h.format)
+                        setTarget(h.target)
+                        applyResultText(h.prompt, h.format)
+                      }}
+                    />
+                  </ScrollArea>
+                ) : (
                   <SessionHistoryList
                     history={history}
                     onSelect={(h) => {
@@ -666,20 +678,11 @@ export function ImageToPromptPanel() {
                       applyResultText(h.prompt, h.format)
                     }}
                   />
-                </ScrollArea>
-              ) : (
-                <SessionHistoryList
-                  history={history}
-                  onSelect={(h) => {
-                    setFormat(h.format)
-                    setTarget(h.target)
-                    applyResultText(h.prompt, h.format)
-                  }}
-                />
-              )}
-            </div>
-          </ToolSurface>
-        ) : null}
+                )}
+              </div>
+            </ToolSurface>
+          ) : null}
+        </ToolModelGate>
       </StudioPanelBody>
     </StudioPanel>
   )

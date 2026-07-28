@@ -1,3 +1,4 @@
+use crate::comfy;
 use crate::commands::AppState;
 use crate::download;
 use serde_json::json;
@@ -45,6 +46,16 @@ fn emit_kind_success(app: &AppHandle, kind: &str, job_key: &str) {
             );
             let _ = app.emit("upscale://updated", id);
         }
+    } else if kind == "runtime" {
+        let ver = comfy::pinned_version();
+        let _ = app.emit(
+            "runtimes://progress",
+            comfy::RuntimeProgress {
+                engine: comfy::ENGINE.into(),
+                stage: "done".into(),
+                message: format!("ComfyUI {ver} installed"),
+            },
+        );
     }
 }
 

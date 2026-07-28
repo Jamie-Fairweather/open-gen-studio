@@ -241,12 +241,51 @@ pub(crate) fn run_step(
                         let db = state.db.lock().map_err(|e| e.to_string())?;
                         db.get_runtime_by_engine(comfy::ENGINE)?
                     };
-                    // Full "runtime" keeps the old monolithic path for any stale jobs.
+                    // Full "runtime" / legacy "runtime_install" keep the combined path.
                     let runtime = if action == "runtime" {
                         comfy::install_portable(app, existing.as_ref(), false)?
                     } else {
                         comfy::install_portable_core(app, existing.as_ref(), false)?
                     };
+                    {
+                        let state = app.state::<AppState>();
+                        let db = state.db.lock().map_err(|e| e.to_string())?;
+                        let _ = db.upsert_runtime(&runtime);
+                    }
+                    let _ = app.emit("runtimes://updated", &runtime);
+                    Ok(())
+                }
+                "runtime_extract" => {
+                    let engine = spec
+                        .get("engine")
+                        .and_then(|v| v.as_str())
+                        .ok_or("runtime engine missing")?;
+                    if engine != comfy::ENGINE {
+                        return Err(format!("unknown engine: {engine}"));
+                    }
+                    comfy::emit_runtime_progress(app, "extract", "Extracting ComfyUI…");
+                    let existing = {
+                        let state = app.state::<AppState>();
+                        let db = state.db.lock().map_err(|e| e.to_string())?;
+                        db.get_runtime_by_engine(comfy::ENGINE)?
+                    };
+                    comfy::extract_portable_core(app, existing.as_ref(), false)
+                }
+                "runtime_configure" => {
+                    let engine = spec
+                        .get("engine")
+                        .and_then(|v| v.as_str())
+                        .ok_or("runtime engine missing")?;
+                    if engine != comfy::ENGINE {
+                        return Err(format!("unknown engine: {engine}"));
+                    }
+                    comfy::emit_runtime_progress(app, "configure", "Configuring ComfyUI…");
+                    let existing = {
+                        let state = app.state::<AppState>();
+                        let db = state.db.lock().map_err(|e| e.to_string())?;
+                        db.get_runtime_by_engine(comfy::ENGINE)?
+                    };
+                    let runtime = comfy::configure_portable_core(app, existing.as_ref(), false)?;
                     {
                         let state = app.state::<AppState>();
                         let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -263,6 +302,7 @@ pub(crate) fn run_step(
                     if engine != comfy::ENGINE {
                         return Err(format!("unknown engine: {engine}"));
                     }
+                    comfy::emit_runtime_progress(app, "configure", "Installing extensions…");
                     upscale::ensure_managed_nodes(app)
                 }
                 other => Err(format!("unknown action: {other}")),

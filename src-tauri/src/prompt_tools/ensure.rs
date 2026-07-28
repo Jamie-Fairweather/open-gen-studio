@@ -121,13 +121,25 @@ fn node_ready(app: &AppHandle, pin_id: &str) -> bool {
 }
 
 pub fn list_weights(app: &AppHandle) -> Result<Vec<PromptToolWeightInfo>, String> {
-    Ok(vec![PromptToolWeightInfo {
-        id: QWENVL_MODEL_ID.into(),
-        name: "Qwen3-VL-8B Instruct (4-bit)".into(),
-        description: "Image→Prompt + Prompt Enhancer (shared vision-language model)".into(),
-        ready: node_ready(app, "qwenvl") && qwenvl_weights_ready(app),
-        provider: "qwenvl".into(),
-    }])
+    let ready = node_ready(app, "qwenvl") && qwenvl_weights_ready(app);
+    let name = "Qwen3-VL-8B Instruct (4-bit)".to_string();
+    // Per-tool rows (shared weights today) so each tool can gate on its own provider id.
+    Ok(vec![
+        PromptToolWeightInfo {
+            id: "image-to-prompt".into(),
+            name: name.clone(),
+            description: "Required for Image to Prompt".into(),
+            ready,
+            provider: "qwenvl".into(),
+        },
+        PromptToolWeightInfo {
+            id: "prompt-enhance".into(),
+            name,
+            description: "Required for Prompt Enhancer".into(),
+            ready,
+            provider: "enhancer".into(),
+        },
+    ])
 }
 
 fn ensure_lock() -> &'static Mutex<()> {

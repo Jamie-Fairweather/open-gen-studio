@@ -271,20 +271,31 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
         s.setSelectedId((prev) =>
           pickDefaultBlueprintId(bps, prev ?? studioRefs.preferredBlueprintId)
         )
-        const installing = rts.some(
-          (r) => r.engine === "comfyui" && r.status === "installing"
-        )
-        s.setRuntimeBusy(installing)
-        if (installing) {
-          s.setRuntimeMessage("Installing ComfyUI in the background…")
-          notifyProgress(
-            "runtime",
-            "Installing ComfyUI",
-            "Installing in the background…"
-          )
-        }
         const snap = await listDownloads().catch(() => EMPTY_DOWNLOAD_SNAPSHOT)
         s.setDownloadSnapshot(snap)
+        const runtimeJob =
+          snap.active?.kind === "runtime" ||
+          snap.queued.some((j) => j.kind === "runtime")
+        const installingDb = rts.some(
+          (r) => r.engine === "comfyui" && r.status === "installing"
+        )
+        const installing = installingDb || runtimeJob
+        s.setRuntimeBusy(installing)
+        if (installing) {
+          const ver =
+            rts.find((r) => r.engine === "comfyui")?.version?.trim() ||
+            snap.active?.title?.match(/ComfyUI\s+(v[\d.]+)/i)?.[1] ||
+            snap.queued
+              .find((j) => j.kind === "runtime")
+              ?.title?.match(/ComfyUI\s+(v[\d.]+)/i)?.[1] ||
+            ""
+          s.setRuntimeMessage("Installing ComfyUI in the background…")
+          notifyInfo(
+            "Installing Runtime",
+            ver ? `Installing ComfyUI ${ver}` : "Installing ComfyUI…",
+            "runtime-install"
+          )
+        }
       } catch (e) {
         store().setSizesProbing(false)
         store().setBlueprintsLoaded(true)
@@ -308,13 +319,19 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
         next[i] = runtime
         return next
       })
+      const runtimeJobActive =
+        store().downloadSnapshot.active?.kind === "runtime"
       store().setRuntimeBusy(
-        runtime.status === "installing" || runtime.status === "starting"
+        runtime.status === "installing" ||
+          runtime.status === "starting" ||
+          runtimeJobActive
       )
       if (runtime.status === "ready") {
         store().setComfyHealthy(false)
-        store().setRuntimeMessage("Runtime ready")
-        store().setRuntimeBusy(false)
+        if (!runtimeJobActive) {
+          store().setRuntimeMessage("Runtime ready")
+          store().setRuntimeBusy(false)
+        }
       } else if (runtime.status === "running") {
         store().setComfyHealthy(true)
         store().setRuntimeMessage("Runtime is running")
@@ -330,10 +347,13 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
     })
 
     void onRuntimeProgress((p) => {
-      store().setRuntimeMessage(`${p.stage}: ${p.message}`)
-      if (p.stage === "done" || p.stage === "ready") {
+      store().setRuntimeMessage(p.message)
+      if (p.stage === "done") {
         store().setRuntimeBusy(false)
-        if (p.stage === "ready") store().setComfyHealthy(true)
+        notifySuccess("Runtime Installed", p.message)
+      } else if (p.stage === "ready") {
+        store().setRuntimeBusy(false)
+        store().setComfyHealthy(true)
         notifyProgress("runtime", "Runtime ready", p.message, true)
       } else if (p.stage === "error") {
         store().setRuntimeBusy(false)
@@ -341,9 +361,8 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
         notifyError(p.message, "Runtime error")
       } else if (p.stage === "start") {
         notifyProgress("runtime", "Starting runtime", p.message)
-      } else {
-        notifyProgress("runtime", "Runtime", p.message)
       }
+      // extract / configure / download: message only — detail lives on Downloads
     }).then((u) => {
       unlistenProgress = u
     })
@@ -540,18 +559,29 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
     })
 
     void onUpscaleProgress((p) => {
+      const installingRuntime =
+        store().downloadSnapshot.active?.kind === "runtime" ||
+        store().runtimes.some(
+          (r) => r.engine === "comfyui" && r.status === "installing"
+        )
+      if (installingRuntime && p.message) {
+        store().setRuntimeMessage(p.message)
+      }
       if (p.stage === "error") {
         notifyError(p.message, "Upscale install failed")
       } else if (p.stage === "done") {
-        notifySuccess(
-          p.modelId === "usdu"
-            ? "Ultimate SD Upscale ready"
-            : p.modelId === "supir"
-              ? "SUPIR node ready - restart Comfy if it was running"
-              : p.modelId.startsWith("supir-")
-                ? "SUPIR weights ready"
-                : "Upscale model ready"
-        )
+        // Runtime install also pins managed nodes — skip per-node toasts there.
+        if (!installingRuntime) {
+          notifySuccess(
+            p.modelId === "usdu"
+              ? "Ultimate SD Upscale ready"
+              : p.modelId === "supir"
+                ? "SUPIR node ready - restart Comfy if it was running"
+                : p.modelId.startsWith("supir-")
+                  ? "SUPIR weights ready"
+                  : "Upscale model ready"
+          )
+        }
         void listUpscalers()
           .then((models) => store().setUpscaleModels(models))
           .catch(() => {})

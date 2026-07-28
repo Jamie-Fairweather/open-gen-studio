@@ -101,9 +101,9 @@ export function LoraPickerDialog({
               : "Official packs plus your saves. Download progress lives in Downloads."}
           </DialogDescription>
           <div className="relative mt-2">
-            <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <SearchIcon className="pointer-events-none absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              className="h-10 rounded-xl bg-muted/60 pl-9"
+              className="h-10 rounded-xl bg-muted/60 **:[input]:h-10 **:[input]:ps-9 **:[input]:leading-10 sm:**:[input]:h-10 sm:**:[input]:leading-10"
               placeholder="Search…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -118,7 +118,7 @@ export function LoraPickerDialog({
                 : "No LoRA packs match your search"}
             </p>
           ) : (
-            <div className="flex flex-col gap-8">
+            <div className="flex flex-col gap-8 pb-6">
               {mine.length > 0 ? (
                 <section className="flex flex-col gap-3">
                   <h3 className="text-sm font-medium text-muted-foreground">

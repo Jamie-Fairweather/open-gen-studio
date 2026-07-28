@@ -2,14 +2,32 @@ import type { Dispatch, SetStateAction } from "react"
 import type { StateCreator } from "zustand"
 import {
   ensureDownload,
+  runtimePinsStatus,
   startComfyui,
   stopComfyui,
   type GpuInfo,
   type RuntimeInstall,
 } from "@/lib/host"
-import { notifyError, notifyProgress, notifySuccess } from "@/lib/notify"
+import {
+  notifyError,
+  notifyInfo,
+  notifyProgress,
+  notifySuccess,
+} from "@/lib/notify"
 import type { StudioStore } from "../studio-store-types"
 import { applySet } from "./helpers"
+
+async function comfyInstallVersion(
+  runtimes: RuntimeInstall[]
+): Promise<string> {
+  const fromRow = runtimes.find((r) => r.engine === "comfyui")?.version?.trim()
+  if (fromRow) return fromRow
+  try {
+    return (await runtimePinsStatus()).comfy.expected
+  } catch {
+    return ""
+  }
+}
 
 export type RuntimeSlice = {
   runtimes: RuntimeInstall[]
@@ -52,7 +70,12 @@ export const createRuntimeSlice: StateCreator<
     const s = get()
     s.setRuntimeBusy(true)
     s.setRuntimeMessage("Queued ComfyUI install…")
-    notifyProgress("runtime", "Installing ComfyUI", "Queued install…")
+    const ver = await comfyInstallVersion(s.runtimes)
+    notifyInfo(
+      "Installing Runtime",
+      ver ? `Installing ComfyUI ${ver}` : "Installing ComfyUI…",
+      "runtime-install"
+    )
     try {
       await ensureDownload(
         { kind: "runtime", engine: "comfyui" },

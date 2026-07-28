@@ -88,17 +88,8 @@ pub fn run_image_to_prompt(
         Some(provider.id()),
         None,
     );
-    let dl = crate::download_manager::ensure(
-        app,
-        crate::download_manager::DownloadSpec::PromptTools {
-            provider: provider.pin_id().into(),
-        },
-        crate::download_manager::EnsureOpts { wait: true },
-    )?;
-    if matches!(dl.status.as_str(), "error" | "cancelled") {
-        return Err(dl
-            .message
-            .unwrap_or_else(|| format!("Prompt Tools install {}", dl.status)));
+    if !crate::prompt_tools::provider_ready(app, provider.pin_id()) {
+        return Err("Model not installed. Install it from this tool page first.".into());
     }
     let ensured = ensure_provider(app, provider.pin_id())?;
     let port = ensure_comfy_with_nodes(
@@ -178,17 +169,8 @@ pub fn run_prompt_enhance(
     let mode = args.mode.as_deref().unwrap_or("expand");
 
     emit_progress(app, "prepare", "Preparing Prompt Enhancer…", None, None);
-    let dl = crate::download_manager::ensure(
-        app,
-        crate::download_manager::DownloadSpec::PromptTools {
-            provider: "qwenvl".into(),
-        },
-        crate::download_manager::EnsureOpts { wait: true },
-    )?;
-    if matches!(dl.status.as_str(), "error" | "cancelled") {
-        return Err(dl
-            .message
-            .unwrap_or_else(|| format!("Prompt Tools install {}", dl.status)));
+    if !crate::prompt_tools::provider_ready(app, "qwenvl") {
+        return Err("Model not installed. Install it from this tool page first.".into());
     }
     let ensured = ensure_provider(app, "qwenvl")?;
     let port = ensure_comfy_with_nodes(

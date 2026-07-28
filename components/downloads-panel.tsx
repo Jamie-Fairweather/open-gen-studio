@@ -22,6 +22,8 @@ type DownloadsPanelProps = {
   snapshot: DownloadSnapshot
   /** Smoothed bytes/sec for the active transfer (0 when unknown). */
   speedBps?: number
+  /** Live status line for non-transfer steps (e.g. extract progress). */
+  activeDetail?: string | null
   onPause: (jobId: string) => void
   onResume: (jobId: string) => void
   onCancel: (jobId: string) => void
@@ -63,22 +65,32 @@ function TransferRail({ value, idle }: { value: number; idle?: boolean }) {
 }
 
 function jobPct(job: DownloadJobView): number | null {
-  if (job.total != null && job.total > 0) {
-    return Math.min(100, (job.downloaded / job.total) * 100)
-  }
   const active = job.steps.find(
     (s) => s.status === "running" || s.status === "paused"
   )
+  // Non-transfer steps (extract/configure/extensions) stay indeterminate —
+  // don't keep showing the finished download %.
+  if (active && active.stepKind !== "http") return null
+  if (job.total != null && job.total > 0) {
+    return Math.min(100, (job.downloaded / job.total) * 100)
+  }
   if (active?.bytesTotal && active.bytesTotal > 0) {
     return Math.min(100, (active.bytesDone / active.bytesTotal) * 100)
   }
-  // Non-transfer steps (extract/configure) stay indeterminate.
-  if (active && active.stepKind !== "http") return null
   return null
 }
 
 function formatPct(pct: number): string {
   return `${Math.min(100, pct).toFixed(2)}%`
+}
+
+/** Parse "Extracting… 20%" style progress from the live status line. */
+function detailPct(detail: string | null | undefined): number | null {
+  if (!detail) return null
+  const m = detail.match(/(\d+(?:\.\d+)?)\s*%/)
+  if (!m) return null
+  const n = Number(m[1])
+  return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : null
 }
 
 function stepStatusIcon(status: string) {
@@ -91,6 +103,7 @@ function stepStatusIcon(status: string) {
 export function DownloadsPanel({
   snapshot,
   speedBps = 0,
+  activeDetail = null,
   onPause,
   onResume,
   onCancel,
@@ -101,32 +114,51 @@ export function DownloadsPanel({
   const history = snapshot.history
   const empty = !active && queued.length === 0 && history.length === 0
   const pendingCount = (active ? 1 : 0) + queued.length
+
+  const activeStep = active?.steps.find(
+    (s) => s.status === "running" || s.status === "paused"
+  )
+  const isTransfer = activeStep?.stepKind === "http"
+  const pct = isTransfer
+    ? active
+      ? jobPct(active)
+      : null
+    : detailPct(activeDetail)
+  const bytesDone = isTransfer
+    ? active?.total != null
+      ? active.downloaded
+      : (activeStep?.bytesDone ?? 0)
+    : 0
+  const bytesTotal = isTransfer
+    ? (active?.total ?? activeStep?.bytesTotal ?? null)
+    : null
+  const remain =
+    bytesTotal != null && bytesTotal > bytesDone ? bytesTotal - bytesDone : 0
+  const showEta =
+    active?.status === "running" &&
+    isTransfer &&
+    speedBps > 8 * 1024 &&
+    remain > 0
+  const etaLabel = showEta
+    ? ` · ${formatBytes(speedBps)}/s · ETA ${formatEta(remain / speedBps)}`
+    : ""
+  const workLabel =
+    activeDetail?.trim() ||
+    (activeStep ? `${activeStep.label}…` : null) ||
+    "Working…"
   const statusLine = active
     ? queued.length > 0
-      ? `${active.status === "paused" ? "Paused" : "Transferring"} · ${queued.length} waiting`
+      ? `${isTransfer ? (active.status === "paused" ? "Paused" : "Transferring") : workLabel} · ${queued.length} waiting`
       : active.status === "paused"
         ? "Paused"
-        : "Transferring"
+        : isTransfer
+          ? "Transferring"
+          : workLabel
     : queued.length > 0
       ? `${queued.length} waiting`
       : history.length > 0
         ? `${history.length} recent`
         : "Idle"
-
-  const pct = active ? jobPct(active) : null
-  const activeStep = active?.steps.find(
-    (s) => s.status === "running" || s.status === "paused"
-  )
-  const bytesDone =
-    active?.total != null ? active.downloaded : (activeStep?.bytesDone ?? 0)
-  const bytesTotal = active?.total ?? activeStep?.bytesTotal ?? null
-  const remain =
-    bytesTotal != null && bytesTotal > bytesDone ? bytesTotal - bytesDone : 0
-  const showEta =
-    active?.status === "running" && speedBps > 8 * 1024 && remain > 0
-  const etaLabel = showEta
-    ? ` · ${formatBytes(speedBps)}/s · ETA ${formatEta(remain / speedBps)}`
-    : ""
 
   return (
     <StudioPanel>
@@ -246,13 +278,20 @@ export function DownloadsPanel({
                     <TransferRail value={pct ?? 0} />
                     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 font-mono text-[11px] text-muted-foreground tabular-nums">
                       <span>
-                        {bytesTotal != null
+                        {isTransfer && bytesTotal != null
                           ? `${formatBytes(bytesDone)} / ${formatBytes(bytesTotal)}${etaLabel}`
-                          : bytesDone > 0
+                          : isTransfer && bytesDone > 0
                             ? `${formatBytes(bytesDone)}${etaLabel}`
-                            : activeStep?.stepKind === "http"
+                            : isTransfer
                               ? "Preparing…"
-                              : "Working…"}
+                              : pct != null
+                                ? activeDetail
+                                    ?.replace(/\s*\d+(?:\.\d+)?\s*%\s*$/, "")
+                                    .trim() ||
+                                  (activeStep
+                                    ? `${activeStep.label}…`
+                                    : "Working…")
+                                : workLabel}
                       </span>
                       <span className="text-foreground/85">
                         {pct != null ? formatPct(pct) : "-"}
@@ -276,6 +315,11 @@ export function DownloadsPanel({
                                 (step.bytesDone / step.bytesTotal) * 100
                               )
                             : null
+                        const livePct =
+                          isActive && step.stepKind !== "http"
+                            ? detailPct(activeDetail)
+                            : null
+                        const rightPct = stepPct ?? livePct
                         return (
                           <li
                             key={step.id}
@@ -303,8 +347,8 @@ export function DownloadsPanel({
                               {step.bytesTotal != null && step.bytesTotal > 0
                                 ? " · "
                                 : null}
-                              {stepPct != null
-                                ? formatPct(stepPct)
+                              {rightPct != null
+                                ? formatPct(rightPct)
                                 : statusLabel(step.status)}
                             </span>
                           </li>

@@ -100,13 +100,15 @@ pub(crate) fn extract_with_sevenz_cli(
     archive: &Path,
     dest: &Path,
 ) -> Result<(), String> {
+    use std::io::Read;
+
     let seven = find_7z_exe().ok_or_else(|| "7-Zip not found".to_string())?;
     super::paths::emit_progress(
         app,
         "extract",
         &format!("Extracting with {}…", seven.display()),
     );
-    let output = process_cmd::new(&seven)
+    let mut child = process_cmd::new(&seven)
         .args([
             "x",
             archive
@@ -115,16 +117,78 @@ pub(crate) fn extract_with_sevenz_cli(
             &format!("-o{}", dest.display()),
             "-y",
             "-bsp1",
+            "-bso1",
+            "-bse1",
         ])
-        .stdout(Stdio::null())
+        .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .output()
+        .spawn()
         .map_err(|e| format!("failed to run 7z: {e}"))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
+
+    let stderr_thread = child.stderr.take().map(|mut s| {
+        std::thread::spawn(move || {
+            let mut buf = String::new();
+            let _ = s.read_to_string(&mut buf);
+            buf
+        })
+    });
+
+    let mut last_emit = Instant::now()
+        .checked_sub(Duration::from_secs(1))
+        .unwrap_or_else(Instant::now);
+    if let Some(mut out) = child.stdout.take() {
+        let mut buf = [0u8; 256];
+        let mut acc = String::new();
+        loop {
+            let n = out.read(&mut buf).map_err(|e| format!("7z stdout: {e}"))?;
+            if n == 0 {
+                break;
+            }
+            for &b in &buf[..n] {
+                if b == b'\r' || b == b'\n' {
+                    if let Some(msg) = parse_7z_progress_line(&acc) {
+                        if last_emit.elapsed() >= Duration::from_millis(400) {
+                            super::paths::emit_progress(app, "extract", &msg);
+                            last_emit = Instant::now();
+                        }
+                    }
+                    acc.clear();
+                } else if b.is_ascii() {
+                    acc.push(b as char);
+                }
+            }
+        }
+        if let Some(msg) = parse_7z_progress_line(&acc) {
+            super::paths::emit_progress(app, "extract", &msg);
+        }
+    }
+
+    let status = child.wait().map_err(|e| format!("7z wait failed: {e}"))?;
+    let stderr = stderr_thread
+        .and_then(|t| t.join().ok())
+        .unwrap_or_default();
+    if !status.success() {
         return Err(format!("7z extract failed: {stderr}"));
     }
+    super::paths::emit_progress(app, "extract", "Extract complete");
     Ok(())
+}
+
+/// Parse 7-Zip `-bsp1` progress lines like `"  45%"` or `"  45% 1234"`.
+fn parse_7z_progress_line(line: &str) -> Option<String> {
+    let t = line.trim();
+    if t.is_empty() {
+        return None;
+    }
+    let pct_token = t
+        .split_whitespace()
+        .find(|p| p.ends_with('%'))?
+        .trim_end_matches('%');
+    let pct: u32 = pct_token.parse().ok()?;
+    if pct > 100 {
+        return None;
+    }
+    Some(format!("Extracting… {pct}%"))
 }
 
 /// Pure-Rust extract via sevenz-rust2 (no system 7-Zip required).
@@ -155,7 +219,7 @@ pub(crate) fn extract_with_rust(
             sevenz_rust2::default_entry_extract_fn(entry, reader, &out)?;
             if !entry.is_directory() {
                 extracted += 1;
-                if last_emit.elapsed() >= Duration::from_secs(2) {
+                if last_emit.elapsed() >= Duration::from_secs(1) {
                     super::paths::emit_progress(
                         app,
                         "extract",
@@ -263,33 +327,31 @@ fn ready_runtime(id: String, created_at: i64, root: &Path) -> RuntimeInstall {
     }
 }
 
-/// Extract + configure pinned portable (assumes archive already downloaded).
-/// Does not install managed custom-node extensions.
-pub fn install_portable_core(
+/// Stable backup dir for custom nodes across extract → configure download steps.
+fn custom_nodes_backup_path(base: &Path) -> PathBuf {
+    base.join(".oga_custom_nodes_backup")
+}
+
+/// Extract pinned portable (assumes archive already downloaded). No configure.
+pub fn extract_portable_core(
     app: &AppHandle,
-    existing: Option<&RuntimeInstall>,
+    _existing: Option<&RuntimeInstall>,
     force: bool,
-) -> Result<RuntimeInstall, String> {
+) -> Result<(), String> {
     let base = super::paths::runtimes_dir(app)?;
     let archive = portable_archive_path(app)?;
     let extract_to = base.join("portable");
-    let models = super::paths::models_dir(app)?;
-    let (id, created_at) = runtime_row_ids(existing);
-
-    let mut custom_nodes_backup: Option<PathBuf> = None;
+    let backup_path = custom_nodes_backup_path(&base);
 
     if let Ok(root) = super::paths::find_portable_root(&extract_to) {
         if super::paths::portable_ready(&root) {
             if super::paths::portable_pin_matches(&root) && !force {
                 super::paths::emit_progress(
                     app,
-                    "configure",
-                    &format!("ComfyUI {COMFY_PINNED_VERSION} already installed - finishing setup…"),
+                    "extract",
+                    &format!("ComfyUI {COMFY_PINNED_VERSION} already extracted"),
                 );
-                super::paths::write_extra_model_paths(&root, &models)?;
-                super::manager::ensure_comfy_manager(app, &root)?;
-                super::paths::write_pin_marker(&root)?;
-                return Ok(ready_runtime(id, created_at, &root));
+                return Ok(());
             }
 
             super::paths::emit_progress(
@@ -301,8 +363,15 @@ pub fn install_portable_core(
                     "Updating ComfyUI to the version required by this app - backing up custom nodes…"
                 },
             );
-            // `base` is runtimes/comfyui - never under extract_to/portable.
-            custom_nodes_backup = backup_custom_nodes(&root, &base)?;
+            if backup_path.exists() {
+                let _ = fs::remove_dir_all(&backup_path);
+            }
+            if let Some(backup) = backup_custom_nodes(&root, &base)? {
+                // Normalize to the stable path configure looks for.
+                if backup != backup_path {
+                    fs::rename(&backup, &backup_path).map_err(|e| e.to_string())?;
+                }
+            }
             fs::remove_dir_all(&extract_to).map_err(|e| e.to_string())?;
         }
     }
@@ -324,24 +393,54 @@ pub fn install_portable_core(
     if !super::paths::portable_ready(&root) {
         return Err("extract finished but ComfyUI portable looks incomplete".into());
     }
+    Ok(())
+}
+
+/// Configure extracted portable: model paths, Manager, restore custom nodes, pin.
+pub fn configure_portable_core(
+    app: &AppHandle,
+    existing: Option<&RuntimeInstall>,
+    _force: bool,
+) -> Result<RuntimeInstall, String> {
+    let base = super::paths::runtimes_dir(app)?;
+    let extract_to = base.join("portable");
+    let models = super::paths::models_dir(app)?;
+    let (id, created_at) = runtime_row_ids(existing);
+    let backup_path = custom_nodes_backup_path(&base);
+
+    let root = super::paths::find_portable_root(&extract_to)?;
+    if !super::paths::portable_ready(&root) {
+        return Err("ComfyUI portable extract missing - run extract first".into());
+    }
+
     super::paths::emit_progress(app, "configure", "Writing shared model paths…");
     super::paths::write_extra_model_paths(&root, &models)?;
     super::manager::ensure_comfy_manager(app, &root)?;
 
-    if let Some(ref backup) = custom_nodes_backup {
+    if backup_path.is_dir() {
         super::paths::emit_progress(app, "configure", "Restoring custom nodes…");
-        if let Err(err) = restore_custom_nodes(&root, backup) {
-            // Don't fail the whole Comfy pin migrate - managed nodes are re-checked out next.
+        if let Err(err) = restore_custom_nodes(&root, &backup_path) {
             super::paths::emit_progress(
                 app,
                 "configure",
                 &format!("Custom nodes restore skipped ({err})"),
             );
-            let _ = fs::remove_dir_all(backup);
+            let _ = fs::remove_dir_all(&backup_path);
         }
     }
     super::paths::write_pin_marker(&root)?;
     Ok(ready_runtime(id, created_at, &root))
+}
+
+/// Extract + configure pinned portable (assumes archive already downloaded).
+/// Does not install managed custom-node extensions.
+pub fn install_portable_core(
+    app: &AppHandle,
+    existing: Option<&RuntimeInstall>,
+    force: bool,
+) -> Result<RuntimeInstall, String> {
+    extract_portable_core(app, existing, force)?;
+    configure_portable_core(app, existing, force)
 }
 
 /// Install or migrate to the pinned ComfyUI portable.

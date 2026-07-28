@@ -135,7 +135,7 @@ pub fn enqueue_comfy_install(
                     comfy::RuntimeProgress {
                         engine: comfy::ENGINE.into(),
                         stage: "done".into(),
-                        message: format!("ComfyUI {} ready", comfy::pinned_version()),
+                        message: format!("ComfyUI {} installed", comfy::pinned_version()),
                     },
                 );
             }

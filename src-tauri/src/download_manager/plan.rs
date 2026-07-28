@@ -48,7 +48,7 @@ pub(crate) fn spec_title(spec: &DownloadSpec) -> String {
         DownloadSpec::Lora { id, arch } => format!("LoRA {id} ({arch})"),
         DownloadSpec::Upscale { id } => format!("Upscale {id}"),
         DownloadSpec::PromptTools { .. } => "Qwen3-VL-8B (Prompt Tools)".into(),
-        DownloadSpec::Runtime { engine } => format!("Install {engine}"),
+        DownloadSpec::Runtime { .. } => format!("ComfyUI {}", comfy::pinned_version()),
     }
 }
 
@@ -254,8 +254,14 @@ pub(crate) fn plan_steps(app: &AppHandle, spec: &DownloadSpec) -> Result<Vec<Pla
                 http_step(format!("Download ComfyUI {ver}"), url, &dest, None),
                 PlannedStep {
                     step_kind: "action".into(),
-                    label: "Install ComfyUI".into(),
-                    spec: json!({ "action": "runtime_install", "engine": engine }),
+                    label: "Extract".into(),
+                    spec: json!({ "action": "runtime_extract", "engine": engine }),
+                    bytes_total: None,
+                },
+                PlannedStep {
+                    step_kind: "action".into(),
+                    label: "Configure".into(),
+                    spec: json!({ "action": "runtime_configure", "engine": engine }),
                     bytes_total: None,
                 },
                 PlannedStep {
@@ -290,7 +296,8 @@ pub(crate) fn enrich_title(app: &AppHandle, spec: &DownloadSpec) -> String {
                     .unwrap_or_else(|| spec_title(spec))
             }
         }
-        _ => spec_title(spec),
+        DownloadSpec::Runtime { .. } => format!("ComfyUI {}", comfy::pinned_version()),
+        DownloadSpec::PromptTools { .. } => spec_title(spec),
     }
 }
 

@@ -26,7 +26,7 @@ export type RefineSlice = {
   beginLoraInstall: (id: string, arch: RecipeArch) => Promise<void>
   beginUpscaleInstall: (id: string) => Promise<void>
   beginUsduInstall: () => Promise<void>
-  beginPromptToolsInstall: () => Promise<void>
+  beginPromptToolsInstall: (provider?: string) => Promise<void>
 }
 
 export const createRefineSlice: StateCreator<
@@ -114,12 +114,9 @@ export const createRefineSlice: StateCreator<
     await get().beginUpscaleInstall("usdu")
   },
 
-  beginPromptToolsInstall: async () => {
+  beginPromptToolsInstall: async (provider = "qwenvl") => {
     try {
-      await ensureDownload(
-        { kind: "promptTools", provider: "qwenvl" },
-        { wait: false }
-      )
+      await ensureDownload({ kind: "promptTools", provider }, { wait: false })
     } catch (e) {
       notifyError(
         e instanceof Error ? e.message : String(e),

@@ -56,3 +56,14 @@ export function loraKeyFromJobKey(jobKey: string): string | null {
 export function upscaleIdFromJobKey(jobKey: string): string | null {
   return jobKey.startsWith("upscale:") ? jobKey.slice("upscale:".length) : null
 }
+
+/** Shared Qwen-VL install job key prefix used by Prompt Tools providers. */
+export function promptToolsModelIdFromJobKey(jobKey: string): string | null {
+  return jobKey.startsWith("prompt-tools:")
+    ? jobKey.slice("prompt-tools:".length)
+    : null
+}
+
+export function isPromptToolsJobKey(jobKey: string): boolean {
+  return jobKey.startsWith("prompt-tools:")
+}

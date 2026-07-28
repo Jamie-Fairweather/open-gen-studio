@@ -37,7 +37,7 @@ impl Db {
                     );
 
                     INSERT INTO settings (key, value) VALUES
-                      ('catalog_repo', 'https://github.com/open-gen-ai/blueprints'),
+                      ('catalog_repo', 'https://github.com/Jamie-Fairweather/open-gen-studio'),
                       ('gpu_preference', 'auto');
                     "#,
                 )

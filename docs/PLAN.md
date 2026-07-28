@@ -8,8 +8,6 @@ Build a **local AI runtime platform** — not “another ComfyUI frontend.”
 
 Think **Steam / Docker Desktop for local generative AI**: the app installs runtimes, models, and dependencies; queues jobs; manages the GPU; and exposes a simple UI. Inference always happens in external engines (ComfyUI, Whisper, Kokoro, Wan, Trellis2, vLLM/llama.cpp, etc.). Media modalities: **image → audio → video → 3D** (in that product order).
 
-Inspiration (and what we want to improve on): [open-generative-ai](https://github.com/anil-matcha/open-generative-ai).
-
 **Day-one promise:** pick an Official Blueprint (e.g. Z-Image Turbo) → one-click install → generate. End users never touch GitHub, Python, or node packing by hand. (We may _host_ Official Blueprint manifests on GitHub for the app to fetch — that is an implementation detail, not a user workflow.)
 
 ---
@@ -21,7 +19,7 @@ Inspiration (and what we want to improve on): [open-generative-ai](https://githu
 3. **Publish Blueprints, not workflows.** Image Blueprints are **recipes** (arch + models + sampler + capabilities). The host **compiles** a Comfy API graph at generate time — we do not ship frozen `workflow.api.json` as the product path.
 4. **Two data planes — never mix them.** Local app state (jobs, installs, gallery) vs Blueprint catalog (read-only manifests; Official ships in-repo today).
 5. **No hosted marketplace database.** Official/community presets are files the app reads; not a public cloud DB.
-6. **99% User Mode, 1% Creator Mode.** Most people never see a node graph. Creator authors **recipes** via a form; optional “Open ComfyUI” is a power-user escape hatch, not the happy path.
+6. **99% User Mode, 1% Creator Mode.** Most people never see a node graph. Creator authors **recipes** via a form — the app never embeds ComfyUI; people who want the node graph use ComfyUI itself.
 
 ---
 
@@ -135,9 +133,9 @@ No graph. No nodes.
 
 ### Creator Mode (advanced)
 
-**Recipe authoring form:** choose arch → fill model slots → sampler/defaults/capabilities → save to My blueprints (`%APPDATA%/…/blueprints/user/<id>/`). No Comfy capture required.
+**Recipe authoring form:** choose arch → fill model slots → sampler/defaults/capabilities → save to My blueprints (`%APPDATA%/…/blueprints/user/<id>/`). No Comfy UI or capture in-app.
 
-Optional: open the managed ComfyUI webview for exploration. Promoting a user pack into `blueprints/official/` is a manual copy / PR — the app never writes Official.
+Promoting a user pack into `blueprints/official/` is a manual copy / PR — the app never writes Official.
 
 ---
 
@@ -265,7 +263,7 @@ Detect GPU → pick release asset URL → download (.7z, resume+checksum)
   → write extra_model_paths.yaml → shared models dir
   → start: python_embeded\python.exe -s ComfyUI\main.py
        --listen 127.0.0.1 --port <managed>
-       (no auto-browser; we own the UI / optional Creator embed)
+       (no auto-browser; we own the UI)
   → health-check HTTP → register runtime_installs row
 ```
 
@@ -285,7 +283,7 @@ Why portable (not “build our own venv”):
 - Downloader must support **`.7z` extract** (portable is 7z, not zip). Pure Rust via **sevenz-rust2** (always works); optional system 7-Zip CLI when present for a faster path.
 - Process manager launches `python_embeded\python.exe`, not `run_nvidia_gpu.bat` (bats are for humans; we pass flags ourselves).
 - Shared **model library** outside the portable tree via `extra_model_paths.yaml` so Blueprint installs don’t duplicate multi‑GB weights per Comfy copy.
-- Optional Creator Comfy view: point a WebView at `http://127.0.0.1:<port>` of _our_ managed Comfy process.
+- Comfy HTTP is for the host/recipe runner only — not exposed as an in-app node editor.
 
 ---
 

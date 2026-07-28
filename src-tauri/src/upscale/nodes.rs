@@ -128,7 +128,7 @@ pub fn managed_nodes_pin_status(app: &AppHandle) -> Vec<pins::PinStatus> {
 
 /// kijai SUPIR resolves relative yaml targets via `import_module(..., package=folder_name)`,
 /// then falls back to `package=absolute_path`. Folder names with hyphens fail, and absolute
-/// paths that contain dots (our `com.open-gen-ai` AppData dir) get split as packages -
+/// paths that contain dots (e.g. a reverse-DNS AppData dir) get split as packages -
 /// yielding `No module named 'C:\\Users\\...\\com'`. Comfy registers the node as
 /// `path.replace('.', '_x_')`; use that as the package for relative imports.
 pub(crate) fn patch_supir_import_hack(app: &AppHandle) -> Result<(), String> {
@@ -181,7 +181,7 @@ pub(crate) fn patch_supir_import_hack(app: &AppHandle) -> Result<(), String> {
     };
     let Some(rel_end) = src[start..].find("\ndef append_zero") else {
         return Err(
-            "SUPIR sgm/util.py layout changed - cannot apply import path fix; update Open Gen AI"
+            "SUPIR sgm/util.py layout changed - cannot apply import path fix; update Open Gen Studio"
                 .into(),
         );
     };

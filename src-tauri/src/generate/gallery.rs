@@ -2,15 +2,11 @@ use crate::db::{GalleryItem, RuntimeInstall};
 use crate::generate::types::ComfyImageRef;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use uuid::Uuid;
 
 pub fn gallery_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("gallery"))
+    Ok(crate::app_paths::app_data_dir(app)?.join("gallery"))
 }
 
 /// `gallery/YYYY-MM-DD` (local calendar day).

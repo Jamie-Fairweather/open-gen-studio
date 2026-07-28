@@ -6,7 +6,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 
 pub const ENGINE: &str = "comfyui";
 pub const DEFAULT_PORT: u16 = 8188;
@@ -70,20 +70,13 @@ pub fn portable_pin_matches(root: &Path) -> bool {
 }
 
 pub fn runtimes_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
+    Ok(crate::app_paths::app_data_dir(app)?
         .join("runtimes")
         .join(ENGINE))
 }
 
 pub fn models_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("models"))
+    Ok(crate::app_paths::app_data_dir(app)?.join("models"))
 }
 
 pub(crate) fn looks_like_portable_root(path: &Path) -> bool {
@@ -129,8 +122,8 @@ pub(crate) fn write_extra_model_paths(portable_root: &Path, models: &Path) -> Re
 
     let models_posix = models.to_string_lossy().replace('\\', "/");
     let yaml = format!(
-        r#"# Managed by Open Gen AI - shared model library
-open_gen_ai:
+        r#"# Managed by Open Gen Studio - shared model library
+open_gen_studio:
   base_path: {models_posix}
   is_default: true
   checkpoints: checkpoints

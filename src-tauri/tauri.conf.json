@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Open Gen AI",
+  "productName": "Open Gen Studio",
   "version": "0.1.0",
-  "identifier": "com.open-gen-ai",
+  "identifier": "com.open-gen-studio",
   "build": {
     "frontendDist": "../out",
     "devUrl": "http://localhost:3000",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Open Gen AI",
+        "title": "Open Gen Studio",
         "width": 1100,
         "height": 720,
         "resizable": true,

@@ -70,7 +70,7 @@ pub fn url_is_gated(url: &str) -> bool {
 fn probe_gated_uncached(url: &str) -> bool {
     let Ok(client) = reqwest::blocking::Client::builder()
         .redirect(reqwest::redirect::Policy::limited(10))
-        .user_agent("OpenGenAI/0.1 (local)")
+        .user_agent("OpenGenStudio/0.1 (local)")
         .timeout(Duration::from_secs(30))
         .build()
     else {

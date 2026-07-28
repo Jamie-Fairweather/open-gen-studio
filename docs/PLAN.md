@@ -1,4 +1,4 @@
-﻿# Open Gen AI - Product & Architecture Plan
+﻿# Open Gen Studio - Product & Architecture Plan
 
 > **Design history + product direction.** For how-tos and source of truth, prefer [`docs/contributing/`](./contributing/) - especially `RecipeArch::ALL` / generated `RECIPE_ARCHES` and Creator `ARCHES` in `lib/creator-arches.ts`.
 
@@ -51,7 +51,7 @@ Keep these mentally and in code as **two different systems**:
 
 Do **not** put marketplace/catalog rows into the local SQLite as source of truth. Optional: cache a fetched catalog snapshot locally for offline browsing - still clearly “cache of GitHub,” not the registry itself.
 
-There is **no** hosted Open Gen AI database for presets/marketplace.
+There is **no** hosted Open Gen Studio database for presets/marketplace.
 
 ### Why not ZenStack
 
@@ -240,7 +240,7 @@ How we ship/install ComfyUI under the host (researched against current Comfy-Org
 
 ### Options considered
 
-| Option                                                                                    | What it is                                                                                                                                                                                                                                                                                 | Verdict for Open Gen AI                                          |
+| Option                                                                                    | What it is                                                                                                                                                                                                                                                                                 | Verdict for Open Gen Studio                                      |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
 | **Official Windows Portable**                                                             | Self-contained folder: `python_embeded` + `ComfyUI` + run/update scripts. Published on [ComfyUI releases](https://github.com/comfyanonymous/ComfyUI/releases) / [portable docs](https://docs.comfy.org/installation/comfyui_portable_windows). GPU-specific builds (NVIDIA / AMD / Intel). | **Primary choice on Windows**                                    |
 | **Comfy Desktop** ([Comfy-Org/Comfy-Desktop](https://github.com/Comfy-Org/Comfy-Desktop)) | Official multi-install _launcher_ app; provisions “standalone” envs. Explicitly not for headless/server use.                                                                                                                                                                               | **Do not depend on it** - we _are_ the launcher                  |

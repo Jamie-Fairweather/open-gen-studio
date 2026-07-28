@@ -7,7 +7,7 @@ use crate::generate;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use uuid::Uuid;
 
 fn comfy_input_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -47,11 +47,7 @@ pub fn save_temp_image(app: &AppHandle, bytes: Vec<u8>, ext: &str) -> Result<Str
         other if other.len() <= 8 && other.chars().all(|c| c.is_ascii_alphanumeric()) => other,
         _ => "png",
     };
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("prompt-tools");
+    let dir = crate::app_paths::app_data_dir(app)?.join("prompt-tools");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let path = dir.join(format!("upload_{}.{}", Uuid::new_v4().simple(), safe_ext));
     fs::write(&path, bytes).map_err(|e| e.to_string())?;

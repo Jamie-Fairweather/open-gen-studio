@@ -8,7 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 pub fn resolve_portable_url(gpu: &GpuInfo) -> Result<&'static str, String> {
     if !cfg!(target_os = "windows") {
@@ -210,10 +210,7 @@ pub fn install_portable(
     let gpu = gpu::detect_nvidia();
     let url = resolve_portable_url(&gpu)?;
     let base = super::paths::runtimes_dir(app)?;
-    let archive = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
+    let archive = crate::app_paths::app_data_dir(app)?
         .join("downloads")
         .join(format!(
             "ComfyUI_windows_portable_nvidia_{COMFY_PINNED_VERSION}.7z"

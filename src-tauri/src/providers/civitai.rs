@@ -188,7 +188,7 @@ fn parse_model_id(url: &str) -> Option<u64> {
 fn client() -> Result<reqwest::blocking::Client, String> {
     reqwest::blocking::Client::builder()
         .redirect(reqwest::redirect::Policy::limited(10))
-        .user_agent("OpenGenAI/0.1 (local; +https://github.com/open-gen-ai)")
+        .user_agent("OpenGenStudio/0.1 (local; +https://github.com/open-gen-ai)")
         .timeout(Duration::from_secs(45))
         .build()
         .map_err(|e| e.to_string())

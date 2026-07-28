@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 use crate::download;
 
@@ -15,11 +15,7 @@ fn remote_size_cache() -> &'static Mutex<HashMap<String, u64>> {
 }
 
 fn remote_size_cache_path(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("remote-size-cache.json"))
+    Ok(crate::app_paths::app_data_dir(app)?.join("remote-size-cache.json"))
 }
 
 /// Load persisted URL sizes before the first blueprint list (call from setup).

@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{connect, Message, WebSocket};
 
@@ -36,11 +36,7 @@ pub(crate) fn connect_comfy_ws(port: u16, client_id: &str) -> Result<ComfySocket
 }
 
 fn preview_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("previews"))
+    Ok(crate::app_paths::app_data_dir(app)?.join("previews"))
 }
 
 fn write_preview_frame(app: &AppHandle, job_id: &str, slot: u8, payload: &[u8]) -> Option<PathBuf> {

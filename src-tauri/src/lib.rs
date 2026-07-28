@@ -1,3 +1,4 @@
+mod app_paths;
 mod blueprints;
 mod comfy;
 mod commands;
@@ -68,7 +69,7 @@ pub fn run() {
                 )?;
             }
 
-            let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+            let data_dir = app_paths::app_data_dir(app.handle())?;
             let db = Db::open(&data_dir)?;
             if let Ok(token) = db.get_setting(download::SETTING_HF_TOKEN) {
                 download::set_stored_hf_token(token);
@@ -87,6 +88,12 @@ pub fn run() {
             blueprints::load_remote_size_cache(app.handle());
 
             download_manager::start_worker(app.handle().clone());
+
+            // Gallery / previews / user blueprints live under the human-readable data dir.
+            let canonical_data = data_dir.canonicalize().unwrap_or(data_dir);
+            let _ = app
+                .asset_protocol_scope()
+                .allow_directory(&canonical_data, true);
 
             // Blueprint thumbnails (Official + user app-data).
             if let Ok(dir) = blueprints::official_dir(app.handle()) {

@@ -116,7 +116,7 @@ export function StudioChrome({ children }: { children: ReactNode }) {
     return (
       <div className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center gap-3 p-8">
         <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Open Gen AI
+          Open Gen Studio
         </h1>
         <p className="text-sm text-muted-foreground">
           Local store and host APIs run inside the Tauri desktop shell. Start
@@ -135,7 +135,7 @@ export function StudioChrome({ children }: { children: ReactNode }) {
         <header className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-border bg-card/90 px-2 py-1 shadow-lg shadow-black/30 backdrop-blur-md sm:gap-3 sm:px-3">
           <div className="flex shrink-0 items-center gap-2 pl-1 text-sm font-medium">
             <LayersIcon className="size-4 text-primary" />
-            <span className="hidden sm:inline">Open Gen AI</span>
+            <span className="hidden sm:inline">Open Gen Studio</span>
           </div>
           <nav className="flex min-w-0 [scrollbar-width:none] items-center gap-0.5 overflow-x-auto text-sm [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             {STUDIO_TABS.map((tab) => {

@@ -145,10 +145,7 @@ pub fn official_dir(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 pub fn user_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
+    let dir = crate::app_paths::app_data_dir(app)?
         .join("loras")
         .join("user");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;

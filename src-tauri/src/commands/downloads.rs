@@ -2,7 +2,7 @@ use crate::download;
 use crate::download_manager::{self, DownloadSnapshot, DownloadSpec, EnsureOpts, EnsureResult};
 use crate::providers::{self, ResolvedModelUrl};
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 /// Resolve a model page/file URL (Hugging Face, CivitAI, direct) to a download URL + filename.
 #[tauri::command]
@@ -23,10 +23,7 @@ pub fn download_url(
         return Err("invalid relative_path".into());
     }
 
-    let dest = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
+    let dest = crate::app_paths::app_data_dir(&app)?
         .join("downloads")
         .join(&relative_path);
 

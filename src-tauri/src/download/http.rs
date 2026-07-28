@@ -1,7 +1,7 @@
 use crate::providers::{self, ProviderKind};
 use std::time::Duration;
 
-pub(crate) const USER_AGENT: &str = "OpenGenAI/0.1 (local; +https://github.com/open-gen-ai)";
+pub(crate) const USER_AGENT: &str = "OpenGenStudio/0.1 (local; +https://github.com/open-gen-ai)";
 
 pub(crate) fn http_client() -> Result<reqwest::blocking::Client, String> {
     reqwest::blocking::Client::builder()

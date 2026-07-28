@@ -2,7 +2,7 @@
   "id": "ideogram4",
   "name": "Ideogram 4",
   "category": "image",
-  "description": "Ideogram 4.0 open weights - strong text rendering and layout control. Uses dual diffusion models + Qwen3-VL. Needs recent ComfyUI with Ideogram4Scheduler / DualModelGuider. ~16GB+ VRAM for FP8.",
+  "description": "Especially good at readable text in images and clean layouts. Needs a capable GPU (about 16GB+ recommended).",
   "runtime": "comfyui",
   "minimumVramGb": 16,
   "flowType": "txt2img",
@@ -51,7 +51,7 @@
       "role": "vae",
       "filename": "flux2-vae.safetensors",
       "path": "vae",
-      "url": "https://huggingface.co/Comfy-Org/Ideogram-4/resolve/main/vae/flux2-vae.safetensors"
+      "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors"
     }
   ]
 }

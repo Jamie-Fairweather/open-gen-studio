@@ -1,0 +1,39 @@
+{
+  "id": "pony-v6",
+  "name": "Pony Diffusion V6 XL",
+  "category": "image",
+  "description": "Beloved anime and character model. For best results, start prompts with score_9, score_8_up, score_7_up.",
+  "runtime": "comfyui",
+  "minimumVramGb": 8,
+  "flowType": "txt2img",
+  "arch": "pony",
+  "sampler": "euler_ancestral",
+  "scheduler": "karras",
+  "capabilities": {
+    "negative": true,
+    "loras": true,
+    "controlnet": false,
+    "upscale": false
+  },
+  "defaults": {
+    "width": 1024,
+    "height": 1024,
+    "steps": 25,
+    "cfg": 7,
+    "seed": 0
+  },
+  "models": [
+    {
+      "role": "checkpoint",
+      "filename": "ponyDiffusionV6XL_v6StartWithThisOne.safetensors",
+      "path": "checkpoints",
+      "url": "https://huggingface.co/LyliaEngine/Pony_Diffusion_V6_XL/resolve/main/ponyDiffusionV6XL_v6StartWithThisOne.safetensors"
+    },
+    {
+      "role": "vae",
+      "filename": "sdxl_vae.safetensors",
+      "path": "vae",
+      "url": "https://huggingface.co/stabilityai/sdxl-vae/resolve/main/sdxl_vae.safetensors"
+    }
+  ]
+}

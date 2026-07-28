@@ -162,11 +162,16 @@ export function targetFromArch(arch?: string | null): PromptTargetId {
   switch (arch) {
     case "flux":
     case "flux2":
+    case "chroma":
       return "flux"
     case "sdxl":
     case "sd15":
+    case "pony":
+    case "illustrious":
+    case "sd3.5":
       return "stableDiffusion"
     case "ideogram4":
+    case "qwen-image":
       return "ideogram"
     case "z-image":
     case "krea2":

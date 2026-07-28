@@ -2,7 +2,7 @@
   "id": "krea2-turbo",
   "name": "Krea 2 Turbo",
   "category": "image",
-  "description": "Open Krea 2 turbo - fast text-to-image with Qwen3-VL text encoder. Requires ComfyUI with native Krea 2 support.",
+  "description": "Fast text-to-image from Krea. Strong at following prompts; built for quick everyday generations.",
   "runtime": "comfyui",
   "minimumVramGb": 8,
   "flowType": "txt2img",

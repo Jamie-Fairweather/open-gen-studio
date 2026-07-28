@@ -1,0 +1,33 @@
+{
+  "id": "noobai-vpred",
+  "name": "NoobAI XL V-Pred 1.0",
+  "category": "image",
+  "description": "Popular anime-style model. Works best with anime/tag-style prompts (character names, clothing, scene keywords).",
+  "runtime": "comfyui",
+  "minimumVramGb": 8,
+  "flowType": "txt2img",
+  "arch": "illustrious",
+  "sampler": "euler",
+  "scheduler": "normal",
+  "capabilities": {
+    "negative": true,
+    "loras": true,
+    "controlnet": false,
+    "upscale": false
+  },
+  "defaults": {
+    "width": 1024,
+    "height": 1024,
+    "steps": 28,
+    "cfg": 5,
+    "seed": 0
+  },
+  "models": [
+    {
+      "role": "checkpoint",
+      "filename": "NoobAI-XL-Vpred-v1.0.safetensors",
+      "path": "checkpoints",
+      "url": "https://huggingface.co/Laxhar/noobai-XL-Vpred-1.0/resolve/main/NoobAI-XL-Vpred-v1.0.safetensors"
+    }
+  ]
+}

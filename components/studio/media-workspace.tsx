@@ -25,6 +25,7 @@ import {
   selectHasSizeControls,
   selectLatestGallerySeed,
   selectLoraInstallingKey,
+  selectLoraQueuedKeys,
   selectPreviewItem,
   selectSelected,
   selectShowAdvancedRail,
@@ -126,6 +127,7 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
   const activeArch = useStudioSelector(selectActiveArch)
   const activeLoraStack = useStudioSelector(selectActiveLoraStack)
   const loraInstallingKey = useStudioSelector(selectLoraInstallingKey)
+  const loraQueuedKeys = useStudioSelector(selectLoraQueuedKeys)
   const upscaleInstallingId = useStudioSelector(selectUpscaleInstallingId)
   const upscaleQueuedIds = useStudioSelector(selectUpscaleQueuedIds)
   const upscalePendingIds = useStudioSelector(selectUpscalePendingIds)
@@ -151,7 +153,7 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
   return (
     <>
       <div
-        className="absolute inset-0 flex flex-col pt-14 transition-[left,right] duration-300 ease-out"
+        className="absolute inset-0 flex flex-col transition-[left,right] duration-300 ease-out"
         style={{
           left: stageInsetLeft,
           right: stageInsetRight,
@@ -196,11 +198,6 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
               <h1 className="font-heading text-4xl font-semibold tracking-tight uppercase md:text-5xl">
                 {studioLabel} Studio
               </h1>
-              <p className="mt-3 max-w-md text-sm text-muted-foreground">
-                {canGenerate
-                  ? "Local blueprints on your GPU - install a model, describe a scene, generate."
-                  : `${studioLabel} blueprints are coming next. Switch to Image to generate now.`}
-              </p>
             </div>
           )}
         </main>
@@ -267,6 +264,7 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
               loraStack={activeLoraStack}
               onLoraStackChange={advanced.setLoraStack}
               loraInstallingKey={loraInstallingKey}
+              loraQueuedKeys={loraQueuedKeys}
               generating={advanced.generating}
               onOpenLoraLibrary={() => advanced.setLoraPickerOpen(true)}
               onInstallLoraVariant={(id, arch) => {

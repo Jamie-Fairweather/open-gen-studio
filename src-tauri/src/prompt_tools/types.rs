@@ -76,8 +76,10 @@ impl PromptTarget {
         match s {
             "auto" => Ok(Self::Auto),
             "flux" => Ok(Self::Flux),
-            "stableDiffusion" | "sd" | "sdxl" | "sd15" => Ok(Self::StableDiffusion),
-            "ideogram" => Ok(Self::Ideogram),
+            "stableDiffusion" | "sd" | "sdxl" | "sd15" | "pony" | "illustrious" => {
+                Ok(Self::StableDiffusion)
+            }
+            "ideogram" | "qwen-image" => Ok(Self::Ideogram),
             "zImageKrea" | "z-image" | "krea" | "krea2" => Ok(Self::ZImageKrea),
             other => Err(format!("unknown prompt target: {other}")),
         }
@@ -89,10 +91,13 @@ impl PromptTarget {
         }
         let s = arch.unwrap_or("").to_ascii_lowercase();
         match RecipeArch::parse(&s) {
-            Some(RecipeArch::Flux | RecipeArch::Flux2) => PromptTarget::Flux,
-            Some(RecipeArch::Sdxl | RecipeArch::Sd15) => PromptTarget::StableDiffusion,
-            Some(RecipeArch::Ideogram4) => PromptTarget::Ideogram,
+            Some(RecipeArch::Flux | RecipeArch::Flux2 | RecipeArch::Chroma) => PromptTarget::Flux,
+            Some(
+                RecipeArch::Sdxl | RecipeArch::Sd15 | RecipeArch::Pony | RecipeArch::Illustrious,
+            ) => PromptTarget::StableDiffusion,
+            Some(RecipeArch::Ideogram4 | RecipeArch::QwenImage) => PromptTarget::Ideogram,
             Some(RecipeArch::ZImage | RecipeArch::Krea2) => PromptTarget::ZImageKrea,
+            Some(RecipeArch::Sd35) => PromptTarget::StableDiffusion,
             None => match s.as_str() {
                 "sd" => PromptTarget::StableDiffusion,
                 "ideogram" => PromptTarget::Ideogram,

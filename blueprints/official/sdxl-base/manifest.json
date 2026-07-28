@@ -1,0 +1,39 @@
+{
+  "id": "sdxl-base",
+  "name": "SDXL 1.0 Base",
+  "category": "image",
+  "description": "The standard SDXL starter model. Reliable for photos and illustration, and works with many community styles.",
+  "runtime": "comfyui",
+  "minimumVramGb": 8,
+  "flowType": "txt2img",
+  "arch": "sdxl",
+  "sampler": "euler",
+  "scheduler": "normal",
+  "capabilities": {
+    "negative": true,
+    "loras": true,
+    "controlnet": false,
+    "upscale": false
+  },
+  "defaults": {
+    "width": 1024,
+    "height": 1024,
+    "steps": 28,
+    "cfg": 7,
+    "seed": 0
+  },
+  "models": [
+    {
+      "role": "checkpoint",
+      "filename": "sd_xl_base_1.0.safetensors",
+      "path": "checkpoints",
+      "url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors"
+    },
+    {
+      "role": "vae",
+      "filename": "sdxl_vae.safetensors",
+      "path": "vae",
+      "url": "https://huggingface.co/stabilityai/sdxl-vae/resolve/main/sdxl_vae.safetensors"
+    }
+  ]
+}

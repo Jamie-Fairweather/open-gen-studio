@@ -269,4 +269,15 @@
   html {
     @apply font-mono font-sans;
   }
+  /* Tauri frameless window: make drag regions work with pen/touch too */
+  [data-tauri-drag-region] {
+    app-region: drag;
+    -webkit-app-region: drag;
+  }
+  [data-tauri-drag-region] button,
+  [data-tauri-drag-region] a,
+  [data-tauri-drag-region] input {
+    app-region: no-drag;
+    -webkit-app-region: no-drag;
+  }
 }

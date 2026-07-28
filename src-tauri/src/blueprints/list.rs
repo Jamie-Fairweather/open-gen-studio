@@ -144,8 +144,26 @@ fn read_blueprint(dir: &Path, models_root: &Path, probe_remote: bool) -> Option<
         return None;
     }
 
-    let raw = fs::read_to_string(&manifest_path).ok()?;
-    let manifest: ManifestFile = serde_json::from_str(&raw).ok()?;
+    let raw = match fs::read_to_string(&manifest_path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "skipping blueprint {}: failed to read manifest ({e})",
+                dir.display()
+            );
+            return None;
+        }
+    };
+    let manifest: ManifestFile = match serde_json::from_str(&raw) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!(
+                "skipping blueprint {}: invalid manifest ({e})",
+                dir.display()
+            );
+            return None;
+        }
+    };
     // Skip non-recipe packs and the `_example` template folder.
     if manifest.arch.trim().is_empty() || manifest.id.starts_with('_') {
         return None;
@@ -234,6 +252,7 @@ fn read_blueprint(dir: &Path, models_root: &Path, probe_remote: bool) -> Option<
         name: manifest.name,
         category: manifest.category,
         description: manifest.description,
+        arch: manifest.arch,
         runtime: manifest.runtime,
         source: "official".into(), // overwritten by caller
         minimum_vram_gb: manifest.minimum_vram_gb,

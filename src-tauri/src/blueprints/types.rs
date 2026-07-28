@@ -8,6 +8,8 @@ pub struct Blueprint {
     pub name: String,
     pub category: String,
     pub description: String,
+    /// Recipe architecture id (e.g. `flux`, `pony`).
+    pub arch: String,
     pub runtime: String,
     /// `"official"` | `"user"`
     pub source: String,

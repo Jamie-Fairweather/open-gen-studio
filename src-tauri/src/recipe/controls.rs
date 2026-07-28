@@ -89,6 +89,10 @@ pub(crate) fn default_steps(arch: Option<RecipeArch>) -> i64 {
     match arch {
         Some(RecipeArch::ZImage | RecipeArch::Krea2) => 8,
         Some(RecipeArch::Flux | RecipeArch::Flux2 | RecipeArch::Ideogram4) => 20,
+        Some(RecipeArch::Pony | RecipeArch::Chroma) => 25,
+        Some(RecipeArch::QwenImage) => 30,
+        Some(RecipeArch::Sd35) => 40,
+        Some(RecipeArch::Illustrious) => 28,
         _ => 28,
     }
 }
@@ -96,6 +100,9 @@ pub(crate) fn default_steps(arch: Option<RecipeArch>) -> i64 {
 pub(crate) fn default_cfg(arch: Option<RecipeArch>) -> i64 {
     match arch {
         Some(RecipeArch::ZImage | RecipeArch::Krea2 | RecipeArch::Flux | RecipeArch::Flux2) => 1,
+        Some(RecipeArch::QwenImage) => 3,
+        Some(RecipeArch::Chroma | RecipeArch::Sd35) => 4,
+        Some(RecipeArch::Illustrious) => 5,
         Some(RecipeArch::Ideogram4) => 7,
         _ => 7,
     }

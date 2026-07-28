@@ -267,6 +267,10 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
         s.setUpscaleModels(upscalers)
         s.setUsduReady(usdu)
         s.setGallery(items)
+        s.setHfToken(settings.huggingface_token ?? "")
+        s.setHfTokenDirty(false)
+        s.setCivitaiToken(settings.civitai_api_key ?? "")
+        s.setCivitaiTokenDirty(false)
         s.setComfyHealthy(status.healthy)
         s.setSelectedId((prev) =>
           pickDefaultBlueprintId(bps, prev ?? studioRefs.preferredBlueprintId)

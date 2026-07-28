@@ -156,9 +156,9 @@ Blueprint (recipe)
 └── Tests             (compile smoke tests in Rust)
 ```
 
-Supported arches (v1): `z-image`, `krea2`, `flux`, `flux2`, `ideogram4`, `sdxl`, `sd15` - see [`blueprints/official/README.md`](../blueprints/official/README.md) and [`adding-model-architectures.md`](./contributing/adding-model-architectures.md).
+Supported arches (v1): `z-image`, `krea2`, `flux`, `flux2`, `ideogram4`, `sdxl`, `sd15`, `pony`, `qwen-image`, `illustrious`, `sd3.5`, `chroma` - see [`architecture-catalog.md`](./contributing/architecture-catalog.md), [`blueprints/official/README.md`](../blueprints/official/README.md), and [`adding-model-architectures.md`](./contributing/adding-model-architectures.md).
 
-Official packs today: `z-image-turbo`, `krea2-turbo`, `ideogram4`.
+Official packs today: `z-image-turbo`, `z-image-base`, `krea2-turbo`, `krea2-raw`, `ideogram4`, `pony-v6`, `flux-dev`, `flux-schnell`, `flux2-dev`, `sdxl-base`, `sd15`, `qwen-image`, `qwen-image-distill`, `noobai-vpred`, `sd35-large`, `sd35-large-turbo`, `chroma`.
 
 ### Models (preset download)
 

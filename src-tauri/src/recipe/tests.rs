@@ -206,6 +206,170 @@ fn compiles_sdxl_with_negative_when_cfg_high() {
 }
 
 #[test]
+fn compiles_pony_with_clip_skip() {
+    let m = manifest_from(json!({
+        "id": "pony-test",
+        "name": "Pony",
+        "category": "image",
+        "runtime": "comfyui",
+        "flowType": "txt2img",
+        "arch": "pony",
+        "sampler": "euler_ancestral",
+        "scheduler": "karras",
+        "capabilities": { "negative": true },
+        "models": [
+            { "filename": "pony.safetensors", "path": "checkpoints", "role": "checkpoint" },
+            { "filename": "sdxl_vae.safetensors", "path": "vae", "role": "vae" }
+        ]
+    }));
+    let mut values = HashMap::new();
+    values.insert(
+        "prompt".into(),
+        json!("score_9, score_8_up, score_7_up, portrait"),
+    );
+    values.insert("negative".into(), json!("score_6, blurry"));
+    values.insert("cfg".into(), json!(7));
+    values.insert("steps".into(), json!(25));
+    values.insert("width".into(), json!(1024));
+    values.insert("height".into(), json!(1024));
+    values.insert("seed".into(), json!(1));
+    let g = compile(&m, &values).unwrap();
+    assert_eq!(g["1"]["class_type"], "CheckpointLoaderSimple");
+    assert_eq!(g["9"]["class_type"], "CLIPSetLastLayer");
+    assert_eq!(g["9"]["inputs"]["stop_at_clip_layer"], -2);
+    assert_eq!(g["9"]["inputs"]["clip"], json!(["1", 1]));
+    assert_eq!(g["2"]["inputs"]["clip"], json!(["9", 0]));
+    assert_eq!(g["3"]["inputs"]["clip"], json!(["9", 0]));
+    assert_eq!(g["8"]["class_type"], "VAELoader");
+    assert_eq!(g["6"]["inputs"]["vae"], json!(["8", 0]));
+    assert_eq!(g["5"]["inputs"]["sampler_name"], "euler_ancestral");
+    assert_eq!(g["5"]["inputs"]["scheduler"], "karras");
+}
+
+#[test]
+fn compiles_illustrious_vpred_and_clip_skip() {
+    let m = manifest_from(json!({
+        "id": "illustrious-test",
+        "name": "Illustrious",
+        "category": "image",
+        "runtime": "comfyui",
+        "flowType": "txt2img",
+        "arch": "illustrious",
+        "sampler": "euler",
+        "scheduler": "normal",
+        "capabilities": { "negative": true },
+        "models": [
+            { "filename": "noobai.safetensors", "path": "checkpoints", "role": "checkpoint" }
+        ]
+    }));
+    let mut values = HashMap::new();
+    values.insert("prompt".into(), json!("1girl"));
+    values.insert("negative".into(), json!("blurry"));
+    values.insert("cfg".into(), json!(5));
+    values.insert("steps".into(), json!(28));
+    values.insert("seed".into(), json!(1));
+    let g = compile(&m, &values).unwrap();
+    assert_eq!(g["9"]["class_type"], "CLIPSetLastLayer");
+    assert_eq!(g["10"]["class_type"], "ModelSamplingDiscrete");
+    assert_eq!(g["10"]["inputs"]["sampling"], "v_prediction");
+    assert_eq!(g["10"]["inputs"]["zsnr"], true);
+    assert_eq!(g["5"]["inputs"]["model"], json!(["10", 0]));
+    assert_eq!(g["2"]["inputs"]["clip"], json!(["9", 0]));
+}
+
+#[test]
+fn compiles_qwen_image_graph() {
+    let m = manifest_from(json!({
+        "id": "qwen-test",
+        "name": "Qwen",
+        "category": "image",
+        "runtime": "comfyui",
+        "flowType": "txt2img",
+        "arch": "qwen-image",
+        "capabilities": { "negative": true },
+        "defaults": { "clipType": "qwen_image", "auraShift": 3.1 },
+        "models": [
+            { "filename": "qwen.safetensors", "path": "diffusion_models", "role": "unet" },
+            { "filename": "te.safetensors", "path": "text_encoders", "role": "text_encoder" },
+            { "filename": "vae.safetensors", "path": "vae", "role": "vae" }
+        ]
+    }));
+    let mut values = HashMap::new();
+    values.insert("prompt".into(), json!("poster text"));
+    values.insert("negative".into(), json!(""));
+    values.insert("cfg".into(), json!(2.5));
+    values.insert("steps".into(), json!(30));
+    values.insert("seed".into(), json!(1));
+    let g = compile(&m, &values).unwrap();
+    assert_eq!(g["1"]["class_type"], "UNETLoader");
+    assert_eq!(g["2"]["inputs"]["type"], "qwen_image");
+    assert_eq!(g["6"]["class_type"], "EmptySD3LatentImage");
+    assert_eq!(g["7"]["class_type"], "ModelSamplingAuraFlow");
+    assert_eq!(g["5"]["class_type"], "CLIPTextEncode");
+}
+
+#[test]
+fn compiles_sd35_graph() {
+    let m = manifest_from(json!({
+        "id": "sd35-test",
+        "name": "SD35",
+        "category": "image",
+        "runtime": "comfyui",
+        "flowType": "txt2img",
+        "arch": "sd3.5",
+        "capabilities": { "negative": true },
+        "defaults": { "sd3Shift": 3.0 },
+        "models": [
+            { "filename": "sd35.safetensors", "path": "checkpoints", "role": "checkpoint" },
+            { "filename": "clip_l.safetensors", "path": "text_encoders", "role": "clip_l" },
+            { "filename": "clip_g.safetensors", "path": "text_encoders", "role": "clip_g" },
+            { "filename": "t5.safetensors", "path": "text_encoders", "role": "t5" }
+        ]
+    }));
+    let mut values = HashMap::new();
+    values.insert("prompt".into(), json!("landscape"));
+    values.insert("negative".into(), json!("blurry"));
+    values.insert("cfg".into(), json!(4.5));
+    values.insert("steps".into(), json!(40));
+    values.insert("seed".into(), json!(1));
+    let g = compile(&m, &values).unwrap();
+    assert_eq!(g["2"]["class_type"], "TripleCLIPLoader");
+    assert_eq!(g["5"]["class_type"], "EmptySD3LatentImage");
+    assert_eq!(g["6"]["class_type"], "ModelSamplingSD3");
+    assert_eq!(g["7"]["inputs"]["model"], json!(["6", 0]));
+}
+
+#[test]
+fn compiles_chroma_graph() {
+    let m = manifest_from(json!({
+        "id": "chroma-test",
+        "name": "Chroma",
+        "category": "image",
+        "runtime": "comfyui",
+        "flowType": "txt2img",
+        "arch": "chroma",
+        "capabilities": { "negative": true },
+        "defaults": { "clipType": "chroma", "auraShift": 1.0 },
+        "models": [
+            { "filename": "chroma.safetensors", "path": "diffusion_models", "role": "unet" },
+            { "filename": "t5.safetensors", "path": "text_encoders", "role": "text_encoder" },
+            { "filename": "ae.safetensors", "path": "vae", "role": "vae" }
+        ]
+    }));
+    let mut values = HashMap::new();
+    values.insert("prompt".into(), json!("portrait"));
+    values.insert("negative".into(), json!("blurry"));
+    values.insert("cfg".into(), json!(4));
+    values.insert("steps".into(), json!(26));
+    values.insert("seed".into(), json!(1));
+    let g = compile(&m, &values).unwrap();
+    assert_eq!(g["2"]["inputs"]["type"], "chroma");
+    assert_eq!(g["6"]["class_type"], "EmptySD3LatentImage");
+    assert_eq!(g["7"]["class_type"], "ModelSamplingAuraFlow");
+    assert_eq!(g["5"]["class_type"], "CLIPTextEncode");
+}
+
+#[test]
 fn compiles_krea2_with_sr_upscale() {
     let m = manifest_from(json!({
         "id": "krea2-turbo",

@@ -25,6 +25,7 @@ type LoraStackProps = {
   onInstallVariant: (id: string, arch: RecipeArch) => void
   onOpenLibrary: () => void
   installingKey?: string | null
+  queuedKeys?: string[]
   disabled?: boolean
 }
 
@@ -42,6 +43,7 @@ export function LoraStack({
   onInstallVariant,
   onOpenLibrary,
   installingKey,
+  queuedKeys = [],
   disabled,
 }: LoraStackProps) {
   const compatible = useMemo(
@@ -87,6 +89,7 @@ export function LoraStack({
             const max = pack?.strengthMax ?? 2
             const step = max - min > 4 ? 0.1 : 0.05
             const busy = installingKey === `${entry.id}:${arch}`
+            const queued = !busy && queuedKeys.includes(`${entry.id}:${arch}`)
             return (
               <Fragment key={entry.id}>
                 {index > 0 ? <Separator /> : null}
@@ -101,7 +104,11 @@ export function LoraStack({
                       </span>
                     ) : (
                       <span className="shrink-0 text-[10px] text-muted-foreground">
-                        Needs download
+                        {busy
+                          ? "Downloading…"
+                          : queued
+                            ? "Queued"
+                            : "Needs download"}
                       </span>
                     )}
                     <WithTooltip label={`Remove ${pack?.name ?? entry.id}`}>
@@ -127,14 +134,14 @@ export function LoraStack({
                       size="sm"
                       variant="secondary"
                       className="mt-0.5 h-8 w-full rounded-lg text-[11px]"
-                      disabled={disabled || busy}
+                      disabled={disabled || busy || queued}
                       onClick={() => {
                         if (!isRecipeArch(arch)) return
                         onInstallVariant(entry.id, arch)
                       }}
                     >
                       <DownloadIcon className="size-3.5" />
-                      {busy ? "Downloading…" : "Install"}
+                      {busy ? "Downloading…" : queued ? "Queued" : "Install"}
                     </Button>
                   ) : (
                     <Slider

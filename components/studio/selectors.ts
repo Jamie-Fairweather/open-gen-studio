@@ -199,6 +199,13 @@ export function selectLoraInstallingKey(s: StudioStore): string | null {
   return key ? loraKeyFromJobKey(key) : null
 }
 
+export function selectLoraQueuedKeys(s: StudioStore): string[] {
+  return s.downloadSnapshot.queued.flatMap((job) => {
+    const key = loraKeyFromJobKey(job.jobKey)
+    return key ? [key] : []
+  })
+}
+
 export function selectUpscaleInstallingId(s: StudioStore): string | null {
   const key = selectActiveJobKey(s)
   return key ? upscaleIdFromJobKey(key) : null

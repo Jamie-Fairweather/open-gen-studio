@@ -160,6 +160,8 @@ export type Blueprint = {
   name: string
   category: string
   description: string
+  /**  Recipe architecture id (e.g. `flux`, `pony`). */
+  arch: string
   runtime: string
   /**  `"official"` | `"user"` */
   source: string
@@ -467,7 +469,18 @@ export type ProviderKind =
  *  parse into this enum at compile / UI boundaries.
  */
 export type RecipeArch =
-  "z-image" | "krea2" | "flux" | "flux2" | "ideogram4" | "sdxl" | "sd15"
+  | "z-image"
+  | "krea2"
+  | "flux"
+  | "flux2"
+  | "ideogram4"
+  | "sdxl"
+  | "sd15"
+  | "pony"
+  | "qwen-image"
+  | "illustrious"
+  | "sd3.5"
+  | "chroma"
 
 export type RecipeCapabilities = {
   negative?: boolean
@@ -602,4 +615,9 @@ export const RECIPE_ARCHES = [
   "ideogram4",
   "sdxl",
   "sd15",
+  "pony",
+  "qwen-image",
+  "illustrious",
+  "sd3.5",
+  "chroma",
 ] as const satisfies readonly RecipeArch[]

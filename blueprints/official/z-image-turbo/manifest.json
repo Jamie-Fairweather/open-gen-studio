@@ -2,7 +2,7 @@
   "id": "z-image-turbo",
   "name": "Z-Image Turbo",
   "category": "image",
-  "description": "An Efficient Image Generation Foundation Model with Single Stream Diffusion Transformer, supports English & Chinese.",
+  "description": "Fast bilingual (English and Chinese) image model. A great everyday choice for quick, solid results.",
   "runtime": "comfyui",
   "minimumVramGb": 8,
   "flowType": "txt2img",

@@ -8,7 +8,7 @@ An **architecture** (`arch`) is a graph family the recipe compiler knows how to 
 
 **Best copy target:** `z-image` - compiler `src-tauri/src/recipe/arch/z_image.rs`, official recipe `blueprints/official/z-image-turbo/`, Creator entry in `lib/creator-arches.ts`.
 
-Related: [`PLAN.md`](../PLAN.md), [`blueprints/official/README.md`](../../blueprints/official/README.md), [`loras/official/README.md`](../../loras/official/README.md).
+Related: [`architecture-catalog.md`](./architecture-catalog.md) (shipped vs candidates), [`PLAN.md`](../PLAN.md), [`blueprints/official/README.md`](../../blueprints/official/README.md), [`loras/official/README.md`](../../loras/official/README.md).
 
 ---
 
@@ -25,7 +25,7 @@ Related: [`PLAN.md`](../PLAN.md), [`blueprints/official/README.md`](../../bluepr
 | **LoRA variants**          | Packs declare per-arch files; stack filtered by active `arch` |
 | **Prompt tools**           | Map `arch` → prompt dialect (`PromptTarget`)                  |
 
-Supported today: `z-image`, `krea2`, `flux`, `flux2`, `ideogram4`, `sdxl`, `sd15`.
+Supported today: `z-image`, `krea2`, `flux`, `flux2`, `ideogram4`, `sdxl`, `sd15`, `pony`, `qwen-image`, `illustrious`, `sd3.5`, `chroma`.
 
 Flow type is `txt2img` only for v1.
 
@@ -252,7 +252,8 @@ Keep README / PLAN tables in sync. No database migration - recipes and LoRA pack
 | Upscale         | Denoise 0.15, steps cap 8                           |
 | Tests           | `compiles_z_image_graph`                            |
 
-**Secondary reference:** `flux` - DualCLIP, `usesGuidance: true`, PromptTarget `Flux`.
+**Secondary reference:** `flux` - DualCLIP, `usesGuidance: true`, PromptTarget `Flux`.  
+**Checkpoint family:** `sdxl` / `sd15` share `compile_checkpoint`; `pony` is the same path plus `CLIPSetLastLayer` (−2).
 
 ---
 

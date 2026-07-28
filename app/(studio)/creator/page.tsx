@@ -20,7 +20,7 @@ function CreatorStudioBody() {
   }, [editFromQuery, router, setEditBlueprintId])
 
   return (
-    <div className="absolute inset-0 flex flex-col pt-14">
+    <div className="absolute inset-0 flex flex-col">
       <CreatorPanel
         editBlueprintId={editBlueprintId}
         onEditCleared={() => setEditBlueprintId(null)}
@@ -32,9 +32,7 @@ function CreatorStudioBody() {
 
 export default function CreatorStudioPage() {
   return (
-    <Suspense
-      fallback={<div className="absolute inset-0 flex flex-col pt-14" />}
-    >
+    <Suspense fallback={<div className="absolute inset-0 flex flex-col" />}>
       <CreatorStudioBody />
     </Suspense>
   )

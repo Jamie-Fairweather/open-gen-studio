@@ -1,0 +1,47 @@
+{
+  "id": "flux2-dev",
+  "name": "Flux.2 Dev",
+  "category": "image",
+  "description": "Next-generation Flux from Black Forest Labs. Sharper, more modern results. Needs up-to-date software and a strong GPU.",
+  "runtime": "comfyui",
+  "minimumVramGb": 16,
+  "flowType": "txt2img",
+  "arch": "flux2",
+  "sampler": "euler",
+  "scheduler": "simple",
+  "capabilities": {
+    "negative": false,
+    "loras": true,
+    "controlnet": false,
+    "upscale": false
+  },
+  "defaults": {
+    "width": 1024,
+    "height": 1024,
+    "steps": 20,
+    "cfg": 1,
+    "seed": 0,
+    "guidance": 3.5,
+    "weightDtype": "default"
+  },
+  "models": [
+    {
+      "role": "unet",
+      "filename": "flux2_dev_fp8mixed.safetensors",
+      "path": "diffusion_models",
+      "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/diffusion_models/flux2_dev_fp8mixed.safetensors"
+    },
+    {
+      "role": "clip",
+      "filename": "mistral_3_small_flux2_fp8.safetensors",
+      "path": "text_encoders",
+      "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/text_encoders/mistral_3_small_flux2_fp8.safetensors"
+    },
+    {
+      "role": "vae",
+      "filename": "flux2-vae.safetensors",
+      "path": "vae",
+      "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors"
+    }
+  ]
+}

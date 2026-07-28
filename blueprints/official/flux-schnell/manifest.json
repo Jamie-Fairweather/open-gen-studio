@@ -1,0 +1,55 @@
+{
+  "id": "flux-schnell",
+  "name": "Flux.1 Schnell",
+  "category": "image",
+  "description": "The fast, freely licensed Flux. Good images in about four steps - pick this when you want speed over maximum detail.",
+  "runtime": "comfyui",
+  "minimumVramGb": 12,
+  "flowType": "txt2img",
+  "arch": "flux",
+  "sampler": "euler",
+  "scheduler": "simple",
+  "capabilities": {
+    "negative": false,
+    "loras": true,
+    "controlnet": false,
+    "upscale": false
+  },
+  "defaults": {
+    "width": 1024,
+    "height": 1024,
+    "steps": 4,
+    "cfg": 1,
+    "seed": 0,
+    "guidance": 3.5,
+    "weightDtype": "default",
+    "maxShift": 1.15,
+    "baseShift": 0.5
+  },
+  "models": [
+    {
+      "role": "unet",
+      "filename": "flux1-schnell.safetensors",
+      "path": "diffusion_models",
+      "url": "https://huggingface.co/black-forest-labs/FLUX.1-schnell/resolve/main/flux1-schnell.safetensors"
+    },
+    {
+      "role": "t5",
+      "filename": "t5xxl_fp8_e4m3fn_scaled.safetensors",
+      "path": "text_encoders",
+      "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn_scaled.safetensors"
+    },
+    {
+      "role": "clip_l",
+      "filename": "clip_l.safetensors",
+      "path": "text_encoders",
+      "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors"
+    },
+    {
+      "role": "vae",
+      "filename": "ae.safetensors",
+      "path": "vae",
+      "url": "https://huggingface.co/Comfy-Org/Lumina_Image_2.0_Repackaged/resolve/main/split_files/vae/ae.safetensors"
+    }
+  ]
+}

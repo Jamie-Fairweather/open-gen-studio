@@ -40,6 +40,8 @@ type ArchDef = {
     cfgOverride?: number
     cfgOverrideStart?: number
     cfgOverrideEnd?: number
+    /** SD 3.5 ModelSamplingSD3 shift. */
+    sd3Shift?: number
   }
 }
 
@@ -265,10 +267,12 @@ const ARCHES: ArchDef[] = [
       {
         role: "vae",
         path: "vae",
-        label: "VAE",
+        label: "VAE (shared with Flux.2)",
         required: true,
+        // Same bytes as Flux.2 — do not use Ideogram-4's similarly named file
+        // (different size/hash; overwriting breaks Flux.2).
         defaultUrl:
-          "https://huggingface.co/Comfy-Org/Ideogram-4/resolve/main/vae/flux2-vae.safetensors",
+          "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors",
       },
     ],
     sampler: "euler",
@@ -347,6 +351,219 @@ const ARCHES: ArchDef[] = [
       steps: 20,
       cfg: 7,
       seed: 0,
+    },
+  },
+  {
+    id: "pony",
+    label: "Pony",
+    slots: [
+      {
+        role: "checkpoint",
+        path: "checkpoints",
+        label: "Checkpoint",
+        required: true,
+        defaultUrl:
+          "https://huggingface.co/LyliaEngine/Pony_Diffusion_V6_XL/resolve/main/ponyDiffusionV6XL_v6StartWithThisOne.safetensors",
+      },
+      {
+        role: "vae",
+        path: "vae",
+        label: "VAE (optional)",
+        required: false,
+        defaultUrl:
+          "https://huggingface.co/stabilityai/sdxl-vae/resolve/main/sdxl_vae.safetensors",
+      },
+    ],
+    sampler: "euler_ancestral",
+    scheduler: "karras",
+    capabilities: {
+      negative: true,
+      loras: true,
+      controlnet: false,
+      upscale: false,
+    },
+    defaults: {
+      width: 1024,
+      height: 1024,
+      steps: 25,
+      cfg: 7,
+      seed: 0,
+    },
+  },
+  {
+    id: "qwen-image",
+    label: "Qwen Image",
+    slots: [
+      {
+        role: "unet",
+        path: "diffusion_models",
+        label: "Diffusion model",
+        required: true,
+        defaultUrl:
+          "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_fp8_e4m3fn.safetensors",
+      },
+      {
+        role: "text_encoder",
+        path: "text_encoders",
+        label: "Text encoder",
+        required: true,
+        defaultUrl:
+          "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      },
+      {
+        role: "vae",
+        path: "vae",
+        label: "VAE",
+        required: true,
+        defaultUrl:
+          "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors",
+      },
+    ],
+    sampler: "euler",
+    scheduler: "simple",
+    capabilities: {
+      negative: true,
+      loras: true,
+      controlnet: false,
+      upscale: false,
+    },
+    defaults: {
+      width: 1024,
+      height: 1024,
+      steps: 30,
+      cfg: 2.5,
+      seed: 0,
+      clipType: "qwen_image",
+      weightDtype: "default",
+      auraShift: 3.1,
+    },
+  },
+  {
+    id: "illustrious",
+    label: "Illustrious",
+    slots: [
+      {
+        role: "checkpoint",
+        path: "checkpoints",
+        label: "Checkpoint",
+        required: true,
+      },
+      { role: "vae", path: "vae", label: "VAE (optional)", required: false },
+    ],
+    sampler: "euler",
+    scheduler: "normal",
+    capabilities: {
+      negative: true,
+      loras: true,
+      controlnet: false,
+      upscale: false,
+    },
+    defaults: {
+      width: 1024,
+      height: 1024,
+      steps: 28,
+      cfg: 5,
+      seed: 0,
+    },
+  },
+  {
+    id: "sd3.5",
+    label: "SD 3.5",
+    slots: [
+      {
+        role: "checkpoint",
+        path: "checkpoints",
+        label: "Checkpoint",
+        required: true,
+        defaultUrl:
+          "https://huggingface.co/stabilityai/stable-diffusion-3.5-large/resolve/main/sd3.5_large.safetensors",
+      },
+      {
+        role: "clip_l",
+        path: "text_encoders",
+        label: "CLIP-L",
+        required: true,
+        defaultUrl:
+          "https://huggingface.co/stabilityai/stable-diffusion-3.5-large/resolve/main/text_encoders/clip_l.safetensors",
+      },
+      {
+        role: "clip_g",
+        path: "text_encoders",
+        label: "CLIP-G",
+        required: true,
+        defaultUrl:
+          "https://huggingface.co/stabilityai/stable-diffusion-3.5-large/resolve/main/text_encoders/clip_g.safetensors",
+      },
+      {
+        role: "t5",
+        path: "text_encoders",
+        label: "T5-XXL",
+        required: true,
+        defaultUrl:
+          "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn_scaled.safetensors",
+      },
+    ],
+    sampler: "euler",
+    scheduler: "simple",
+    capabilities: {
+      negative: true,
+      loras: true,
+      controlnet: false,
+      upscale: false,
+    },
+    defaults: {
+      width: 1024,
+      height: 1024,
+      steps: 40,
+      cfg: 4.5,
+      seed: 0,
+      sd3Shift: 3,
+    },
+  },
+  {
+    id: "chroma",
+    label: "Chroma",
+    slots: [
+      {
+        role: "unet",
+        path: "diffusion_models",
+        label: "Diffusion model",
+        required: true,
+      },
+      {
+        role: "text_encoder",
+        path: "text_encoders",
+        label: "T5 text encoder",
+        required: true,
+        defaultUrl:
+          "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors",
+      },
+      {
+        role: "vae",
+        path: "vae",
+        label: "VAE",
+        required: true,
+        defaultUrl:
+          "https://huggingface.co/Comfy-Org/Lumina_Image_2.0_Repackaged/resolve/main/split_files/vae/ae.safetensors",
+      },
+    ],
+    sampler: "euler",
+    scheduler: "simple",
+    capabilities: {
+      negative: true,
+      loras: true,
+      controlnet: false,
+      upscale: false,
+    },
+    defaults: {
+      width: 1024,
+      height: 1024,
+      steps: 26,
+      cfg: 4,
+      seed: 0,
+      clipType: "chroma",
+      weightDtype: "default",
+      auraShift: 1,
     },
   },
 ]

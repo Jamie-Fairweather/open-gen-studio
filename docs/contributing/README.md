@@ -2,11 +2,13 @@
 
 Practical how-tos for extending Open Gen Studio. Product/design background lives in [`docs/PLAN.md`](../PLAN.md) (design history - prefer these guides + `RecipeArch::ALL` / Creator `ARCHES` as source of truth).
 
-| Guide                                                          | When to use it                                                                                     |
-| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| [Coding standards](./coding-standards.md)                      | House rules - especially **IPC: Rust → Specta → TypeScript**                                       |
-| [Adding a model architecture](./adding-model-architectures.md) | New Comfy graph family (`RecipeArch`): compiler, Creator form, LoRAs, prompt tools, upscale, tests |
-| [Dev notes: Specta → stable v2](./dev-notes-specta-v2.md)      | On **rc.25** + tauri-specta; bump to Specta **2.0 stable** when it ships                           |
+| Guide                                                            | When to use it                                                                                     |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [Coding standards](./coding-standards.md)                        | House rules - especially **IPC: Rust → Specta → TypeScript**                                       |
+| [Adding a model architecture](./adding-model-architectures.md)   | New Comfy graph family (`RecipeArch`): compiler, Creator form, LoRAs, prompt tools, upscale, tests |
+| [Architecture catalog](./architecture-catalog.md)                | Checklist of shipped vs candidate arches (txt2img, edit, video)                                    |
+| [Blueprint thumbnail prompts](../blueprint-thumbnail-prompts.md) | Example prompts (per-model dialect) for Official pack `thumbnail.png` files                        |
+| [Dev notes: Specta → stable v2](./dev-notes-specta-v2.md)        | On **rc.25** + tauri-specta; bump to Specta **2.0 stable** when it ships                           |
 
 ## Local quality gates
 

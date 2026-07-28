@@ -11,6 +11,10 @@
   <img src="https://img.shields.io/badge/Built%20with-Tauri%202-7C3AED?style=for-the-badge" />
 </p>
 
+![Open Gen Studio preview 1](preview1.png)
+
+![Open Gen Studio preview 2](preview2.png)
+
 </div>
 
 ---

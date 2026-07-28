@@ -39,6 +39,7 @@ type AdvancedControlsProps = {
   loraStack: LoraStackEntry[]
   onLoraStackChange: (stack: LoraStackEntry[]) => void
   loraInstallingKey: string | null
+  loraQueuedKeys: string[]
   generating: boolean
   onOpenLoraLibrary: () => void
   onInstallLoraVariant: (id: string, arch: RecipeArch) => void
@@ -78,6 +79,7 @@ export function AdvancedControls({
   loraStack,
   onLoraStackChange,
   loraInstallingKey,
+  loraQueuedKeys,
   generating,
   onOpenLoraLibrary,
   onInstallLoraVariant,
@@ -353,6 +355,7 @@ export function AdvancedControls({
           stack={loraStack}
           onChange={onLoraStackChange}
           installingKey={loraInstallingKey}
+          queuedKeys={loraQueuedKeys}
           disabled={generating}
           onOpenLibrary={onOpenLoraLibrary}
           onInstallVariant={onInstallLoraVariant}

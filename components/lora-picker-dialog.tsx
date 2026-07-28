@@ -34,6 +34,8 @@ type LoraPickerDialogProps = {
   /** Pack ids already on the generate stack. */
   selectedIds?: string[]
   installingKey?: string | null
+  /** `id:arch` keys waiting in the download queue. */
+  queuedKeys?: string[]
   onSelect: (id: string) => void
   onInstall: (id: string, arch: RecipeArch) => void
   onDeleteUser?: (id: string) => void
@@ -56,6 +58,7 @@ export function LoraPickerDialog({
   arch,
   selectedIds = [],
   installingKey,
+  queuedKeys = [],
   onSelect,
   onInstall,
   onDeleteUser,
@@ -132,6 +135,7 @@ export function LoraPickerDialog({
                         arch={arch}
                         selected={selectedIds.includes(pack.id)}
                         installing={installingKey === `${pack.id}:${arch}`}
+                        queued={queuedKeys.includes(`${pack.id}:${arch}`)}
                         onSelect={() => {
                           onSelect(pack.id)
                           onOpenChange(false)
@@ -162,6 +166,7 @@ export function LoraPickerDialog({
                         arch={arch}
                         selected={selectedIds.includes(pack.id)}
                         installing={false}
+                        queued={queuedKeys.includes(`${pack.id}:${arch}`)}
                         onSelect={() => {
                           onSelect(pack.id)
                           onOpenChange(false)
@@ -189,6 +194,7 @@ export function LoraPickerDialog({
                         arch={arch}
                         selected={selectedIds.includes(pack.id)}
                         installing={installingKey === `${pack.id}:${arch}`}
+                        queued={queuedKeys.includes(`${pack.id}:${arch}`)}
                         onSelect={() => {
                           onSelect(pack.id)
                           onOpenChange(false)
@@ -215,6 +221,7 @@ function LoraCard({
   arch,
   selected,
   installing,
+  queued,
   onSelect,
   onInstall,
   onDelete,
@@ -223,6 +230,7 @@ function LoraCard({
   arch?: string | null
   selected: boolean
   installing: boolean
+  queued: boolean
   onSelect: () => void
   onInstall: () => void
   onDelete?: () => void
@@ -324,6 +332,12 @@ function LoraCard({
               <Spinner className="size-3.5" />
               Downloading
             </Button>
+          ) : queued ? (
+            <WithTooltip label="Queued in Downloads">
+              <Button type="button" size="sm" variant="outline" disabled>
+                Queued
+              </Button>
+            </WithTooltip>
           ) : (
             <WithTooltip label={ready ? "Already on disk" : "Download file"}>
               <Button

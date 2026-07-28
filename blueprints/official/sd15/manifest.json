@@ -1,0 +1,33 @@
+{
+  "id": "sd15",
+  "name": "Stable Diffusion 1.5",
+  "category": "image",
+  "description": "Classic Stable Diffusion 1.5. Lightest to run, huge library of community styles. Default size is 512x512.",
+  "runtime": "comfyui",
+  "minimumVramGb": 4,
+  "flowType": "txt2img",
+  "arch": "sd15",
+  "sampler": "euler",
+  "scheduler": "normal",
+  "capabilities": {
+    "negative": true,
+    "loras": true,
+    "controlnet": false,
+    "upscale": false
+  },
+  "defaults": {
+    "width": 512,
+    "height": 512,
+    "steps": 20,
+    "cfg": 7,
+    "seed": 0
+  },
+  "models": [
+    {
+      "role": "checkpoint",
+      "filename": "v1-5-pruned-emaonly.safetensors",
+      "path": "checkpoints",
+      "url": "https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.safetensors"
+    }
+  ]
+}

@@ -23,9 +23,14 @@ import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { WithTooltip } from "@/components/ui/tooltip"
 import { isInstalled } from "@/lib/blueprint-helpers"
+import { ARCHES } from "@/lib/creator-arches"
 import { formatBytes } from "@/lib/format"
 import { gallerySrc, type Blueprint } from "@/lib/host"
 import { cn } from "@/lib/utils"
+
+function archLabel(arch: string): string {
+  return ARCHES.find((a) => a.id === arch)?.label ?? arch
+}
 
 export type BlueprintInstallProgress = {
   blueprintId: string
@@ -84,7 +89,8 @@ export function BlueprintPickerDialog({
           (bp) =>
             bp.name.toLowerCase().includes(q) ||
             bp.description.toLowerCase().includes(q) ||
-            bp.category.toLowerCase().includes(q) ||
+            bp.arch.toLowerCase().includes(q) ||
+            archLabel(bp.arch).toLowerCase().includes(q) ||
             bp.id.toLowerCase().includes(q)
         )
       : blueprints
@@ -104,7 +110,10 @@ export function BlueprintPickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogPopup className="max-w-5xl sm:max-w-5xl" showCloseButton>
+      <DialogPopup
+        className="h-[90dvh] w-[90vw] max-w-[90vw] sm:max-w-[90vw]"
+        showCloseButton
+      >
         <DialogHeader>
           <DialogTitle>Blueprints</DialogTitle>
           <DialogDescription>
@@ -121,7 +130,7 @@ export function BlueprintPickerDialog({
             />
           </div>
         </DialogHeader>
-        <DialogPanel className="max-h-[min(70vh,640px)]">
+        <DialogPanel>
           {sorted.length === 0 ? (
             <p className="py-12 text-center text-sm text-muted-foreground">
               No blueprints match your search
@@ -133,7 +142,7 @@ export function BlueprintPickerDialog({
                   <h3 className="text-sm font-medium text-muted-foreground">
                     My blueprints
                   </h3>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                     {mine.map((bp) => (
                       <BlueprintCard
                         key={`user-${bp.id}`}
@@ -166,7 +175,7 @@ export function BlueprintPickerDialog({
                   <h3 className="text-sm font-medium text-muted-foreground">
                     Official · Installed
                   </h3>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                     {officialInstalled.map((bp) => (
                       <BlueprintCard
                         key={`official-${bp.id}`}
@@ -191,7 +200,7 @@ export function BlueprintPickerDialog({
                   <h3 className="text-sm font-medium text-muted-foreground">
                     Official · Available
                   </h3>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                     {officialAvailable.map((bp) => (
                       <BlueprintCard
                         key={`official-${bp.id}`}
@@ -273,12 +282,14 @@ function BlueprintCard({
           </div>
         )}
         <div className="absolute inset-x-0 bottom-0 flex flex-wrap gap-1.5 p-2">
-          <Badge
-            variant="secondary"
-            className="rounded-md bg-black/55 text-[10px] text-white backdrop-blur-sm"
-          >
-            {bp.category}
-          </Badge>
+          {bp.arch ? (
+            <Badge
+              variant="secondary"
+              className="rounded-md bg-black/55 text-[10px] text-white backdrop-blur-sm"
+            >
+              {archLabel(bp.arch)}
+            </Badge>
+          ) : null}
           {bp.source === "user" ? (
             <Badge
               variant="secondary"
@@ -334,7 +345,7 @@ function BlueprintCard({
             ) : null}
             <span className="truncate">{bp.name}</span>
           </h4>
-          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+          <p className="mt-1 line-clamp-4 text-xs leading-snug text-muted-foreground">
             {bp.description || `${bp.runtime} blueprint`}
           </p>
         </div>

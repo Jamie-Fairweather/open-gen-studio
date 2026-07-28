@@ -22,6 +22,16 @@ pub enum RecipeArch {
     Sdxl,
     #[serde(rename = "sd15")]
     Sd15,
+    #[serde(rename = "pony")]
+    Pony,
+    #[serde(rename = "qwen-image")]
+    QwenImage,
+    #[serde(rename = "illustrious")]
+    Illustrious,
+    #[serde(rename = "sd3.5")]
+    Sd35,
+    #[serde(rename = "chroma")]
+    Chroma,
 }
 
 impl RecipeArch {
@@ -33,6 +43,11 @@ impl RecipeArch {
         Self::Ideogram4,
         Self::Sdxl,
         Self::Sd15,
+        Self::Pony,
+        Self::QwenImage,
+        Self::Illustrious,
+        Self::Sd35,
+        Self::Chroma,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -44,6 +59,11 @@ impl RecipeArch {
             Self::Ideogram4 => "ideogram4",
             Self::Sdxl => "sdxl",
             Self::Sd15 => "sd15",
+            Self::Pony => "pony",
+            Self::QwenImage => "qwen-image",
+            Self::Illustrious => "illustrious",
+            Self::Sd35 => "sd3.5",
+            Self::Chroma => "chroma",
         }
     }
 
@@ -56,6 +76,11 @@ impl RecipeArch {
             "ideogram4" => Some(Self::Ideogram4),
             "sdxl" => Some(Self::Sdxl),
             "sd15" => Some(Self::Sd15),
+            "pony" => Some(Self::Pony),
+            "qwen-image" => Some(Self::QwenImage),
+            "illustrious" => Some(Self::Illustrious),
+            "sd3.5" | "sd3" => Some(Self::Sd35),
+            "chroma" => Some(Self::Chroma),
             _ => None,
         }
     }

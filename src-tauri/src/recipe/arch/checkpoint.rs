@@ -1,4 +1,5 @@
 use crate::blueprints::ManifestFile;
+use crate::recipe::RecipeArch;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
@@ -7,7 +8,9 @@ use crate::recipe::values::{
     f64_val, i64_val, model_by_role, sampler_name, scheduler_name, str_val,
 };
 
-/// SD1.5 / SDXL checkpoint txt2img with optional real negative when CFG > 1.
+/// SD1.5 / SDXL / Pony / Illustrious checkpoint txt2img.
+/// Pony & Illustrious: CLIPSetLastLayer (−2).
+/// Illustrious: ModelSamplingDiscrete (v_prediction + zsnr) for NoobAI-style v-pred packs.
 pub(crate) fn compile_checkpoint(
     manifest: &ManifestFile,
     values: &HashMap<String, Value>,
@@ -29,6 +32,21 @@ pub(crate) fn compile_checkpoint(
         String::new()
     };
 
+    let arch = RecipeArch::parse(&manifest.arch);
+    let clip_skip = matches!(arch, Some(RecipeArch::Pony | RecipeArch::Illustrious));
+    let v_pred = matches!(arch, Some(RecipeArch::Illustrious));
+
+    let clip_link = if clip_skip {
+        json!(["9", 0])
+    } else {
+        json!(["1", 1])
+    };
+    let model_link = if v_pred {
+        json!(["10", 0])
+    } else {
+        json!(["1", 0])
+    };
+
     let mut graph = json!({
         "1": {
             "class_type": "CheckpointLoaderSimple",
@@ -38,14 +56,14 @@ pub(crate) fn compile_checkpoint(
             "class_type": "CLIPTextEncode",
             "inputs": {
                 "text": prompt,
-                "clip": ["1", 1]
+                "clip": clip_link.clone()
             }
         },
         "3": {
             "class_type": "CLIPTextEncode",
             "inputs": {
                 "text": negative_text,
-                "clip": ["1", 1]
+                "clip": clip_link
             }
         },
         "4": {
@@ -65,7 +83,7 @@ pub(crate) fn compile_checkpoint(
                 "sampler_name": sampler_name(manifest),
                 "scheduler": scheduler_name(manifest),
                 "denoise": 1.0,
-                "model": ["1", 0],
+                "model": model_link,
                 "positive": ["2", 0],
                 "negative": ["3", 0],
                 "latent_image": ["4", 0]
@@ -87,9 +105,36 @@ pub(crate) fn compile_checkpoint(
         }
     });
 
-    // Optional separate VAE override.
+    let obj = graph.as_object_mut().unwrap();
+
+    if clip_skip {
+        obj.insert(
+            "9".into(),
+            json!({
+                "class_type": "CLIPSetLastLayer",
+                "inputs": {
+                    "stop_at_clip_layer": -2,
+                    "clip": ["1", 1]
+                }
+            }),
+        );
+    }
+
+    if v_pred {
+        obj.insert(
+            "10".into(),
+            json!({
+                "class_type": "ModelSamplingDiscrete",
+                "inputs": {
+                    "sampling": "v_prediction",
+                    "zsnr": true,
+                    "model": ["1", 0]
+                }
+            }),
+        );
+    }
+
     if let Ok(vae) = model_by_role(&manifest.models, "vae") {
-        let obj = graph.as_object_mut().unwrap();
         obj.insert(
             "8".into(),
             json!({
@@ -103,11 +148,21 @@ pub(crate) fn compile_checkpoint(
             .map(|i| i.insert("vae".into(), json!(["8", 0])));
     }
 
-    // VAE may be checkpoint slot 2 or optional VAELoader "8".
     let vae_link: (&'static str, u64) = if model_by_role(&manifest.models, "vae").is_ok() {
         ("8", 0)
     } else {
         ("1", 2)
+    };
+
+    let clip_consumers: &[(&str, &str)] = if clip_skip {
+        &[("9", "clip")]
+    } else {
+        &[("2", "clip"), ("3", "clip")]
+    };
+    let model_consumers: &[(&str, &str)] = if v_pred {
+        &[("10", "model")]
+    } else {
+        &[("5", "model")]
     };
 
     finish_recipe(
@@ -116,8 +171,8 @@ pub(crate) fn compile_checkpoint(
         manifest,
         ("1", 0),
         ("1", 1),
-        &[("5", "model")],
-        &[("2", "clip"), ("3", "clip")],
+        model_consumers,
+        clip_consumers,
         UpscaleWiring {
             model_from: ("5", "model"),
             positive: ("2", 0),

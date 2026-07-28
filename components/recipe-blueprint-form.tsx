@@ -358,6 +358,9 @@ export function RecipeBlueprintForm({
     if (arch.defaults.auraShift != null) {
       defaults.auraShift = arch.defaults.auraShift
     }
+    if (arch.defaults.sd3Shift != null) {
+      defaults.sd3Shift = arch.defaults.sd3Shift
+    }
     if (arch.defaults.weightDtype) {
       defaults.weightDtype = arch.defaults.weightDtype
     }

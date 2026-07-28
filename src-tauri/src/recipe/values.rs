@@ -53,7 +53,7 @@ pub(crate) fn model_by_role<'a>(
     let path_match = match role {
         "unet" | "diffusion" => "diffusion_models",
         "vae" => "vae",
-        "text_encoder" | "clip" => "text_encoders",
+        "text_encoder" | "clip" | "clip_l" | "clip_g" | "t5" => "text_encoders",
         "checkpoint" => "checkpoints",
         _ => "",
     };
@@ -69,7 +69,9 @@ pub(crate) fn sampler_name(manifest: &ManifestFile) -> &str {
     if manifest.sampler.is_empty() {
         match manifest.arch.as_str() {
             "z-image" => "res_multistep",
-            "krea2" | "flux" | "flux2" | "ideogram4" => "euler",
+            "pony" => "euler_ancestral",
+            "krea2" | "flux" | "flux2" | "ideogram4" | "qwen-image" | "sd3.5" | "chroma"
+            | "illustrious" => "euler",
             _ => "euler",
         }
     } else {
@@ -79,7 +81,10 @@ pub(crate) fn sampler_name(manifest: &ManifestFile) -> &str {
 
 pub(crate) fn scheduler_name(manifest: &ManifestFile) -> &str {
     if manifest.scheduler.is_empty() {
-        "simple"
+        match manifest.arch.as_str() {
+            "pony" => "karras",
+            _ => "simple",
+        }
     } else {
         manifest.scheduler.as_str()
     }

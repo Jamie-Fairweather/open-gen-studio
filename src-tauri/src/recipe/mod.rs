@@ -20,8 +20,8 @@ pub use arch_id::RecipeArch;
 pub use controls::synthetic_controls;
 
 use arch::{
-    compile_checkpoint, compile_flux, compile_flux2, compile_ideogram4, compile_krea2,
-    compile_z_image,
+    compile_checkpoint, compile_chroma, compile_flux, compile_flux2, compile_ideogram4,
+    compile_krea2, compile_qwen_image, compile_sd35, compile_z_image,
 };
 
 /// Compile a Comfy API workflow from a recipe + live User Mode values.
@@ -53,6 +53,11 @@ pub fn compile(manifest: &ManifestFile, values: &HashMap<String, Value>) -> Resu
         RecipeArch::Flux => compile_flux(manifest, values),
         RecipeArch::Flux2 => compile_flux2(manifest, values),
         RecipeArch::Ideogram4 => compile_ideogram4(manifest, values),
-        RecipeArch::Sdxl | RecipeArch::Sd15 => compile_checkpoint(manifest, values),
+        RecipeArch::QwenImage => compile_qwen_image(manifest, values),
+        RecipeArch::Sd35 => compile_sd35(manifest, values),
+        RecipeArch::Chroma => compile_chroma(manifest, values),
+        RecipeArch::Sdxl | RecipeArch::Sd15 | RecipeArch::Pony | RecipeArch::Illustrious => {
+            compile_checkpoint(manifest, values)
+        }
     }
 }

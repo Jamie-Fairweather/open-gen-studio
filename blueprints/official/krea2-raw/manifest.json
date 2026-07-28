@@ -1,0 +1,47 @@
+{
+  "id": "krea2-raw",
+  "name": "Krea 2 RAW",
+  "category": "image",
+  "description": "Full-quality Krea 2 for maximum detail or training custom styles. Slower than Turbo - use Turbo for everyday generating.",
+  "runtime": "comfyui",
+  "minimumVramGb": 12,
+  "flowType": "txt2img",
+  "arch": "krea2",
+  "sampler": "euler",
+  "scheduler": "simple",
+  "capabilities": {
+    "negative": false,
+    "loras": true,
+    "controlnet": false,
+    "upscale": false
+  },
+  "defaults": {
+    "width": 1024,
+    "height": 1024,
+    "steps": 52,
+    "cfg": 1,
+    "seed": 0,
+    "clipType": "krea2",
+    "weightDtype": "default"
+  },
+  "models": [
+    {
+      "role": "unet",
+      "filename": "krea2_raw_fp8_scaled.safetensors",
+      "path": "diffusion_models",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_raw_fp8_scaled.safetensors"
+    },
+    {
+      "role": "text_encoder",
+      "filename": "qwen3vl_4b_fp8_scaled.safetensors",
+      "path": "text_encoders",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_fp8_scaled.safetensors"
+    },
+    {
+      "role": "vae",
+      "filename": "qwen_image_vae.safetensors",
+      "path": "vae",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors"
+    }
+  ]
+}

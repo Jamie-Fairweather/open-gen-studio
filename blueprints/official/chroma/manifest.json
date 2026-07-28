@@ -1,0 +1,48 @@
+{
+  "id": "chroma",
+  "name": "Chroma Unlocked",
+  "category": "image",
+  "description": "Flux-style quality with classic positive and negative prompts - more creative control when you want to dial results in.",
+  "runtime": "comfyui",
+  "minimumVramGb": 12,
+  "flowType": "txt2img",
+  "arch": "chroma",
+  "sampler": "euler",
+  "scheduler": "simple",
+  "capabilities": {
+    "negative": true,
+    "loras": true,
+    "controlnet": false,
+    "upscale": false
+  },
+  "defaults": {
+    "width": 1024,
+    "height": 1024,
+    "steps": 26,
+    "cfg": 4,
+    "seed": 0,
+    "clipType": "chroma",
+    "weightDtype": "default",
+    "auraShift": 1
+  },
+  "models": [
+    {
+      "role": "unet",
+      "filename": "chroma-unlocked-v50.safetensors",
+      "path": "diffusion_models",
+      "url": "https://huggingface.co/lodestones/Chroma/resolve/main/chroma-unlocked-v50.safetensors"
+    },
+    {
+      "role": "text_encoder",
+      "filename": "t5xxl_fp16.safetensors",
+      "path": "text_encoders",
+      "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors"
+    },
+    {
+      "role": "vae",
+      "filename": "ae.safetensors",
+      "path": "vae",
+      "url": "https://huggingface.co/lodestones/Chroma/resolve/main/ae.safetensors"
+    }
+  ]
+}

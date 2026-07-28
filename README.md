@@ -20,7 +20,7 @@ Most local AI tools make you become the engineer: install Python, hunt weights, 
 - **A studio, not a dashboard.** Prompt, generate, gallery, refine. Calm UI built for making images
 - **LoRAs & upscale that just work.** Shared libraries across Blueprints, not per-pack scavenger hunts
 - **Smart helpers.** Image to Prompt and Prompt Enhance when you need a push
-- **Creator when you’re ready.** Author your own recipe Blueprints without capturing a spaghetti graph
+- **Bring your own models.** Paste a Hugging Face or CivitAI link, fill the recipe, and generate. No node graph, no manual downloads.
 
 You shouldn’t need a weekend of setup to make one good image. That’s the bar.
 

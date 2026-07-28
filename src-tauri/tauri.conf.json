@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Open Gen Studio",
   "version": "0.1.0",
-  "identifier": "com.open-gen-studio",
+  "identifier": "studio.opengen",
   "build": {
     "frontendDist": "../out",
     "devUrl": "http://localhost:3000",

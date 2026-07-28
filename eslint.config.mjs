@@ -15,6 +15,13 @@ const eslintConfig = defineConfig([
     "src-tauri/**",
     // Specta / tauri-specta generated bindings
     "lib/generated/**",
+    "graphify-out/**",
+    ".cursor/**",
+    ".agents/**",
+    ".github/**",
+    ".vscode/**",
+    ".husky/**",
+    ".impeccable/**",
   ]),
 ])
 

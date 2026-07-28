@@ -1,0 +1,475 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-28T17:08:00.000Z",
+  "title": "Design System: Open Gen Studio",
+  "extensions": {
+    "colorMeta": {
+      "acid-lime": {
+        "role": "primary",
+        "displayName": "Acid Lime",
+        "canonical": "#d4ff00",
+        "tonalRamp": [
+          "#1a2200",
+          "#3d5200",
+          "#6b8f00",
+          "#9acc00",
+          "#d4ff00",
+          "#e0ff4d",
+          "#ecff99",
+          "#f7ffcc"
+        ]
+      },
+      "acid-lime-foreground": {
+        "role": "primary",
+        "displayName": "Acid Lime Foreground",
+        "canonical": "#121212",
+        "tonalRamp": [
+          "#121212",
+          "#1c1c1c",
+          "#2a2a2a",
+          "#3f3f3f",
+          "#525252",
+          "#737373",
+          "#a3a3a3",
+          "#e5e5e5"
+        ]
+      },
+      "void-black": {
+        "role": "neutral",
+        "displayName": "Void Black",
+        "canonical": "#0b0b0d",
+        "tonalRamp": [
+          "#050506",
+          "#0b0b0d",
+          "#121214",
+          "#141416",
+          "#18181b",
+          "#27272a",
+          "#3f3f46",
+          "#52525b"
+        ]
+      },
+      "stage-ink": {
+        "role": "neutral",
+        "displayName": "Stage Ink",
+        "canonical": "#141416",
+        "tonalRamp": [
+          "#0b0b0d",
+          "#121214",
+          "#141416",
+          "#18181b",
+          "#1f1f23",
+          "#27272a",
+          "#3f3f46",
+          "#52525b"
+        ]
+      },
+      "popover-ink": {
+        "role": "neutral",
+        "displayName": "Popover Ink",
+        "canonical": "#121214",
+        "tonalRamp": [
+          "#0b0b0d",
+          "#101012",
+          "#121214",
+          "#161618",
+          "#1c1c1f",
+          "#27272a",
+          "#3f3f46",
+          "#52525b"
+        ]
+      },
+      "rail-ink": {
+        "role": "neutral",
+        "displayName": "Rail Ink",
+        "canonical": "#18181b",
+        "tonalRamp": [
+          "#0b0b0d",
+          "#121214",
+          "#18181b",
+          "#1f1f23",
+          "#27272a",
+          "#3f3f46",
+          "#52525b",
+          "#71717a"
+        ]
+      },
+      "paper-white": {
+        "role": "neutral",
+        "displayName": "Paper White",
+        "canonical": "#f4f4f5",
+        "tonalRamp": [
+          "#3f3f46",
+          "#71717a",
+          "#a1a1aa",
+          "#d4d4d8",
+          "#e4e4e7",
+          "#f4f4f5",
+          "#fafafa",
+          "#ffffff"
+        ]
+      },
+      "zinc-mute": {
+        "role": "neutral",
+        "displayName": "Zinc Mute",
+        "canonical": "#a1a1aa",
+        "tonalRamp": [
+          "#27272a",
+          "#3f3f46",
+          "#52525b",
+          "#71717a",
+          "#a1a1aa",
+          "#d4d4d8",
+          "#e4e4e7",
+          "#f4f4f5"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "rgba(255, 255, 255, 0.08)",
+        "tonalRamp": [
+          "rgba(255,255,255,0.03)",
+          "rgba(255,255,255,0.05)",
+          "rgba(255,255,255,0.08)",
+          "rgba(255,255,255,0.10)",
+          "rgba(255,255,255,0.14)",
+          "rgba(255,255,255,0.20)",
+          "rgba(255,255,255,0.30)",
+          "rgba(255,255,255,0.45)"
+        ]
+      },
+      "input-wash": {
+        "role": "neutral",
+        "displayName": "Input Wash",
+        "canonical": "rgba(255, 255, 255, 0.10)",
+        "tonalRamp": [
+          "rgba(255,255,255,0.04)",
+          "rgba(255,255,255,0.06)",
+          "rgba(255,255,255,0.08)",
+          "rgba(255,255,255,0.10)",
+          "rgba(255,255,255,0.14)",
+          "rgba(255,255,255,0.18)",
+          "rgba(255,255,255,0.24)",
+          "rgba(255,255,255,0.32)"
+        ]
+      },
+      "accent-wash": {
+        "role": "neutral",
+        "displayName": "Accent Wash",
+        "canonical": "rgba(255, 255, 255, 0.05)",
+        "tonalRamp": [
+          "rgba(255,255,255,0.02)",
+          "rgba(255,255,255,0.03)",
+          "rgba(255,255,255,0.05)",
+          "rgba(255,255,255,0.08)",
+          "rgba(255,255,255,0.10)",
+          "rgba(255,255,255,0.14)",
+          "rgba(255,255,255,0.20)",
+          "rgba(255,255,255,0.28)"
+        ]
+      },
+      "destructive": {
+        "role": "secondary",
+        "displayName": "Destructive",
+        "canonical": "#f87171",
+        "tonalRamp": [
+          "#450a0a",
+          "#7f1d1d",
+          "#b91c1c",
+          "#ef4444",
+          "#f87171",
+          "#fca5a5",
+          "#fecaca",
+          "#fee2e2"
+        ]
+      },
+      "success": {
+        "role": "secondary",
+        "displayName": "Success",
+        "canonical": "#10b981",
+        "tonalRamp": [
+          "#022c22",
+          "#064e3b",
+          "#047857",
+          "#059669",
+          "#10b981",
+          "#34d399",
+          "#6ee7b7",
+          "#a7f3d0"
+        ]
+      },
+      "warning": {
+        "role": "secondary",
+        "displayName": "Warning",
+        "canonical": "#f59e0b",
+        "tonalRamp": [
+          "#451a03",
+          "#92400e",
+          "#b45309",
+          "#d97706",
+          "#f59e0b",
+          "#fbbf24",
+          "#fcd34d",
+          "#fde68a"
+        ]
+      },
+      "info": {
+        "role": "secondary",
+        "displayName": "Info",
+        "canonical": "#3b82f6",
+        "tonalRamp": [
+          "#172554",
+          "#1e3a8a",
+          "#1d4ed8",
+          "#2563eb",
+          "#3b82f6",
+          "#60a5fa",
+          "#93c5fd",
+          "#bfdbfe"
+        ]
+      },
+      "light-canvas": {
+        "role": "neutral",
+        "displayName": "Light Canvas",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#e5e5e5",
+          "#f0f0f0",
+          "#f5f5f5",
+          "#fafafa",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff"
+        ]
+      },
+      "light-ink": {
+        "role": "neutral",
+        "displayName": "Light Ink",
+        "canonical": "#262626",
+        "tonalRamp": [
+          "#0a0a0a",
+          "#171717",
+          "#262626",
+          "#404040",
+          "#525252",
+          "#737373",
+          "#a3a3a3",
+          "#d4d4d4"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Uppercase page titles (DOWNLOADS, CREATOR) with tight tracking."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Panel titles such as Image Gallery."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Nav items, control labels, button text."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Prompt copy, descriptions, list primary lines."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Small uppercase section stamps (SAMPLING, REFINE, LORAS)."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Seeds, filenames, URLs, recipe IDs."
+      }
+    },
+    "shadows": [
+      {
+        "name": "floating-chrome",
+        "value": "0 10px 15px -3px rgba(0,0,0,0.30), 0 4px 6px -4px rgba(0,0,0,0.30)",
+        "purpose": "Floating pill header above the stage."
+      },
+      {
+        "name": "overlay-lift",
+        "value": "0 10px 15px -3px rgba(0,0,0,0.10)",
+        "purpose": "Dialogs, menus, and popovers."
+      },
+      {
+        "name": "control-inset-light",
+        "value": "0 1px rgba(0,0,0,0.04)",
+        "purpose": "Subtle top-edge on light-mode controls."
+      },
+      {
+        "name": "control-inset-dark",
+        "value": "0 -1px rgba(255,255,255,0.06)",
+        "purpose": "Subtle top-edge on dark-mode controls."
+      },
+      {
+        "name": "primary-glow",
+        "value": "0 1px 2px rgba(212,255,0,0.24)",
+        "purpose": "Soft tint under primary Acid Lime buttons."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-toast",
+        "value": "cubic-bezier(0.5, 1, 0.89, 1)",
+        "purpose": "Toast success/error micro-motion."
+      },
+      {
+        "name": "duration-overlay",
+        "value": "200ms",
+        "purpose": "Dialog and menu open/close scale+opacity."
+      },
+      {
+        "name": "ease-overlay",
+        "value": "ease-in-out",
+        "purpose": "Overlay enter/exit pairing with duration-overlay."
+      },
+      {
+        "name": "transition-color",
+        "value": "color 150ms ease, background-color 150ms ease, border-color 150ms ease",
+        "purpose": "Nav and ghost control hover states."
+      }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Acid Lime expose/ready CTA — Generate, Save recipe.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">Generate</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; height: 32px; padding: 0 12px; border: 1px solid #d4ff00; border-radius: 10px; background: #d4ff00; color: #121212; font-family: Outfit, ui-sans-serif, system-ui, sans-serif; font-size: 0.875rem; font-weight: 500; box-shadow: 0 1px 2px rgba(212,255,0,0.24); cursor: pointer; transition: background-color 150ms ease, box-shadow 150ms ease; } .ds-btn-primary:hover { background: color-mix(in srgb, #d4ff00 90%, transparent); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px #0b0b0d, 0 0 0 4px #d4ff00; } .ds-btn-primary:active { box-shadow: none; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Quiet secondary action on dark surfaces.",
+      "html": "<button class=\"ds-btn-outline\" type=\"button\">Enhance</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; height: 32px; padding: 0 12px; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; background: rgba(255,255,255,0.10); color: #f4f4f5; font-family: Outfit, ui-sans-serif, system-ui, sans-serif; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: background-color 150ms ease; } .ds-btn-outline:hover { background: rgba(255,255,255,0.16); } .ds-btn-outline:focus-visible { outline: none; box-shadow: 0 0 0 2px #0b0b0d, 0 0 0 4px #d4ff00; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Icon and tertiary actions (settings, rail handles).",
+      "html": "<button class=\"ds-btn-ghost\" type=\"button\" aria-label=\"Settings\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/></svg></button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid transparent; border-radius: 9999px; background: transparent; color: #f4f4f5; cursor: pointer; transition: background-color 150ms ease; } .ds-btn-ghost:hover { background: rgba(255,255,255,0.05); } .ds-btn-ghost:focus-visible { outline: none; box-shadow: 0 0 0 2px #0b0b0d, 0 0 0 4px #d4ff00; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "Default dark field with lime focus ring.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Name</span><input class=\"ds-input\" type=\"text\" placeholder=\"My realism pack\" value=\"My realism pack\" /></label>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; font-family: Outfit, ui-sans-serif, system-ui, sans-serif; } .ds-field-label { font-size: 0.875rem; font-weight: 500; color: #f4f4f5; } .ds-input { height: 30px; width: 100%; padding: 0 12px; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; background: rgba(255,255,255,0.10); color: #f4f4f5; font-size: 0.875rem; outline: none; transition: border-color 150ms ease, box-shadow 150ms ease; } .ds-input::placeholder { color: rgba(161,161,170,0.72); } .ds-input:hover { background: rgba(255,255,255,0.12); } .ds-input:focus-visible { border-color: #d4ff00; box-shadow: 0 0 0 3px rgba(212,255,0,0.24); }"
+    },
+    {
+      "name": "Floating Pill Nav",
+      "kind": "nav",
+      "refersTo": "nav-pill",
+      "description": "Centered blurred header pill with lime active underline.",
+      "html": "<nav class=\"ds-nav-pill\" aria-label=\"Studio\"><span class=\"ds-nav-brand\"><svg class=\"ds-nav-icon\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><polygon points=\"12 2 2 7 12 12 22 7 12 2\"/><polyline points=\"2 17 12 22 22 17\"/><polyline points=\"2 12 12 17 22 12\"/></svg>Open Gen Studio</span><a class=\"ds-nav-link\" href=\"#\">Image</a><a class=\"ds-nav-link ds-nav-link-active\" href=\"#\">Downloads<span class=\"ds-nav-dot\"></span></a></nav>",
+      "css": ".ds-nav-pill { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px; border: 1px solid rgba(255,255,255,0.08); border-radius: 9999px; background: color-mix(in srgb, #141416 90%, transparent); color: #f4f4f5; font-family: Outfit, ui-sans-serif, system-ui, sans-serif; font-size: 0.875rem; backdrop-filter: blur(12px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.30); } .ds-nav-brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; padding-inline: 4px; } .ds-nav-icon { color: #d4ff00; } .ds-nav-link { position: relative; padding: 6px 10px; color: #a1a1aa; text-decoration: none; transition: color 150ms ease; } .ds-nav-link:hover { color: #f4f4f5; } .ds-nav-link-active { color: #f4f4f5; font-weight: 500; } .ds-nav-link-active::after { content: \"\"; position: absolute; left: 10px; right: 10px; bottom: -2px; height: 2px; border-radius: 9999px; background: #d4ff00; } .ds-nav-dot { display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 9999px; background: #d4ff00; vertical-align: middle; }"
+    },
+    {
+      "name": "Status Ready",
+      "kind": "chip",
+      "refersTo": "chip-selected",
+      "description": "Success status used on completed downloads.",
+      "html": "<span class=\"ds-status-ready\">Ready</span>",
+      "css": ".ds-status-ready { display: inline-flex; align-items: center; font-family: Outfit, ui-sans-serif, system-ui, sans-serif; font-size: 0.875rem; font-weight: 500; color: #10b981; }"
+    },
+    {
+      "name": "Stage Card",
+      "kind": "card",
+      "refersTo": "card-surface",
+      "description": "Tonal panel for rails, lists, and prompt dock.",
+      "html": "<section class=\"ds-card\"><p class=\"ds-card-stamp\">Recent</p><div class=\"ds-card-row\"><span>Krea 2 Turbo</span><span class=\"ds-status-ready\">Ready</span></div></section>",
+      "css": ".ds-card { background: #141416; color: #f4f4f5; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px 16px; font-family: Outfit, ui-sans-serif, system-ui, sans-serif; } .ds-card-stamp { margin: 0 0 8px; font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: #a1a1aa; } .ds-card-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid rgba(255,255,255,0.08); font-size: 0.875rem; } .ds-status-ready { color: #10b981; font-weight: 500; }"
+    },
+    {
+      "name": "Gallery Selection",
+      "kind": "custom",
+      "refersTo": "chip-selected",
+      "description": "Selected gallery thumb uses Acid Lime border, not a heavy shadow.",
+      "html": "<button class=\"ds-thumb ds-thumb-selected\" type=\"button\" aria-label=\"Selected image\"><span class=\"ds-thumb-fill\"></span></button>",
+      "css": ".ds-thumb { width: 72px; height: 72px; padding: 0; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; background: #18181b; overflow: hidden; cursor: pointer; } .ds-thumb-fill { display: block; width: 100%; height: 100%; background: linear-gradient(145deg, #27272a, #3f3f46); } .ds-thumb-selected { border: 2px solid #d4ff00; } .ds-thumb:focus-visible { outline: none; box-shadow: 0 0 0 2px #0b0b0d, 0 0 0 4px #d4ff00; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Darkroom Console",
+    "overview": "Open Gen Studio is a calm near-black creative console. The generated image is the subject; chrome recedes into soft tonal panels and a floating pill nav. Acid lime is the expose/ready signal — Generate, Save, selection borders, status dots — never wallpaper.\n\nPersonality is calm, precise, and image-first. Controls feel refined and restrained (coss / new-york density), with rare high-voltage CTAs. Depth comes mostly from tonal steps (void → stage → popover), not heavy shadows. A light theme exists in tokens for completeness, but the product defaults to dark and that is the visual authority.\n\nConfirmed visual rejections: neon cyberpunk overload; purple AI-SaaS gradients; dense Comfy/node-graph chrome; terminal green-on-black hacker UI.",
+    "keyCharacteristics": [
+      "Dark-first void stage with soft card tonal lifts",
+      "Acid lime used sparingly as the ready/expose signal",
+      "Floating blurred pill navigation",
+      "Image-centered three-rail studio (Advanced · Stage · Gallery)",
+      "Outfit geometric sans + Geist Mono for code/IDs",
+      "Uppercase tracked section labels for panel headers"
+    ],
+    "rules": [
+      {
+        "name": "The Exposure Rule",
+        "body": "Acid lime occupies a small fraction of any screen — CTAs, selection, and live status only. If the UI starts to glow, pull it back.",
+        "section": "colors"
+      },
+      {
+        "name": "The Void Floor Rule",
+        "body": "New surfaces sit on Void Black or a single tonal step up (Stage / Rail / Popover). Do not introduce unrelated gray families.",
+        "section": "colors"
+      },
+      {
+        "name": "The Label Stamp Rule",
+        "body": "Structural section headers use small uppercase tracked labels in Zinc Mute — not oversized title case banners.",
+        "section": "typography"
+      },
+      {
+        "name": "The Mono Lane Rule",
+        "body": "Geist Mono is for machine-readable values only; never for marketing headlines.",
+        "section": "typography"
+      },
+      {
+        "name": "The Stage Center Rule",
+        "body": "On Image (and future media) surfaces, the artwork owns the center; chrome and controls orbit it.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Prefer a tonal step or hairline over a new shadow. Shadows mark floating chrome or overlays, not every panel.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Pill Is Special",
+        "body": "Full rounding is reserved for the floating nav (and small status dots). Do not pill every button.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do keep Acid Lime rare — primary actions, selection, and live status only (The Exposure Rule).",
+      "Do build on Void → Stage → Popover tonal steps before adding shadows.",
+      "Do center media on Image/Video/Audio surfaces; let chrome orbit the stage.",
+      "Do use Outfit for UI and Geist Mono for machine values.",
+      "Do stamp sections with small uppercase tracked labels.",
+      "Do reuse coss control density (compact heights, soft inset edges, lime focus rings)."
+    ],
+    "donts": [
+      "Don't wash large regions in lime or add neon glow stacks.",
+      "Don't introduce purple/indigo “AI product” gradients or glassmorphism for its own sake.",
+      "Don't recreate Comfy node-graph visual language inside the studio.",
+      "Don't make every control a pill; reserve full rounding for the header and dots.",
+      "Don't treat the light theme as the default authority when inventing new studio UI.",
+      "Don't fabricate brand illustrations or marketing chrome that fight the darkroom calm."
+    ]
+  }
+}

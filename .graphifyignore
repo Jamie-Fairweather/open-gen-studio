@@ -5,7 +5,7 @@ graphify-out/
 node_modules/
 dist/
 
-src-tauri/target/
-src-tauri/gen/
+backend/target/
+backend/gen/
 
 skills-lock.json

@@ -17,7 +17,7 @@ No remote CI. Before a large change (or anytime you want a full local gate):
 ```bash
 bun run check          # typecheck + lint
 bun run check:full     # + recipe Rust tests (may fail on Windows - see below)
-bun run ipc:check      # regenerate bindings; fail if lib/generated/ drifts
+bun run ipc:check      # regenerate bindings; fail if frontend/lib/generated/ drifts
 ```
 
 Pre-commit (husky) already runs `lint:fix` + `typecheck` + lint-staged.

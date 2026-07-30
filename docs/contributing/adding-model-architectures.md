@@ -2,13 +2,13 @@
 
 An **architecture** (`arch`) is a graph family the recipe compiler knows how to build at generate time - for example `z-image`, `flux`, or `sdxl`. Blueprints (recipes) pick an `arch`; the Rust compiler emits Comfy API JSON from that recipe plus live User Mode settings.
 
-**Closed id set:** `RecipeArch` in Rust (`src-tauri/src/recipe/arch_id.rs`), exported to TypeScript via Specta (`lib/generated/bindings.ts`). Manifests still store a string; parse with `RecipeArch::parse` / `isRecipeArch`.
+**Closed id set:** `RecipeArch` in Rust (`backend/src/recipe/arch_id.rs`), exported to TypeScript via Specta (`frontend/lib/generated/bindings.ts`). Manifests still store a string; parse with `RecipeArch::parse` / `isRecipeArch`.
 
 **Creator metadata** (slots, default URLs, capabilities) is separate - still authored in `ARCHES` inside [`lib/creator-arches.ts`](../../lib/creator-arches.ts). That is product data, not an IPC DTO. See [Coding standards](./coding-standards.md).
 
-**Best copy target:** `z-image` - compiler `src-tauri/src/recipe/arch/z_image.rs`, official recipe `blueprints/official/z-image-turbo/`, Creator entry in `lib/creator-arches.ts`.
+**Best copy target:** `z-image` - compiler `backend/src/recipe/arch/z_image.rs`, official recipe `content/blueprints/z-image-turbo/`, Creator entry in `lib/creator-arches.ts`.
 
-Related: [`architecture-catalog.md`](./architecture-catalog.md) (shipped vs candidates), [`PLAN.md`](../PLAN.md), [`blueprints/official/README.md`](../../blueprints/official/README.md), [`loras/official/README.md`](../../loras/official/README.md).
+Related: [`architecture-catalog.md`](./architecture-catalog.md) (shipped vs candidates), [`PLAN.md`](../PLAN.md), [`content/blueprints/README.md`](../../content/blueprints/README.md), [`content/loras/README.md`](../../content/loras/README.md).
 
 ---
 
@@ -21,7 +21,7 @@ Related: [`architecture-catalog.md`](./architecture-catalog.md) (shipped vs cand
 | **Rust compiler**          | `recipe::compile` matches on `RecipeArch`                     |
 | **Creator `ARCHES`**       | Per-arch UI metadata - slots, defaults, capabilities          |
 | **`lib/arch.ts`**          | Re-exports generated `RECIPE_ARCHES` for pickers              |
-| **Official blueprint**     | Optional package under `blueprints/official/<id>/`            |
+| **Official blueprint**     | Optional package under `content/blueprints/<id>/`             |
 | **LoRA variants**          | Packs declare per-arch files; stack filtered by active `arch` |
 | **Prompt tools**           | Map `arch` → prompt dialect (`PromptTarget`)                  |
 
@@ -35,11 +35,11 @@ Flow type is `txt2img` only for v1.
 
 1. Design the Comfy API graph and model **roles**.
 2. Add a `RecipeArch` variant in `arch_id.rs` (serde + specta renames).
-3. Add `src-tauri/src/recipe/arch/<name>.rs` with `finish_recipe` (LoRA + upscale wiring).
+3. Add `backend/src/recipe/arch/<name>.rs` with `finish_recipe` (LoRA + upscale wiring).
 4. Register the module in `arch/mod.rs` and the match arm in `recipe/mod.rs`.
 5. Tune `controls.rs` and `values.rs` (defaults, sampler/scheduler, guidance vs CFG).
 6. Upscale / refine: `upscale_tail.rs`, mirror defaults in `lib/host/upscale.ts`, update `refine-controls.tsx` if needed.
-7. Run **`bun run ipc:types`** so `lib/generated/bindings.ts` picks up the new `RecipeArch` variant.
+7. Run **`bun run ipc:types`** so `frontend/lib/generated/bindings.ts` picks up the new `RecipeArch` variant.
 8. Creator UI: add an `ARCHES` entry in `lib/creator-arches.ts` (id typed as `RecipeArch`). Run `bun run ipc:types` so `RECIPE_ARCHES` regenerates from Rust.
 9. Prompt tools: extend `PromptTarget::resolve` / `targetFromArch` if needed (new dialect only if needed).
 10. Optional: official recipe + LoRA variants; update READMEs.
@@ -63,7 +63,7 @@ Before writing code, freeze:
 - **Capabilities** - `negative`, `loras`, `controlnet`, `upscale` flags on the recipe.
 - **Custom nodes** - prefer Comfy core. If you need a pack, list it in manifest `customNodes[]` so install clones it.
 
-Official role cheat sheet: [`blueprints/official/README.md`](../../blueprints/official/README.md).
+Official role cheat sheet: [`content/blueprints/README.md`](../../content/blueprints/README.md).
 
 ---
 
@@ -71,11 +71,11 @@ Official role cheat sheet: [`blueprints/official/README.md`](../../blueprints/of
 
 ### Enum variant
 
-In `src-tauri/src/recipe/arch_id.rs`, add a variant with matching serde/specta renames, extend `ALL` / `as_str` / `parse`.
+In `backend/src/recipe/arch_id.rs`, add a variant with matching serde/specta renames, extend `ALL` / `as_str` / `parse`.
 
 ### New compiler module
 
-Add `src-tauri/src/recipe/arch/<name>.rs` with `compile_<name>(manifest, values)`.
+Add `backend/src/recipe/arch/<name>.rs` with `compile_<name>(manifest, values)`.
 
 Pattern (from Z-Image):
 
@@ -109,18 +109,18 @@ If the arch uses a **guider** path for Ultimate SD Upscale, set `UpscaleWiring.g
 
 ### Register
 
-**`src-tauri/src/recipe/arch/mod.rs`** - `mod` + `pub(crate) use`.
+**`backend/src/recipe/arch/mod.rs`** - `mod` + `pub(crate) use`.
 
-**`src-tauri/src/recipe/mod.rs`** - match on `RecipeArch` (error string comes from `RecipeArch::supported_list()`).
+**`backend/src/recipe/mod.rs`** - match on `RecipeArch` (error string comes from `RecipeArch::supported_list()`).
 
 ### Controls and sampler fallbacks
 
-**`src-tauri/src/recipe/controls.rs`**
+**`backend/src/recipe/controls.rs`**
 
 - `synthetic_controls` - Flux-like arches use **Guidance** instead of CFG. Extend if your arch is guidance-based.
 - `default_steps` / `default_cfg` - add match arms for sensible fallbacks.
 
-**`src-tauri/src/recipe/values.rs`**
+**`backend/src/recipe/values.rs`**
 
 - `sampler_name` / `scheduler_name` - fallbacks when the manifest leaves them empty.
 
@@ -160,16 +160,16 @@ Creator Mode authors recipes without embedding Comfy.
 
 ## 4. Official blueprint (optional)
 
-Ship a package under `blueprints/official/<blueprint-id>/`:
+Ship a package under `content/blueprints/<blueprint-id>/`:
 
 ```
 manifest.json    # required - includes "arch": "your-arch"
 thumbnail.png    # optional
 ```
 
-Folders starting with `_` are ignored (e.g. `_example`). Resources are already bundled via `src-tauri/tauri.conf.json`.
+Folders starting with `_` are ignored (e.g. `_example`). Resources are already bundled via `backend/tauri.conf.json`.
 
-Update the supported-`arch` table in [`blueprints/official/README.md`](../../blueprints/official/README.md).
+Update the supported-`arch` table in [`content/blueprints/README.md`](../../content/blueprints/README.md).
 
 ---
 
@@ -177,12 +177,12 @@ Update the supported-`arch` table in [`blueprints/official/README.md`](../../blu
 
 LoRAs are a **shared library**, not blueprint `models[]`. Generate resolves the stack with `resolve_stack_for_generate(…, &manifest.arch, …)` and the compiler inserts `LoraLoader` nodes via `finish_recipe` / `finish_with_loras`.
 
-| Touchpoint                 | Change                                                                 |
-| -------------------------- | ---------------------------------------------------------------------- |
-| Compiler                   | Call `finish_recipe` with correct model/clip consumers                 |
-| `lib/creator-arches.ts`    | New `ARCHES` entry; `bun run ipc:types` refreshes `RECIPE_ARCHES`      |
-| `loras/official/README.md` | Document the new `arch`                                                |
-| Official / user packs      | Optional: `{ "arch": "your-arch", "filename", "path", "url" }` variant |
+| Touchpoint                | Change                                                                 |
+| ------------------------- | ---------------------------------------------------------------------- |
+| Compiler                  | Call `finish_recipe` with correct model/clip consumers                 |
+| `lib/creator-arches.ts`   | New `ARCHES` entry; `bun run ipc:types` refreshes `RECIPE_ARCHES`      |
+| `content/loras/README.md` | Document the new `arch`                                                |
+| Official / user packs     | Optional: `{ "arch": "your-arch", "filename", "path", "url" }` variant |
 
 Enable `capabilities.loras: true` on recipes that should show the LoRA stack.
 
@@ -194,7 +194,7 @@ Keep TS and Rust mappings in sync.
 
 **`lib/prompt-tools.ts`** - `targetFromArch` (ids are generated `PromptTarget`).
 
-**`src-tauri/src/prompt_tools/types.rs`** - `PromptTarget::resolve` (prefer matching on `RecipeArch::parse`).
+**`backend/src/prompt_tools/types.rs`** - `PromptTarget::resolve` (prefer matching on `RecipeArch::parse`).
 
 If the arch needs a **new dialect**, add a `PromptTarget` variant + `#[derive(Type)]`, dialect text in `prompts.rs`, UI labels in `PROMPT_TARGETS`, then `bun run ipc:types`. If it fits an existing dialect, only extend the arch→target maps.
 
@@ -204,17 +204,17 @@ Panels already call `targetFromArch(studio.activeArch)`.
 
 ## 7. Upscale / Refine
 
-| File                                   | What                                                               |
-| -------------------------------------- | ------------------------------------------------------------------ |
-| `src-tauri/src/recipe/upscale_tail.rs` | `usdu_denoise` / `usdu_steps`; guider wiring                       |
-| `lib/host/upscale.ts`                  | `defaultUsduSteps` / `defaultUsduDenoise` - keep aligned with Rust |
-| `components/refine-controls.tsx`       | `turboArch` caution; `guiderUsdu` for custom-sampling arches       |
+| File                                 | What                                                               |
+| ------------------------------------ | ------------------------------------------------------------------ |
+| `backend/src/recipe/upscale_tail.rs` | `usdu_denoise` / `usdu_steps`; guider wiring                       |
+| `lib/host/upscale.ts`                | `defaultUsduSteps` / `defaultUsduDenoise` - keep aligned with Rust |
+| `components/refine-controls.tsx`     | `turboArch` caution; `guiderUsdu` for custom-sampling arches       |
 
 ---
 
 ## 8. Tests and docs
 
-**`src-tauri/src/recipe/tests.rs`** - add `compiles_<arch>_graph` (and USDU/guider cases if applicable).
+**`backend/src/recipe/tests.rs`** - add `compiles_<arch>_graph` (and USDU/guider cases if applicable).
 
 Keep README / PLAN tables in sync. No database migration - recipes and LoRA packs are files.
 
@@ -222,19 +222,19 @@ Keep README / PLAN tables in sync. No database migration - recipes and LoRA pack
 
 ## Touchpoint index
 
-| Area                    | Paths                                                                                                 |
-| ----------------------- | ----------------------------------------------------------------------------------------------------- |
-| Allowlist enum          | `src-tauri/src/recipe/arch_id.rs` → `bun run ipc:types` → `lib/generated/bindings.ts` + `lib/arch.ts` |
-| Creator metadata        | `lib/creator-arches.ts` (`ARCHES`)                                                                    |
-| Compiler                | `src-tauri/src/recipe/arch/*`, `recipe/mod.rs`                                                        |
-| Finish / LoRA / upscale | `recipe/upscale_tail.rs`, `recipe/lora.rs`                                                            |
-| Controls / values       | `recipe/controls.rs`, `recipe/values.rs`                                                              |
-| Official recipes        | `blueprints/official/<id>/manifest.json`                                                              |
-| LoRA packs              | `loras/official/<pack>/manifest.json`                                                                 |
-| Prompt tools            | `lib/prompt-tools.ts`, `prompt_tools/types.rs`, `prompts.rs`                                          |
-| USDU defaults UI        | `lib/host/upscale.ts`, `components/refine-controls.tsx`                                               |
-| IPC standards           | [`coding-standards.md`](./coding-standards.md)                                                        |
-| Tests                   | `src-tauri/src/recipe/tests.rs`                                                                       |
+| Area                    | Paths                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Allowlist enum          | `backend/src/recipe/arch_id.rs` → `bun run ipc:types` → `frontend/lib/generated/bindings.ts` + `lib/arch.ts` |
+| Creator metadata        | `lib/creator-arches.ts` (`ARCHES`)                                                                           |
+| Compiler                | `backend/src/recipe/arch/*`, `recipe/mod.rs`                                                                 |
+| Finish / LoRA / upscale | `recipe/upscale_tail.rs`, `recipe/lora.rs`                                                                   |
+| Controls / values       | `recipe/controls.rs`, `recipe/values.rs`                                                                     |
+| Official recipes        | `content/blueprints/<id>/manifest.json`                                                                      |
+| LoRA packs              | `content/loras/<pack>/manifest.json`                                                                         |
+| Prompt tools            | `lib/prompt-tools.ts`, `prompt_tools/types.rs`, `prompts.rs`                                                 |
+| USDU defaults UI        | `lib/host/upscale.ts`, `components/refine-controls.tsx`                                                      |
+| IPC standards           | [`coding-standards.md`](./coding-standards.md)                                                               |
+| Tests                   | `backend/src/recipe/tests.rs`                                                                                |
 
 ---
 
@@ -246,7 +246,7 @@ Keep README / PLAN tables in sync. No database migration - recipes and LoRA pack
 | Compiler        | `arch/z_image.rs` → `finish_recipe`                 |
 | Dispatch        | `recipe/mod.rs` match                               |
 | Creator         | `ARCHES` entry with unet / text_encoder / vae slots |
-| Official recipe | `blueprints/official/z-image-turbo/`                |
+| Official recipe | `content/blueprints/z-image-turbo/`                 |
 | LoRAs           | Variants with `"arch": "z-image"`                   |
 | Prompt tools    | Maps to `zImageKrea`                                |
 | Upscale         | Denoise 0.15, steps cap 8                           |
@@ -265,4 +265,4 @@ Keep README / PLAN tables in sync. No database migration - recipes and LoRA pack
 - Skipping `finish_recipe` → LoRAs and Refine never rewire.
 - Updating only TS or only Rust prompt-target maps → Auto dialect disagrees.
 - Guider arches with `guider: None` or wrong Refine `guiderUsdu` → USDU breaks.
-- Hand-editing `lib/generated/bindings.ts` → overwritten on next export.
+- Hand-editing `frontend/lib/generated/bindings.ts` → overwritten on next export.

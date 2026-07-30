@@ -90,7 +90,7 @@ Revisit only if we later build a real multi-user cloud product. Not for the loca
                        |
                    Local GPU
 
-Catalog (today): blueprints/official/ (bundled)
+Catalog (today): content/blueprints/ (bundled)
 Catalog (later): GitHub Blueprint repo ──fetch──► Registry UI / installer
 ```
 
@@ -100,7 +100,7 @@ Catalog (later): GitHub Blueprint repo ──fetch──► Registry UI / instal
 
 | Area        | Choice                                 | Notes                                  |
 | ----------- | -------------------------------------- | -------------------------------------- |
-| Shell       | **Tauri 2**                            | Already scaffolded (`src-tauri/`)      |
+| Shell       | **Tauri 2**                            | Already scaffolded (`backend/`)        |
 | UI          | **Next.js 16 + React 19 + Tailwind 4** | coss/Base UI; talks to Rust via IPC    |
 | Local store | **SQLite in Rust** (`rusqlite`)        | Single writer next to the orchestrator |
 | Host logic  | **Rust (Tauri)**                       | Processes, GPU, downloads, jobs        |
@@ -135,7 +135,7 @@ No graph. No nodes.
 
 **Recipe authoring form:** choose arch → fill model slots → sampler/defaults/capabilities → save to My blueprints (`%APPDATA%/…/blueprints/user/<id>/`). No Comfy UI or capture in-app.
 
-Promoting a user pack into `blueprints/official/` is a manual copy / PR - the app never writes Official.
+Promoting a user pack into `content/blueprints/` is a manual copy / PR - the app never writes Official.
 
 ---
 
@@ -156,7 +156,7 @@ Blueprint (recipe)
 └── Tests             (compile smoke tests in Rust)
 ```
 
-Supported arches (v1): `z-image`, `krea2`, `flux`, `flux2`, `ideogram4`, `sdxl`, `sd15`, `pony`, `qwen-image`, `illustrious`, `sd3.5`, `chroma` - see [`architecture-catalog.md`](./contributing/architecture-catalog.md), [`blueprints/official/README.md`](../blueprints/official/README.md), and [`adding-model-architectures.md`](./contributing/adding-model-architectures.md).
+Supported arches (v1): `z-image`, `krea2`, `flux`, `flux2`, `ideogram4`, `sdxl`, `sd15`, `pony`, `qwen-image`, `illustrious`, `sd3.5`, `chroma` - see [`architecture-catalog.md`](./contributing/architecture-catalog.md), [`content/blueprints/README.md`](../content/blueprints/README.md), and [`adding-model-architectures.md`](./contributing/adding-model-architectures.md).
 
 Official packs today: `z-image-turbo`, `z-image-base`, `krea2-turbo`, `krea2-raw`, `ideogram4`, `pony-v6`, `flux-dev`, `flux-schnell`, `flux2-dev`, `sdxl-base`, `sd15`, `qwen-image`, `qwen-image-distill`, `noobai-vpred`, `sd35-large`, `sd35-large-turbo`, `chroma`.
 
@@ -181,7 +181,7 @@ Install lands files in the shared library: `app_data/models/<path>/<filename>` (
 
 | Library   | Location                           | Notes                                 |
 | --------- | ---------------------------------- | ------------------------------------- |
-| LoRAs     | `loras/official` + user packs      | Arch-filtered stack at generate       |
+| LoRAs     | `content/loras` + user packs       | Arch-filtered stack at generate       |
 | Upscalers | `models/upscale_models/` (+ SUPIR) | Refine UI: SR / USDU / SUPIR - shared |
 
 ---
@@ -191,16 +191,16 @@ Install lands files in the shared library: `app_data/models/<path>/<filename>` (
 UI still feels like a Registry. **Official Blueprints ship inside the app** - not a hosted marketplace DB.
 
 ```
-blueprints/official/<id>/
+content/blueprints/<id>/
   manifest.json        # recipe (arch, models, defaults, capabilities)
   thumbnail.png        # optional
 ```
 
-No `workflow.api.json`. No `controls[]`. See [`blueprints/official/README.md`](../blueprints/official/README.md).
+No `workflow.api.json`. No `controls[]`. See [`content/blueprints/README.md`](../content/blueprints/README.md).
 
 ```
 Registry (UI)
-├── Official   ← read from blueprints/official/ (built-in)
+├── Official   ← read from content/blueprints/ (built-in)
 ├── Community  ← later: GitHub repo(s) of the same folder shape
 └── Local      ← My blueprints / user-added on disk
 ```
@@ -208,7 +208,7 @@ Registry (UI)
 ### Install / generate flow (Official)
 
 ```
-App lists blueprints/official/*
+App lists content/blueprints/*
   → User picks Blueprint → ensure Comfy runtime + models (+ nodes)
   → Compile Comfy API graph from arch + recipe + live settings
   → POST Comfy /prompt → poll → Gallery
@@ -337,7 +337,7 @@ Migrations live in the Rust host (versioned SQL / rusqlite).
 
 - Next UI + Tauri shell; SQLite in Rust; IPC + events
 - ComfyUI Windows Portable install + supervisor + shared models
-- Recipe Official Blueprints + runtime graph compiler (`src-tauri/src/recipe/`)
+- Recipe Official Blueprints + runtime graph compiler (`backend/src/recipe/`)
 - Creator recipe form; My blueprints; generate recipe-only
 - LoRA library + Refine (SR / USDU / SUPIR)
 - Tools: Image to Prompt + Prompt Enhance (QwenVL via Comfy)

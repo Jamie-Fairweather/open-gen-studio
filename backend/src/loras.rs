@@ -110,20 +110,19 @@ pub fn official_dir(app: &AppHandle) -> Result<PathBuf, String> {
         candidates.push(
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("..")
-                .join("loras")
-                .join("official"),
+                .join("content")
+                .join("loras"),
         );
     }
 
-    for rel in ["loras/official", "_up_/loras/official", "official"] {
+    for rel in ["loras", "_up_/loras"] {
         if let Ok(p) = app.path().resolve(rel, BaseDirectory::Resource) {
-            // Prefer paths that look like loras/official when ambiguous.
             candidates.push(p);
         }
     }
     if let Ok(resource) = app.path().resource_dir() {
-        candidates.push(resource.join("_up_").join("loras").join("official"));
-        candidates.push(resource.join("loras").join("official"));
+        candidates.push(resource.join("_up_").join("loras"));
+        candidates.push(resource.join("loras"));
     }
 
     #[cfg(not(debug_assertions))]
@@ -131,8 +130,8 @@ pub fn official_dir(app: &AppHandle) -> Result<PathBuf, String> {
         candidates.push(
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("..")
-                .join("loras")
-                .join("official"),
+                .join("content")
+                .join("loras"),
         );
     }
 

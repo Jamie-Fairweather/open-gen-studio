@@ -14,24 +14,19 @@ pub fn official_dir(app: &AppHandle) -> Result<PathBuf, String> {
         candidates.push(
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("..")
-                .join("blueprints")
-                .join("official"),
+                .join("content")
+                .join("blueprints"),
         );
     }
 
-    for rel in [
-        "blueprints/official",
-        "_up_/blueprints/official",
-        "official",
-    ] {
+    for rel in ["blueprints", "_up_/blueprints"] {
         if let Ok(p) = app.path().resolve(rel, BaseDirectory::Resource) {
             candidates.push(p);
         }
     }
     if let Ok(resource) = app.path().resource_dir() {
-        candidates.push(resource.join("_up_").join("blueprints").join("official"));
-        candidates.push(resource.join("blueprints").join("official"));
-        candidates.push(resource.join("official"));
+        candidates.push(resource.join("_up_").join("blueprints"));
+        candidates.push(resource.join("blueprints"));
     }
 
     #[cfg(not(debug_assertions))]
@@ -39,8 +34,8 @@ pub fn official_dir(app: &AppHandle) -> Result<PathBuf, String> {
         candidates.push(
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("..")
-                .join("blueprints")
-                .join("official"),
+                .join("content")
+                .join("blueprints"),
         );
     }
 

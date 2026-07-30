@@ -14,7 +14,7 @@ name = "app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-# Dev-only: regenerate lib/generated/bindings.ts (`npm run ipc:types`).
+# Dev-only: regenerate frontend/lib/generated/bindings.ts (`npm run ipc:types`).
 # Package default-run is `app` (main.rs) so `tauri dev` / `cargo run` stay unambiguous.
 name = "export-ipc"
 path = "src/bin/export_ipc.rs"

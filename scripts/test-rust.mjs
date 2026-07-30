@@ -17,7 +17,7 @@ if (process.platform === "win32") {
 
 const result = spawnSync(
   "cargo",
-  ["test", "--manifest-path", "src-tauri/Cargo.toml", "recipe::"],
+  ["test", "--manifest-path", "backend/Cargo.toml", "recipe::"],
   { stdio: "inherit", shell: true }
 )
 

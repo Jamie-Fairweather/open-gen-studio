@@ -9,7 +9,7 @@ Example prompts for generating `thumbnail.png` (or `.jpg` / `.webp`) for each of
 1. Install / select the blueprint in Studio.
 2. Paste the positive prompt (and negative if listed).
 3. Use the pack’s default steps / CFG unless noted.
-4. Prefer a square-ish crop that punches at picker size (~4:3). Save as `blueprints/official/<id>/thumbnail.png`.
+4. Prefer a square-ish crop that punches at picker size (~4:3). Save as `content/blueprints/<id>/thumbnail.png`.
 
 **Negatives:** only when `capabilities.negative` is true. Distilled / guidance packs (Flux, Flux.2, Z-Image, Krea 2, Ideogram) — put quality into the positive instead.
 

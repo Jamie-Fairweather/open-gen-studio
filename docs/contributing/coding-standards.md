@@ -30,7 +30,7 @@ Related: [Contributing guides](./README.md), [Adding a model architecture](./add
 - Prefer a named Rust struct over `serde_json::json!({…})` for anything the frontend listens to.
 - Prefer a Rust enum over duplicated string unions when the set is closed (`RecipeArch`, `PromptFormat`, `UpscaleKind`, …).
 - Manifests on disk may still store free-form strings (e.g. `"arch": "flux"`); parse into the enum at the boundary (`RecipeArch::parse`).
-- Do not commit hand-edits to `lib/generated/bindings.ts` or `ipc.ts`.
+- Do not commit hand-edits to `frontend/lib/generated/bindings.ts` or `ipc.ts`.
 - `serde_json::Value` / open maps: mark with `#[specta(type = specta_typescript::Any)]` or use `JsonValue` / `JsonMap` - Specta will stack-overflow if it tries to inline recursive `Value`.
 - Specta is pinned to **2.0.0-rc.25** (+ tauri-specta) - when stable v2 ships, follow [Dev notes: Specta stable v2](./dev-notes-specta-v2.md).
 

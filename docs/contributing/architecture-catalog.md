@@ -2,7 +2,7 @@
 
 Checklist of ComfyUI graph families worth supporting as a `RecipeArch`, vs what Open Gen Studio already ships.
 
-**Source of truth for shipped ids:** `RecipeArch` in [`src-tauri/src/recipe/arch_id.rs`](../../src-tauri/src/recipe/arch_id.rs) → `bun run ipc:types` → `RECIPE_ARCHES`.
+**Source of truth for shipped ids:** `RecipeArch` in [`backend/src/recipe/arch_id.rs`](../../backend/src/recipe/arch_id.rs) → `bun run ipc:types` → `RECIPE_ARCHES`.
 
 **How to add one:** [`adding-model-architectures.md`](./adding-model-architectures.md).
 

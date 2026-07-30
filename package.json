@@ -4,18 +4,18 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "next dev frontend",
+    "build": "next build frontend",
+    "start": "next start frontend",
     "desktop": "tauri dev",
     "desktop:build": "tauri build",
-    "lint": "eslint .",
-    "lint:fix": "eslint --fix .",
-    "format": "prettier --write \"**/*.{ts,tsx}\" && cargo fmt --manifest-path src-tauri/Cargo.toml",
-    "typecheck": "tsc --noEmit",
+    "lint": "eslint frontend",
+    "lint:fix": "eslint --fix frontend",
+    "format": "prettier --write \"frontend/**/*.{ts,tsx}\" && cargo fmt --manifest-path backend/Cargo.toml",
+    "typecheck": "tsc --noEmit -p frontend/tsconfig.json",
     "test:rust": "bun scripts/test-rust.mjs",
-    "ipc:types": "cargo run --manifest-path src-tauri/Cargo.toml --bin export-ipc",
-    "ipc:check": "bun run ipc:types && git diff --exit-code -- lib/generated/",
+    "ipc:types": "cargo run --manifest-path backend/Cargo.toml --bin export-ipc",
+    "ipc:check": "bun run ipc:types && git diff --exit-code -- frontend/lib/generated/",
     "check": "bun run typecheck && bun run lint",
     "check:full": "bun run check && bun run test:rust",
     "cleanup": "bun run lint:fix && bun run typecheck && bun run format && graphify update .",
@@ -23,7 +23,7 @@
   },
   "lint-staged": {
     "*": "prettier --write --ignore-unknown",
-    "*.rs": "cargo fmt --manifest-path src-tauri/Cargo.toml --"
+    "*.rs": "cargo fmt --manifest-path backend/Cargo.toml --"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

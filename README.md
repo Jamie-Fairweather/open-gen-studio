@@ -62,13 +62,13 @@ Most local AI tools make you become the engineer: install Python, hunt weights, 
 
 # Stack
 
-| Layer   | Choice                                        |
-| ------- | --------------------------------------------- |
-| Shell   | **Tauri 2**                                   |
-| UI      | **Next.js 16 · React 19 · Tailwind 4 · coss** |
-| Host    | **Rust** (`rusqlite`, recipe compilers, IPC)  |
-| IPC     | **Specta / tauri-specta → `lib/generated/`**  |
-| Package | **Bun**                                       |
+| Layer   | Choice                                                |
+| ------- | ----------------------------------------------------- |
+| Shell   | **Tauri 2**                                           |
+| UI      | **Next.js 16 · React 19 · Tailwind 4 · coss**         |
+| Host    | **Rust** (`rusqlite`, recipe compilers, IPC)          |
+| IPC     | **Specta / tauri-specta → `frontend/lib/generated/`** |
+| Package | **Bun**                                               |
 
 ---
 
@@ -94,7 +94,7 @@ bun run desktop          # Tauri + Next (http://localhost:3000)
 bun run check            # typecheck + lint
 bun run check:full       # + recipe Rust tests (skipped on Windows; see contributing)
 bun run ipc:types        # regenerate Specta bindings
-bun run ipc:check        # fail if lib/generated/ drifts
+bun run ipc:check        # fail if frontend/lib/generated/ drifts
 bun run desktop:build    # production desktop build
 ```
 
@@ -108,8 +108,8 @@ bun run desktop:build    # production desktop build
 | [Coding standards](docs/contributing/coding-standards.md)                      | IPC: Rust → Specta → TypeScript |
 | [Adding a model architecture](docs/contributing/adding-model-architectures.md) | New `RecipeArch` end-to-end     |
 | [Product plan](docs/PLAN.md)                                                   | Vision, architecture, roadmap   |
-| [Official Blueprints](blueprints/official/README.md)                           | Recipe manifest layout          |
-| [Official LoRAs](loras/official/README.md)                                     | Multi-arch LoRA packs           |
+| [Official Blueprints](content/blueprints/README.md)                            | Recipe manifest layout          |
+| [Official LoRAs](content/loras/README.md)                                      | Multi-arch LoRA packs           |
 
 ---
 

@@ -31,7 +31,7 @@ Shipped vs candidate arches: [`docs/contributing/architecture-catalog.md`](../..
 ## Layout
 
 ```
-blueprints/official/
+content/blueprints/
   <blueprint-id>/
     manifest.json       # recipe: arch, models, defaults, capabilities
     thumbnail.png       # optional

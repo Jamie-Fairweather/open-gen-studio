@@ -62,7 +62,7 @@ Product name: **Open Gen Studio** (identifier `studio.opengen`). Voice in shippi
 ## Evidence on Hand
 
 - README and `docs/PLAN.md` — vision, architecture, roadmap.
-- Official Blueprints under `blueprints/official/`; Official LoRAs under `loras/official/`.
+- Official Blueprints under `content/blueprints/`; Official LoRAs under `content/loras/`.
 - Runnable UI and host in-repo (Tauri + Next studio).
 
 Do not fabricate testimonials, benchmarks, customer logos, pricing, or marketplace claims.

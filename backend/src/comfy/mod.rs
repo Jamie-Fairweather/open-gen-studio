@@ -20,4 +20,6 @@ pub fn emit_runtime_progress(app: &tauri::AppHandle, stage: &str, message: &str)
     paths::emit_progress(app, stage, message);
 }
 #[allow(unused_imports)]
-pub use process::{health, is_process_alive, start, stop, wait_until_healthy};
+pub use process::{
+    health, is_process_alive, kill_portable_python, start, stop, wait_until_healthy,
+};

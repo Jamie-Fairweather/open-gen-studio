@@ -63,6 +63,51 @@ pub(crate) fn restore_custom_nodes(root: &Path, backup: &Path) -> Result<(), Str
     }
     copy_dir_recursive(backup, &dest)?;
     let _ = fs::remove_dir_all(backup);
+    // Never carry over managed packs - they are re-pinned fresh (avoids restoring a
+    // broken QwenVL/SUPIR tree that already matched HEAD and skipped re-clone).
+    purge_managed_custom_nodes(root);
+    Ok(())
+}
+
+/// Delete app-managed custom node folders so `ensure_managed_nodes` re-clones them.
+pub(crate) fn purge_managed_custom_nodes(root: &Path) {
+    let custom = root.join("ComfyUI").join("custom_nodes");
+    purge_managed_folders(&custom);
+}
+
+/// Backup layout is the custom_nodes tree itself (no ComfyUI/ prefix).
+fn purge_managed_custom_nodes_in_backup(backup: &Path) {
+    purge_managed_folders(backup);
+}
+
+fn purge_managed_folders(custom_nodes_dir: &Path) {
+    if !custom_nodes_dir.is_dir() {
+        return;
+    }
+    for pin in pins::MANAGED_NODES {
+        let _ = fs::remove_dir_all(custom_nodes_dir.join(pin.folder));
+    }
+}
+
+/// Retry delete - Windows often holds locks for a few seconds after process kill.
+fn remove_dir_retries(path: &Path, attempts: u32) -> Result<(), String> {
+    for i in 0..attempts {
+        if !path.exists() {
+            return Ok(());
+        }
+        match fs::remove_dir_all(path) {
+            Ok(()) => return Ok(()),
+            Err(e) if i + 1 >= attempts => {
+                return Err(format!(
+                    "Could not delete ComfyUI folder (a file is still in use): {e}. \
+                     Close anything using that folder, reboot if needed, then retry Reinstall."
+                ));
+            }
+            Err(_) => {
+                std::thread::sleep(Duration::from_secs(2));
+            }
+        }
+    }
     Ok(())
 }
 
@@ -363,16 +408,20 @@ pub fn extract_portable_core(
                     "Updating ComfyUI to the version required by this app - backing up custom nodes…"
                 },
             );
+            // Release file locks before wipe (tracked stop happens in enqueue; catch orphans).
+            super::process::kill_portable_python(&root);
             if backup_path.exists() {
-                let _ = fs::remove_dir_all(&backup_path);
+                let _ = remove_dir_retries(&backup_path, 3);
             }
             if let Some(backup) = backup_custom_nodes(&root, &base)? {
+                // Drop managed packs from the backup so restore cannot resurrect a broken pin.
+                purge_managed_custom_nodes_in_backup(&backup);
                 // Normalize to the stable path configure looks for.
                 if backup != backup_path {
                     fs::rename(&backup, &backup_path).map_err(|e| e.to_string())?;
                 }
             }
-            fs::remove_dir_all(&extract_to).map_err(|e| e.to_string())?;
+            remove_dir_retries(&extract_to, 8)?;
         }
     }
 
@@ -385,7 +434,10 @@ pub fn extract_portable_core(
 
     if extract_to.exists() {
         super::paths::emit_progress(app, "extract", "Removing incomplete extract…");
-        fs::remove_dir_all(&extract_to).map_err(|e| e.to_string())?;
+        if let Ok(root) = super::paths::find_portable_root(&extract_to) {
+            super::process::kill_portable_python(&root);
+        }
+        remove_dir_retries(&extract_to, 8)?;
     }
     extract_7z(app, &archive, &extract_to)?;
 
@@ -458,6 +510,8 @@ pub fn install_portable(
         "Ensuring managed custom nodes match app pins…",
     );
     crate::upscale::ensure_managed_nodes(app)?;
+    // Fresh python_embeded has no Prompt Tools deps; marker was wiped with the portable.
+    let _ = crate::prompt_tools::install_qwenvl_python_deps(app)?;
     Ok(runtime)
 }
 

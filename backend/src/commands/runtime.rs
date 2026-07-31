@@ -119,6 +119,14 @@ pub fn enqueue_comfy_install(
         row
     };
 
+    // Stop tracked Comfy + orphaned portable pythons before wipe (Windows locks otherwise).
+    let _ = comfy::stop(&state.processes);
+    if let Some(ref rt) = existing {
+        if !rt.install_path.is_empty() {
+            comfy::kill_portable_python(Path::new(&rt.install_path));
+        }
+    }
+
     let app_bg = app.clone();
     let job = installing.clone();
     std::thread::spawn(move || {

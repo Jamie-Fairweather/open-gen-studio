@@ -210,6 +210,66 @@ fn comfy_has_node_type(port: u16, class_type: &str) -> bool {
     }
 }
 
+fn missing_node_types<'a>(port: u16, required: &[&'a str]) -> Vec<&'a str> {
+    required
+        .iter()
+        .copied()
+        .filter(|c| !comfy_has_node_type(port, c))
+        .collect()
+}
+
+/// Comfy can answer /system_stats before custom nodes finish importing - poll.
+fn wait_for_node_types<'a>(
+    app: &AppHandle,
+    port: u16,
+    required: &[&'a str],
+    attempts: u32,
+) -> Vec<&'a str> {
+    let mut missing = missing_node_types(port, required);
+    if missing.is_empty() {
+        return missing;
+    }
+    emit_progress(
+        app,
+        "wait",
+        "Waiting for Prompt Tools nodes to finish loading…",
+        None,
+        None,
+    );
+    for i in 0..attempts {
+        missing = missing_node_types(port, required);
+        if missing.is_empty() {
+            return missing;
+        }
+        if i + 1 < attempts {
+            std::thread::sleep(Duration::from_secs(2));
+        }
+    }
+    missing
+}
+
+fn clear_qwenvl_deps_marker(app: &AppHandle) {
+    if let Ok(root) = portable_root(app) {
+        let _ = fs::remove_file(root.join(".oga_qwenvl_hf_deps"));
+    }
+}
+
+fn missing_nodes_error(missing: &[&str], after_restart: bool) -> String {
+    let list = missing.join(", ");
+    if after_restart {
+        format!(
+            "ComfyUI is missing required nodes after restart: {list}. \
+             Custom node failed to import - check Comfy logs for ComfyUI-QwenVL errors, \
+             or use Settings → Reinstall ComfyUI."
+        )
+    } else {
+        format!(
+            "ComfyUI is missing required nodes: {list}. \
+             Custom node may have failed to import - check Comfy logs."
+        )
+    }
+}
+
 /// Start Comfy if needed; restart once when required custom nodes are not loaded yet.
 pub(crate) fn ensure_comfy_with_nodes(
     app: &AppHandle,
@@ -230,19 +290,15 @@ pub(crate) fn ensure_comfy_with_nodes(
         let _ = comfy::stop(processes);
     }
     let port = ensure_comfy_running(app, db, processes, runtime)?;
-    let missing: Vec<&str> = required
-        .iter()
-        .copied()
-        .filter(|c| !comfy_has_node_type(port, c))
-        .collect();
+    let missing = wait_for_node_types(app, port, required, 20);
     if missing.is_empty() {
         return Ok(port);
     }
     if force_restart {
-        return Err(format!(
-            "ComfyUI is missing required nodes after restart: {}. Check custom node install / Comfy logs.",
-            missing.join(", ")
-        ));
+        if missing.iter().any(|n| n.starts_with("AILab_QwenVL")) {
+            clear_qwenvl_deps_marker(app);
+        }
+        return Err(missing_nodes_error(&missing, true));
     }
     emit_progress(
         app,
@@ -256,16 +312,12 @@ pub(crate) fn ensure_comfy_with_nodes(
     );
     let _ = comfy::stop(processes);
     let port = ensure_comfy_running(app, db, processes, runtime)?;
-    let still_missing: Vec<&str> = required
-        .iter()
-        .copied()
-        .filter(|c| !comfy_has_node_type(port, c))
-        .collect();
+    let still_missing = wait_for_node_types(app, port, required, 20);
     if !still_missing.is_empty() {
-        return Err(format!(
-            "ComfyUI is missing required nodes: {}. Custom node may have failed to import - check Comfy logs.",
-            still_missing.join(", ")
-        ));
+        if still_missing.iter().any(|n| n.starts_with("AILab_QwenVL")) {
+            clear_qwenvl_deps_marker(app);
+        }
+        return Err(missing_nodes_error(&still_missing, false));
     }
     Ok(port)
 }
@@ -331,27 +383,37 @@ pub fn install_qwenvl_python_deps(app: &AppHandle) -> Result<bool, String> {
         .join("custom_nodes")
         .join("ComfyUI-QwenVL")
         .join("requirements.txt");
-    if reqs.is_file() {
-        emit_progress(
-            app,
-            "install",
-            "Installing ComfyUI-QwenVL Python dependencies…",
-            None,
-            Some("requirements.txt"),
+    if !reqs.is_file() {
+        return Err(
+            "ComfyUI-QwenVL requirements.txt missing - reinstall Prompt Tools / custom node".into(),
         );
-        let status = process_cmd::new(&python)
-            .args([
-                "-m",
-                "pip",
-                "install",
-                "-r",
-                reqs.to_str().ok_or("invalid requirements path")?,
-            ])
-            .status()
-            .map_err(|e| format!("failed to run pip for QwenVL: {e}"))?;
-        if !status.success() {
-            return Err("QwenVL requirements.txt pip install failed".into());
-        }
+    }
+    emit_progress(
+        app,
+        "install",
+        "Installing ComfyUI-QwenVL Python dependencies…",
+        None,
+        Some("requirements.txt"),
+    );
+    let reqs_s = reqs.to_str().ok_or("invalid requirements path")?;
+    // requirements.txt lists bare `transformers`; Comfy's embed often already has an
+    // older build, so pip skips upgrade. Qwen3-VL needs >= 4.57.
+    let status = process_cmd::new(&python)
+        .args([
+            "-s",
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            "transformers>=4.57.0",
+            "-r",
+            reqs_s,
+        ])
+        .current_dir(&root)
+        .status()
+        .map_err(|e| format!("failed to run pip for QwenVL: {e}"))?;
+    if !status.success() {
+        return Err("QwenVL requirements.txt pip install failed".into());
     }
     fs::write(&marker, b"ok").map_err(|e| e.to_string())?;
     Ok(true)

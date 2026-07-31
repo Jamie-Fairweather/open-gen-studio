@@ -303,7 +303,10 @@ pub(crate) fn run_step(
                         return Err(format!("unknown engine: {engine}"));
                     }
                     comfy::emit_runtime_progress(app, "configure", "Installing extensions…");
-                    upscale::ensure_managed_nodes(app)
+                    upscale::ensure_managed_nodes(app)?;
+                    // Same as install_portable: reinstall QwenVL pip deps after a wipe/restore.
+                    let _ = prompt_tools::install_qwenvl_python_deps(app)?;
+                    Ok(())
                 }
                 other => Err(format!("unknown action: {other}")),
             }

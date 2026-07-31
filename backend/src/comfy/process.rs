@@ -93,6 +93,36 @@ pub fn stop(processes: &Mutex<ProcessState>) -> Result<(), String> {
     Ok(())
 }
 
+/// Kill orphaned `python.exe` processes whose executable lives under `root`
+/// (e.g. after a crash, or when AppState lost the child handle). Needed so
+/// Settings → Reinstall can delete the portable tree on Windows.
+pub fn kill_portable_python(root: &std::path::Path) {
+    #[cfg(windows)]
+    {
+        let root_s = root.to_string_lossy().replace('/', "\\");
+        if root_s.is_empty() {
+            return;
+        }
+        // Escape single quotes for PowerShell single-quoted string.
+        let root_ps = root_s.replace('\'', "''");
+        let script = format!(
+            "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | \
+             Where-Object {{ $_.ExecutablePath -and $_.ExecutablePath.StartsWith('{root_ps}', [StringComparison]::OrdinalIgnoreCase) }} | \
+             ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}"
+        );
+        let _ = process_cmd::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        std::thread::sleep(Duration::from_secs(1));
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = root;
+    }
+}
+
 pub fn health(port: u16) -> Result<bool, String> {
     let url = format!("http://127.0.0.1:{port}/system_stats");
     let client = reqwest::blocking::Client::builder()

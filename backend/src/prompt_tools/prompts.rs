@@ -15,40 +15,67 @@ pub(crate) fn target_dialect_hint(target: PromptTarget) -> &'static str {
             " Optimize for Ideogram: clear subject and style; note any text that should appear in the image."
         }
         PromptTarget::ZImageKrea => {
-            " Optimize for Z-Image / Krea turbo models: concise medium-length prose, strong subject focus."
+            " Optimize for Z-Image / Krea turbo models: concise medium-length prose with strong \
+subject focus; keep depth order (foreground vs behind) and distinctive lighting/capture feel \
+(flash, grain, hard shadows) - layout and feel matter as much as the subject."
         }
     }
 }
 
 /// Checklist so captions are dense enough to recreate the image as closely as text allows.
 fn recreation_detail_instruction() -> &'static str {
-    "Goal: a prompt that could recreate this image as closely as possible. Describe only what is \
-visible - do not invent props, logos, or celebrity names. Cover all of the following when present:\n\
-1) Medium & style - photo, illustration, anime, 3D render, painting, etc.; art style or look.\n\
+    "Goal: a prompt that could recreate this image as closely as possible - same subject, same \
+spatial layout (what is in front of what), same camera perspective, and same photographic feel. \
+Stick to visible details; never invent unread names, brands, or props.\n\
+Cover all of the following when present:\n\
+1) Medium & capture character - photo / illustration / anime / 3D / painting; and for photos, \
+name the capture look when it is distinctive: on-camera flash snapshot, film grain, phone camera, \
+studio strobe, candid point-and-shoot, polished DSLR, CGI-clean, etc. When the look evokes a \
+specific era or format, say so (e.g. Polaroid / Instax, disposable camera, early-2000s digicam flash, \
+1990s point-and-shoot film, vintage slide film, modern mirrorless). Mention visible grain, noise, \
+color cast, or compression that sells that era. Do not default to soft cinematic language unless \
+the image actually looks that way.\n\
 2) Subjects - count and who/what; for people: apparent age range, gender presentation, body type, \
 hair (color, length, style), facial features, expression, skin tone, distinctive marks; for objects: \
 shape, material, color, condition.\n\
 3) Pose & action - facing direction (toward camera, away, left, right, three-quarter), body pose, \
 hand positions, gaze, what they are doing. Never say only \"a person\".\n\
 4) Clothing & accessories - garments, colors, materials/textures, jewelry, bags, glasses, hats.\n\
-5) Composition - where subjects sit in frame (left/center/right, foreground/mid/background), \
-relative positions, framing, aspect (portrait/landscape/square).\n\
-6) Camera - shot type (extreme close-up through extreme wide), angle, vantage height (eye-level, \
-low, high, bird's-eye), depth of field (background sharp or blurred).\n\
-7) Setting - environment, architecture, props, weather, time of day, indoor/outdoor.\n\
-8) Lighting - direction, hard/soft, color temperature, key shadows, rim/backlight, reflections.\n\
-9) Color & texture - dominant palette, contrast, notable materials (metal, fabric, skin, glass).\n\
+5) Spatial layout (critical) - depth order from camera: what sits in the near foreground, midground, \
+and background. State whether the subject is in front of, behind, between, or peeking over props. \
+Name occlusion (e.g. drums in foreground framing/hiding the lower body). Left/right placement of \
+each major object. Do not flatten the scene into a single plane or invent a cleaner layout than \
+what is shown.\n\
+6) Camera & perspective - shot type (extreme close-up through extreme wide), camera height vs subject \
+(worm's-eye, eye-level with subject, looking down), tilt, distance, how close foreground objects \
+are to the lens, depth of field (what is sharp vs soft).\n\
+7) Setting - environment, architecture, props, weather, time of day, indoor/outdoor; surface colors \
+(carpet, walls) as seen.\n\
+8) Lighting - critical for feel: flash vs ambient, hard vs soft shadows, shadow direction and \
+length on nearby surfaces, color temperature, specular highlights on metal/glass/eyes, rim/backlight. \
+If the image has harsh direct flash and hard shadows, say so - never rewrite that as dim ambient \
+or soft shadows.\n\
+9) Color & texture - dominant palette, contrast level, notable materials (metal, fabric, fur, glass).\n\
 10) Text - quote any readable text, logos, or signage exactly; omit if none."
+}
+
+fn output_only_rules() -> &'static str {
+    "Avoid meta phrases like \"This image shows\" or \"You are looking at\". Never append Notes, \
+disclaimers, compliance commentary, explanations, or markdown headers after the prompt. \
+Output ONLY the prompt text."
 }
 
 pub(crate) fn general_custom_prompt(target: PromptTarget) -> String {
     format!(
-        "Write a single dense text-to-image prompt that could recreate this image almost 1:1.\n\
+        "Write a single dense text-to-image prompt that could recreate this image almost 1:1, \
+matching subject, spatial layout/perspective, and the photo's look/feel (lighting, grain, contrast).\n\
+Put depth order early in the prompt (e.g. \"foreground drums, subject behind them\") so generators \
+do not restage the scene.\n\
 {}\n\
 Weave the checklist into flowing generation-ready language (not a numbered list). Prefer concrete \
-nouns and visual facts over mood words. Avoid meta phrases like \"This image shows\" or \
-\"You are looking at\". Output ONLY the prompt.{}",
+nouns and visual facts over mood words. {}.{}",
         recreation_detail_instruction(),
+        output_only_rules(),
         target_dialect_hint(target)
     )
 }
@@ -61,16 +88,17 @@ Medium: …\n\
 Subject: … (appearance, count, expression - never vague)\n\
 Pose: … (facing, body, hands, gaze, action)\n\
 Clothing: …\n\
-Composition: … (placement in frame, foreground/mid/background, aspect)\n\
+Composition: … (depth order front→back, behind/in front/between/peeking over, left/right, occlusion, aspect)\n\
 Setting: …\n\
 Style: …\n\
-Lighting: … (direction, quality, color temp, DOF)\n\
-Camera: … (shot type, angle, height)\n\
+Lighting: … (flash vs ambient, hard/soft shadows, color temp)\n\
+Camera: … (shot type, height vs subject, tilt, distance, DOF)\n\
 Colors: …\n\
 Text: … (quote exactly, or none)\n\
-Details: … (props, materials, anything else needed to recreate)\n\
-{}. Do not add other commentary.{}",
+Details: … (props, materials, grain/noise, anything else needed to recreate)\n\
+{}. {}.{}",
         recreation_detail_instruction(),
+        output_only_rules(),
         target_dialect_hint(target)
     )
 }
@@ -81,7 +109,8 @@ pub(crate) fn json_custom_prompt(target: PromptTarget) -> String {
 using keys: medium, subject, pose_and_facing, clothing, composition, camera_shot, setting, style, \
 lighting, colors (array of strings), visible_text, details, \
 negative_suggestions (array of strings for things that would break the recreation). \
-Fill every key with concrete visual facts. {}.{}",
+Fill every key with concrete visual facts including depth order/perspective and capture feel \
+(flash, grain, contrast). No Notes or commentary outside the JSON. {}.{}",
         recreation_detail_instruction(),
         target_dialect_hint(target)
     )
@@ -92,8 +121,9 @@ pub(crate) fn graphic_custom_prompt(target: PromptTarget) -> String {
         "Describe this image as a graphic-design brief that could recreate the layout almost 1:1: \
 medium, layout grid, typography (font feel, weight, size hierarchy), brand feel, exact color palette, \
 composition hierarchy, subject placement/facing if figures are present, negative space, and any \
-visible text (quote exactly). {}. Write a single cohesive prompt.{}",
+visible text (quote exactly). {}. Write a single cohesive prompt. {}.{}",
         recreation_detail_instruction(),
+        output_only_rules(),
         target_dialect_hint(target)
     )
 }

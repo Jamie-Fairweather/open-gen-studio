@@ -32,7 +32,33 @@ fn reject_model_error_text(text: &str) -> Result<String, String> {
             "QwenVL failed to load: {t}. Dependencies were installed - if this persists, restart ComfyUI from Settings and retry."
         ));
     }
-    Ok(t.to_string())
+    Ok(strip_meta_tail(t))
+}
+
+/// Drop trailing model chatter (Notes / disclaimers) that sometimes follows the real prompt.
+fn strip_meta_tail(text: &str) -> String {
+    let parts: Vec<&str> = text.split("\n\n").collect();
+    if parts.len() < 2 {
+        return text.to_string();
+    }
+    let mut end = parts.len();
+    while end > 1 {
+        let last = parts[end - 1].trim();
+        let lower = last.to_ascii_lowercase();
+        let stripped = lower.trim_start_matches(['*', '#', '-', ' ']);
+        let is_meta = stripped.starts_with("note")
+            || stripped.starts_with("disclaimer")
+            || stripped.starts_with("important")
+            || lower.contains("original query specifically")
+            || lower.contains("remains compliant")
+            || lower.contains("visually verifiable");
+        if is_meta {
+            end -= 1;
+        } else {
+            break;
+        }
+    }
+    parts[..end].join("\n\n").trim().to_string()
 }
 
 fn suggest_negative(target: PromptTarget, _format: PromptFormat) -> Option<String> {

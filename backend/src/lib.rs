@@ -78,11 +78,15 @@ pub fn run() {
             if let Ok(token) = db.get_setting(download::SETTING_CIVITAI_TOKEN) {
                 download::set_stored_civitai_token(token);
             }
+            // Background job threads do not survive process exit.
+            let _ = db.fail_interrupted_jobs_on_startup();
+
             app.manage(AppState {
                 db: Mutex::new(db),
                 processes: Mutex::new(ProcessState::default()),
                 comfy_install_busy: Mutex::new(false),
                 cancelled_jobs: Mutex::new(Default::default()),
+                active_generate_jobs: std::sync::Arc::new(Mutex::new(Default::default())),
             });
 
             // Restore remote model sizes so installed blueprints look ready immediately.

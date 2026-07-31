@@ -52,12 +52,31 @@ pub fn generate_image(
         let mut cancelled = state.cancelled_jobs.lock().map_err(|e| e.to_string())?;
         cancelled.remove(&job.id);
     }
+    let active_jobs = state.active_generate_jobs.clone();
+    {
+        let mut active = active_jobs.lock().map_err(|e| e.to_string())?;
+        active.insert(job.id.clone());
+    }
 
     let app_bg = app.clone();
     let job_bg = job.clone();
     let runtime_bg = runtime.clone();
     let blueprint_id_bg = blueprint_id.clone();
     std::thread::spawn(move || {
+        // Clears the in-memory active set even if this thread panics.
+        struct ActiveGuard(
+            std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
+            String,
+        );
+        impl Drop for ActiveGuard {
+            fn drop(&mut self) {
+                if let Ok(mut active) = self.0.lock() {
+                    active.remove(&self.1);
+                }
+            }
+        }
+        let _active = ActiveGuard(active_jobs, job_bg.id.clone());
+
         let state = app_bg.state::<AppState>();
         let result = generate::run_generate(
             &app_bg,

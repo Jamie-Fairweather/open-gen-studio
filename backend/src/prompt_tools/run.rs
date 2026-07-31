@@ -14,7 +14,7 @@ use crate::db::{Db, Job, RuntimeInstall};
 use crate::generate;
 use serde_json::json;
 use std::collections::HashSet;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
@@ -35,18 +35,27 @@ fn reject_model_error_text(text: &str) -> Result<String, String> {
     Ok(t.to_string())
 }
 
-fn refuse_if_generate_running(db: &Mutex<Db>) -> Result<(), String> {
-    let jobs = {
-        let db = db.lock().map_err(|e| e.to_string())?;
-        db.list_jobs()?
-    };
-    if jobs
-        .iter()
-        .any(|j| j.kind == "generate" && (j.status == "running" || j.status == "queued"))
+fn refuse_if_generate_running(
+    app: &AppHandle,
+    db: &Mutex<Db>,
+    active_generate_jobs: &Arc<Mutex<HashSet<String>>>,
+) -> Result<(), String> {
     {
-        return Err(
-            "A generate job is running - wait for it to finish before using Prompt Tools".into(),
-        );
+        let active = active_generate_jobs.lock().map_err(|e| e.to_string())?;
+        if !active.is_empty() {
+            return Err(
+                "A generate job is running - wait for it to finish before using Prompt Tools"
+                    .into(),
+            );
+        }
+    }
+    // DB can still say running after a panicked/lost worker — clear those orphans.
+    let healed = {
+        let db = db.lock().map_err(|e| e.to_string())?;
+        db.fail_orphaned_generate_jobs()?
+    };
+    for job in healed {
+        let _ = app.emit("jobs://updated", &job);
     }
     Ok(())
 }
@@ -72,11 +81,12 @@ pub fn run_image_to_prompt(
     db: &Mutex<Db>,
     processes: &Mutex<ProcessState>,
     cancelled: &Mutex<HashSet<String>>,
+    active_generate_jobs: &Arc<Mutex<HashSet<String>>>,
     job: &Job,
     args: &RunImageToPromptArgs,
     runtime: &RuntimeInstall,
 ) -> Result<PromptToolResult, String> {
-    refuse_if_generate_running(db)?;
+    refuse_if_generate_running(app, db, active_generate_jobs)?;
     let format = PromptFormat::from_str(&args.format)?;
     let target = PromptTarget::from_str(&args.target)?.resolve(args.arch.as_deref());
     let provider = provider_for_format(format);
@@ -156,11 +166,12 @@ pub fn run_prompt_enhance(
     db: &Mutex<Db>,
     processes: &Mutex<ProcessState>,
     cancelled: &Mutex<HashSet<String>>,
+    active_generate_jobs: &Arc<Mutex<HashSet<String>>>,
     job: &Job,
     args: &RunPromptEnhanceArgs,
     runtime: &RuntimeInstall,
 ) -> Result<PromptToolResult, String> {
-    refuse_if_generate_running(db)?;
+    refuse_if_generate_running(app, db, active_generate_jobs)?;
     let prompt = args.prompt.trim();
     if prompt.is_empty() {
         return Err("Prompt is empty - use Image to Prompt or type an idea first".into());

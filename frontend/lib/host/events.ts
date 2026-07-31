@@ -6,6 +6,7 @@ import type {
   GalleryItem,
   Job,
   JobProgress,
+  JobQueueSnapshot,
   LoraProgress,
   OfficialBlueprint,
   PromptToolsProgress,
@@ -86,6 +87,12 @@ export function onJobProgress(
   handler: (progress: JobProgress) => void
 ): Promise<UnlistenFn> {
   return listen<JobProgress>("jobs://progress", (e) => handler(e.payload))
+}
+
+export function onJobQueue(
+  handler: (snapshot: JobQueueSnapshot) => void
+): Promise<UnlistenFn> {
+  return listen<JobQueueSnapshot>("jobs://queue", (e) => handler(e.payload))
 }
 
 export function onBlueprintProgress(

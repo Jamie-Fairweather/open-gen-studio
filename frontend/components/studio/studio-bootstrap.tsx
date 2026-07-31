@@ -5,12 +5,12 @@ import { usePathname, useRouter } from "next/navigation"
 import {
   comfyuiStatus,
   detectGpu,
-  galleryItemCategory,
   getOfficialBlueprint,
   isTauri,
   listBlueprints,
   listDownloads,
   listGallery,
+  listJobQueue,
   listLoras,
   listRuntimes,
   listSettings,
@@ -24,6 +24,7 @@ import {
   onGalleryDeleted,
   onGalleryUpdated,
   onJobProgress,
+  onJobQueue,
   onJobsUpdated,
   onLoraProgress,
   onLorasUpdated,
@@ -208,6 +209,7 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
     let unlistenBlueprintProbe: (() => void) | undefined
     let unlistenJobs: (() => void) | undefined
     let unlistenJobProgress: (() => void) | undefined
+    let unlistenJobQueue: (() => void) | undefined
     let unlistenGallery: (() => void) | undefined
     let unlistenGalleryDeleted: (() => void) | undefined
     let unlistenLorasUpdated: (() => void) | undefined
@@ -465,14 +467,18 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
     })
 
     void onJobsUpdated((job) => {
+      if (job.kind !== "generate") return
       if (
         job.status === "completed" ||
         job.status === "failed" ||
         job.status === "cancelled"
       ) {
-        store().setGenerating(false)
+        const stillGenerating = store().jobQueue.some(
+          (i) => i.kind === "generate" && i.jobId !== job.id
+        )
+        store().setGenerating(stillGenerating)
         store().setActiveJobId((id) => (id === job.id ? null : id))
-        store().clearLivePreview()
+        if (!stillGenerating) store().clearLivePreview()
       }
       if (job.status === "failed" && job.error) {
         notifyError(job.error, "Generation failed")
@@ -485,6 +491,8 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
     })
 
     void onJobProgress((p) => {
+      if (store().handleToolJobProgress(p)) return
+
       if (p.stage !== "start") {
         notifyDismiss("runtime")
       }
@@ -499,19 +507,28 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
         return
       }
       if (p.stage === "done") {
-        store().setGenerating(false)
+        const stillGenerating = store().jobQueue.some(
+          (i) => i.kind === "generate" && i.jobId !== p.jobId
+        )
+        store().setGenerating(stillGenerating)
         store().setActiveJobId((id) => (id === p.jobId ? null : id))
-        store().clearLivePreview()
+        if (!stillGenerating) store().clearLivePreview()
         notifySuccess("Generation complete", p.message)
       } else if (p.stage === "cancelled") {
-        store().setGenerating(false)
+        const stillGenerating = store().jobQueue.some(
+          (i) => i.kind === "generate" && i.jobId !== p.jobId
+        )
+        store().setGenerating(stillGenerating)
         store().setActiveJobId((id) => (id === p.jobId ? null : id))
-        store().clearLivePreview()
+        if (!stillGenerating) store().clearLivePreview()
         notifyInfo("Cancelled", p.message, "job")
       } else if (p.stage === "error") {
-        store().setGenerating(false)
+        const stillGenerating = store().jobQueue.some(
+          (i) => i.kind === "generate" && i.jobId !== p.jobId
+        )
+        store().setGenerating(stillGenerating)
         store().setActiveJobId((id) => (id === p.jobId ? null : id))
-        store().clearLivePreview()
+        if (!stillGenerating) store().clearLivePreview()
         notifyError(p.message, "Generation failed")
       } else if (p.stage === "start") {
         notifyProgress("runtime", "Starting runtime", p.message)
@@ -520,13 +537,31 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
       unlistenJobProgress = u
     })
 
+    void listJobQueue()
+      .then((snap) => store().setJobQueue(snap.items))
+      .catch(() => {})
+    void onJobQueue((snap) => {
+      store().setJobQueue(snap.items)
+      const runningGenerate = snap.items.find(
+        (i) => i.kind === "generate" && i.status === "running"
+      )
+      const anyGenerate = snap.items.some((i) => i.kind === "generate")
+      store().setGenerating(anyGenerate)
+      if (runningGenerate) {
+        store().setActiveJobId(runningGenerate.jobId)
+      } else if (!anyGenerate) {
+        store().setActiveJobId(null)
+      }
+    }).then((u) => {
+      unlistenJobQueue = u
+    })
+
     void onGalleryUpdated((item) => {
-      const category = galleryItemCategory(item)
       store().setGallery((prev) => {
         if (prev.some((x) => x.id === item.id)) return prev
         return [item, ...prev]
       })
-      studioRefs.navigateTab(category)
+      // Select the new item but do not force-navigate away from the current page.
       store().setSelectedGalleryId(item.id)
     }).then((u) => {
       unlistenGallery = u
@@ -598,6 +633,7 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
     })
 
     void onPromptToolsProgress((p) => {
+      if (p.message) store().handlePromptToolsStatus(p.message)
       if (p.stage === "error") {
         notifyError(p.message, "Prompt Tools install failed")
       }
@@ -629,6 +665,7 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
       unlistenBlueprintProbe?.()
       unlistenJobs?.()
       unlistenJobProgress?.()
+      unlistenJobQueue?.()
       unlistenGallery?.()
       unlistenGalleryDeleted?.()
       unlistenLorasUpdated?.()

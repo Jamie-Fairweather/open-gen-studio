@@ -18,6 +18,8 @@ export type {
   GpuInfo,
   Job,
   JobProgress,
+  JobQueueItem,
+  JobQueueSnapshot,
   LoraPack,
   LoraProgress,
   LoraVariantInfo,

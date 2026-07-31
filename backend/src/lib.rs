@@ -1,6 +1,7 @@
 mod app_paths;
 mod blueprints;
 mod comfy;
+mod comfy_queue;
 mod commands;
 mod creator;
 mod db;

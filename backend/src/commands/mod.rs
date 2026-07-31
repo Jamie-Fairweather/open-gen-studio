@@ -73,6 +73,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             downloads::resolve_model_url,
             generate::generate_image,
             generate::cancel_job,
+            generate::list_job_queue,
             runtime::free_comfy_vram,
             prompt_tools::list_prompt_tool_weights,
             prompt_tools::ensure_prompt_tools_provider,
@@ -90,6 +91,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<crate::prompt_tools::PromptFormat>()
         .typ::<crate::prompt_tools::PromptTarget>()
         .typ::<crate::ipc::JobProgress>()
+        .typ::<crate::ipc::JobQueueItem>()
+        .typ::<crate::ipc::JobQueueSnapshot>()
         .typ::<crate::ipc::LoraProgress>()
         .typ::<crate::ipc::PromptToolsProgress>()
         .typ::<crate::ipc::ComfyStatus>()

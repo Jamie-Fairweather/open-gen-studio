@@ -31,6 +31,10 @@ export async function cancelJob(id: string): Promise<Job> {
   return commands.cancelJob(id)
 }
 
+export async function listJobQueue() {
+  return commands.listJobQueue()
+}
+
 export async function freeComfyVram(): Promise<void> {
   await commands.freeComfyVram()
 }

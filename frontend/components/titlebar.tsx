@@ -36,7 +36,7 @@ type TitlebarProps = {
   leading?: ReactNode
   /** Centered content (e.g. nav tabs). */
   children?: ReactNode
-  /** Right side, just before window controls (e.g. settings). */
+  /** Right side, just before window controls (optional utilities). */
   trailing?: ReactNode
 }
 

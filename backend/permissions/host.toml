@@ -54,6 +54,7 @@ commands.allow = [
   "resolve_model_url",
   "generate_image",
   "cancel_job",
+  "list_job_queue",
   "free_comfy_vram",
   "list_prompt_tool_weights",
   "ensure_prompt_tools_provider",

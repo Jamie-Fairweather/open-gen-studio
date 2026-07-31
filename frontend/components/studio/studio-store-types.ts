@@ -5,6 +5,7 @@ import type { DownloadsSlice } from "./slices/downloads"
 import type { RuntimeSlice } from "./slices/runtime"
 import type { RefineSlice } from "./slices/refine"
 import type { SettingsSlice } from "./slices/settings"
+import type { ToolsSlice } from "./slices/tools"
 import type { UiSlice } from "./slices/ui"
 
 export type StudioStore = CatalogSlice &
@@ -14,4 +15,5 @@ export type StudioStore = CatalogSlice &
   RuntimeSlice &
   RefineSlice &
   SettingsSlice &
+  ToolsSlice &
   UiSlice

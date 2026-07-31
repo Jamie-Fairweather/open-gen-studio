@@ -10,6 +10,7 @@ import { CivitaiTokenDialog } from "@/components/civitai-token-dialog"
 import { HfTokenDialog } from "@/components/hf-token-dialog"
 import { LoraPickerDialog } from "@/components/lora-picker-dialog"
 import { ModelsLibraryDialog } from "@/components/models-library-dialog"
+import { JobQueuePopover } from "@/components/job-queue-popover"
 import { SettingsDialog } from "@/components/settings-dialog"
 import {
   selectActiveArch,
@@ -141,20 +142,6 @@ export function StudioChrome({ children }: { children: ReactNode }) {
             <span className="hidden sm:inline">Open Gen Studio</span>
           </div>
         }
-        trailing={
-          <WithTooltip label="Settings">
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              className="shrink-0"
-              aria-label="Settings"
-              onClick={() => setSettingsOpen(true)}
-            >
-              <SettingsIcon />
-            </Button>
-          </WithTooltip>
-        }
       >
         <nav className="flex min-w-0 [scrollbar-width:none] items-center gap-0.5 overflow-x-auto text-sm [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           {STUDIO_TABS.map((tab) => {
@@ -186,6 +173,22 @@ export function StudioChrome({ children }: { children: ReactNode }) {
               </Link>
             )
           })}
+          <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-border" />
+          <div className="flex shrink-0 items-center gap-0.5">
+            <JobQueuePopover />
+            <WithTooltip label="Settings">
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                className="shrink-0"
+                aria-label="Settings"
+                onClick={() => setSettingsOpen(true)}
+              >
+                <SettingsIcon />
+              </Button>
+            </WithTooltip>
+          </div>
         </nav>
       </Titlebar>
 

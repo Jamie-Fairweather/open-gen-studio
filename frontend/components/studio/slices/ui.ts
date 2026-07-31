@@ -1,6 +1,11 @@
 import type { Dispatch, SetStateAction } from "react"
 import type { StateCreator } from "zustand"
-import { gallerySrc, type StudioTab, type ToolsHandoff } from "@/lib/host"
+import {
+  gallerySrc,
+  type JobQueueItem,
+  type StudioTab,
+  type ToolsHandoff,
+} from "@/lib/host"
 import { SIDE_RAIL_WIDTH } from "@/components/side-rail"
 import type { StudioStore } from "../studio-store-types"
 import { studioRefs } from "../studio-refs"
@@ -17,6 +22,7 @@ export type UiSlice = {
   galleryOpen: boolean
   advancedOpen: boolean
   toolsHandoff: ToolsHandoff | null
+  jobQueue: JobQueueItem[]
   navigateTab: (tab: StudioTab) => void
   setDesktop: Dispatch<SetStateAction<boolean>>
   setStudioTab: Dispatch<SetStateAction<StudioTab>>
@@ -28,6 +34,7 @@ export type UiSlice = {
   setGalleryOpen: Dispatch<SetStateAction<boolean>>
   setAdvancedOpen: Dispatch<SetStateAction<boolean>>
   setToolsHandoff: Dispatch<SetStateAction<ToolsHandoff | null>>
+  setJobQueue: Dispatch<SetStateAction<JobQueueItem[]>>
   /** Read and clear handoff (call once on tool page mount). */
   consumeToolsHandoff: () => ToolsHandoff | null
   openImageToPrompt: (handoff?: ToolsHandoff) => void
@@ -37,7 +44,8 @@ export type UiSlice = {
 }
 
 export const createUiSlice: StateCreator<StudioStore, [], [], UiSlice> = (
-  set
+  set,
+  get
 ) => ({
   // Server + hydration assume desktop (Tauri-first) so SSR HTML matches the shell;
   // bootstrap flips this after hydrate when running outside Tauri.
@@ -51,6 +59,7 @@ export const createUiSlice: StateCreator<StudioStore, [], [], UiSlice> = (
   galleryOpen: false,
   advancedOpen: false,
   toolsHandoff: null,
+  jobQueue: [],
 
   navigateTab: (tab) => {
     studioRefs.navigateTab(tab)
@@ -81,6 +90,8 @@ export const createUiSlice: StateCreator<StudioStore, [], [], UiSlice> = (
       return { toolsHandoff }
     }),
 
+  setJobQueue: (next) => set((s) => ({ jobQueue: applySet(s.jobQueue, next) })),
+
   consumeToolsHandoff: () => {
     const current = studioRefs.toolsHandoff
     if (current) {
@@ -99,7 +110,11 @@ export const createUiSlice: StateCreator<StudioStore, [], [], UiSlice> = (
   },
 
   openPromptEnhancer: (handoff) => {
-    if (handoff) {
+    if (handoff?.prompt != null) {
+      // Apply immediately — panel only seeds once on mount, so revisits
+      // must not rely on toolsHandoff alone.
+      get().seedPromptEnhance(handoff.prompt)
+    } else if (handoff) {
       studioRefs.toolsHandoff = handoff
       set({ toolsHandoff: handoff })
     }

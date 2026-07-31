@@ -9,6 +9,7 @@ import { createDownloadsSlice } from "./slices/downloads"
 import { createRuntimeSlice } from "./slices/runtime"
 import { createRefineSlice } from "./slices/refine"
 import { createSettingsSlice } from "./slices/settings"
+import { createToolsSlice } from "./slices/tools"
 import { createUiSlice } from "./slices/ui"
 import type { StudioStore } from "./studio-store-types"
 
@@ -22,6 +23,7 @@ export const useStudioStore = create<StudioStore>()((...a) => ({
   ...createRuntimeSlice(...a),
   ...createRefineSlice(...a),
   ...createSettingsSlice(...a),
+  ...createToolsSlice(...a),
   ...createUiSlice(...a),
 }))
 

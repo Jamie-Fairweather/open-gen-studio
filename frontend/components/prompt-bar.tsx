@@ -308,7 +308,6 @@ export function PromptBar({
                   size="sm"
                   variant="ghost"
                   className="rounded-full"
-                  disabled={generating}
                   onClick={onOpenImageToPrompt}
                   aria-label="Image to Prompt"
                 >
@@ -324,7 +323,6 @@ export function PromptBar({
                   size="sm"
                   variant="ghost"
                   className="rounded-full"
-                  disabled={generating}
                   onClick={onOpenPromptEnhancer}
                   aria-label="Enhance prompt"
                 >
@@ -349,14 +347,14 @@ export function PromptBar({
               type="button"
               size="lg"
               className="rounded-full px-5 font-semibold"
-              disabled={generating || !canGenerate}
+              disabled={!canGenerate}
               onClick={onGenerate}
             >
               <SparklesIcon />
               {generating
                 ? genStep
-                  ? `${genStep.step}/${genStep.max}`
-                  : "Generating…"
+                  ? `Queue · ${genStep.step}/${genStep.max}`
+                  : "Add to queue"
                 : "Generate"}
             </Button>
           </div>

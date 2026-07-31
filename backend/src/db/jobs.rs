@@ -96,22 +96,4 @@ impl Db {
             .map_err(|e| e.to_string())?;
         Ok(n)
     }
-
-    /// Fail generate rows with no live worker (mid-session panic / lost thread).
-    pub fn fail_orphaned_generate_jobs(&self) -> Result<Vec<Job>, String> {
-        let orphans: Vec<Job> = self
-            .list_jobs()?
-            .into_iter()
-            .filter(|j| j.kind == "generate" && (j.status == "running" || j.status == "queued"))
-            .collect();
-        let mut updated = Vec::with_capacity(orphans.len());
-        for job in orphans {
-            updated.push(self.update_job_status(
-                &job.id,
-                "failed",
-                Some("Interrupted (no active worker)"),
-            )?);
-        }
-        Ok(updated)
-    }
 }

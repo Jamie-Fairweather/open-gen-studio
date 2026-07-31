@@ -1,11 +1,12 @@
 use super::state::AppState;
 use crate::blueprints;
 use crate::comfy;
+use crate::comfy_queue;
 use crate::db::Job;
 use crate::generate;
 use tauri::{AppHandle, Emitter, Manager, State};
 
-/// Queue a generate job: returns immediately, runs Comfy /prompt in the background.
+/// Queue a generate job: returns immediately, runs Comfy /prompt when the slot is free.
 #[tauri::command]
 #[specta::specta]
 pub fn generate_image(
@@ -41,10 +42,15 @@ pub fn generate_image(
     })
     .to_string();
 
+    let label = if detail.name.is_empty() {
+        "Generate image".into()
+    } else {
+        detail.name.clone()
+    };
+
     let job = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
-        let created = db.create_job("generate", &params)?;
-        db.update_job_status(&created.id, "running", None)?
+        db.create_job("generate", &params)?
     };
     let _ = app.emit("jobs://updated", &job);
 
@@ -63,7 +69,6 @@ pub fn generate_image(
     let runtime_bg = runtime.clone();
     let blueprint_id_bg = blueprint_id.clone();
     std::thread::spawn(move || {
-        // Clears the in-memory active set even if this thread panics.
         struct ActiveGuard(
             std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
             String,
@@ -78,16 +83,18 @@ pub fn generate_image(
         let _active = ActiveGuard(active_jobs, job_bg.id.clone());
 
         let state = app_bg.state::<AppState>();
-        let result = generate::run_generate(
-            &app_bg,
-            &state.db,
-            &state.processes,
-            &state.cancelled_jobs,
-            &job_bg,
-            &blueprint_id_bg,
-            values,
-            &runtime_bg,
-        );
+        let result = comfy_queue::run_with_slot(&app_bg, &job_bg.id, "generate", &label, || {
+            generate::run_generate(
+                &app_bg,
+                &state.db,
+                &state.processes,
+                &state.cancelled_jobs,
+                &job_bg,
+                &blueprint_id_bg,
+                values,
+                &runtime_bg,
+            )
+        });
 
         let updated = match result {
             Ok(_) => {
@@ -132,7 +139,6 @@ pub fn generate_image(
         if let Ok(mut cancelled) = state.cancelled_jobs.lock() {
             cancelled.remove(&job_bg.id);
         }
-        // Live latent frames are only needed while the job runs.
         generate::cleanup_job_previews(&app_bg, &job_bg.id);
         if let Some(job) = updated {
             let _ = app_bg.emit("jobs://updated", &job);
@@ -149,6 +155,7 @@ pub fn cancel_job(app: AppHandle, state: State<'_, AppState>, id: String) -> Res
         let mut cancelled = state.cancelled_jobs.lock().map_err(|e| e.to_string())?;
         cancelled.insert(id.clone());
     }
+    comfy_queue::release(&app, &id);
 
     let port = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -172,4 +179,10 @@ pub fn cancel_job(app: AppHandle, state: State<'_, AppState>, id: String) -> Res
         }),
     );
     Ok(job)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn list_job_queue() -> Result<crate::ipc::JobQueueSnapshot, String> {
+    Ok(comfy_queue::snapshot())
 }

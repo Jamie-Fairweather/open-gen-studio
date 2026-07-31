@@ -18,6 +18,8 @@ export type {
   GpuInfo,
   Job,
   JobProgress,
+  JobQueueItem,
+  JobQueueSnapshot,
   LoraPack,
   LoraProgress,
   LoraVariantInfo,
@@ -70,6 +72,7 @@ export {
   onUpscaleProgress,
   onPromptToolsProgress,
   onJobProgress,
+  onJobQueue,
   onBlueprintProgress,
   onBlueprintsUpdated,
   onBlueprintSizes,
@@ -142,6 +145,7 @@ export {
   updateJobStatus,
   generateImage,
   cancelJob,
+  listJobQueue,
   freeComfyVram,
 } from "./host/generate"
 

@@ -13,19 +13,17 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type DragEvent,
-} from "react"
+import { useEffect, useRef, type ChangeEvent, type DragEvent } from "react"
 import {
   selectActiveArch,
   selectHasNegativePrompt,
 } from "@/components/studio/selectors"
 import { useStudioSelector, useStudioStore } from "@/components/studio/store"
+import {
+  displayImageToPrompt,
+  emptyStructuredFields,
+  type ToolHistoryEntry,
+} from "@/components/studio/slices/tools"
 import {
   StudioPanel,
   StudioPanelBody,
@@ -42,41 +40,22 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import {
-  cancelJob,
   galleryItemCategory,
   gallerySrc,
   isTauri,
-  onJobProgress,
-  onPromptToolsProgress,
-  runImageToPrompt,
   saveTempToolImage,
   type GalleryItem,
 } from "@/lib/host"
-import { notifyError, notifySuccess } from "@/lib/notify"
+import { notifySuccess } from "@/lib/notify"
 import {
-  flattenStructuredFields,
-  formatTargetHint,
-  parseStructuredPrompt,
   PROMPT_FORMATS,
   PROMPT_TARGETS,
   STRUCTURED_FIELDS,
+  parseStructuredPrompt,
   targetFromArch,
   type PromptFormatId,
-  type PromptTargetId,
-  type StructuredFields,
-  emptyStructuredFields,
 } from "@/lib/prompt-tools"
 import { cn } from "@/lib/utils"
-
-const HISTORY_MAX = 12
-
-type HistoryEntry = {
-  id: string
-  prompt: string
-  format: PromptFormatId
-  target: PromptTargetId
-  at: number
-}
 
 async function bytesFromFile(
   file: File
@@ -93,8 +72,8 @@ function SessionHistoryList({
   history,
   onSelect,
 }: {
-  history: HistoryEntry[]
-  onSelect: (entry: HistoryEntry) => void
+  history: ToolHistoryEntry[]
+  onSelect: (entry: ToolHistoryEntry) => void
 }) {
   return (
     <ul className="divide-y divide-border">
@@ -115,73 +94,67 @@ function SessionHistoryList({
 
 export function ImageToPromptPanel() {
   const router = useRouter()
-  const toolsHandoff = useStudioStore((s) => s.toolsHandoff)
   const gallery = useStudioStore((s) => s.gallery)
   const consumeToolsHandoff = useStudioStore((s) => s.consumeToolsHandoff)
   const setPrompt = useStudioStore((s) => s.setPrompt)
   const setControlValues = useStudioStore((s) => s.setControlValues)
+  const state = useStudioStore((s) => s.imageToPrompt)
+  const patch = useStudioStore((s) => s.patchImageToPrompt)
+  const run = useStudioStore((s) => s.runImageToPromptTool)
+  const cancel = useStudioStore((s) => s.cancelImageToPromptTool)
   const activeArch = useStudioSelector(selectActiveArch)
   const hasNegativePrompt = useStudioSelector(selectHasNegativePrompt)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const [imagePath, setImagePath] = useState<string | null>(
-    () => toolsHandoff?.imagePath ?? null
-  )
-  const [previewUrl, setPreviewUrl] = useState<string | null>(() => {
-    const path = toolsHandoff?.imagePath
-    return path ? gallerySrc(path) : null
-  })
-  const [format, setFormat] = useState<PromptFormatId>("general")
-  const [target, setTarget] = useState<PromptTargetId>(() =>
-    activeArch ? targetFromArch(activeArch) : "auto"
-  )
-  const [result, setResult] = useState("")
-  const [negative, setNegative] = useState<string | null>(null)
-  const [fields, setFields] = useState<StructuredFields | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [status, setStatus] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [history, setHistory] = useState<HistoryEntry[]>([])
-  const [jobId, setJobId] = useState<string | null>(null)
-  const [galleryOpen, setGalleryOpen] = useState(false)
-  const [dragging, setDragging] = useState(false)
-
-  const hint = formatTargetHint(format, target)
-  const showStructured =
-    format === "structured" || format === "json" || format === "graphicDesign"
-  const imageGallery = gallery.filter(
-    (item) => galleryItemCategory(item) === "image"
-  )
+  const {
+    imagePath,
+    previewUrl,
+    format,
+    target,
+    result,
+    negative,
+    fields,
+    busy,
+    status,
+    error,
+    history,
+    jobId,
+    galleryOpen,
+  } = state
 
   useEffect(() => {
-    consumeToolsHandoff()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- consume once on mount
-  }, [])
-
-  useEffect(() => {
-    let unlisten: (() => void) | undefined
-    void onPromptToolsProgress((p) => {
-      if (p.message) setStatus(p.message)
-    }).then((u) => {
-      unlisten = u
-    })
-    return () => unlisten?.()
+    const handoff = consumeToolsHandoff()
+    if (handoff?.imagePath && !useStudioStore.getState().imageToPrompt.busy) {
+      patch({
+        imagePath: handoff.imagePath,
+        previewUrl: gallerySrc(handoff.imagePath),
+        error: null,
+      })
+    } else if (
+      !useStudioStore.getState().imageToPrompt.busy &&
+      activeArch &&
+      useStudioStore.getState().imageToPrompt.target === "auto"
+    ) {
+      patch({ target: targetFromArch(activeArch) })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once on mount
   }, [])
 
   const applyImagePath = (path: string) => {
-    setImagePath(path)
-    setPreviewUrl(gallerySrc(path))
-    setError(null)
+    patch({
+      imagePath: path,
+      previewUrl: gallerySrc(path),
+      error: null,
+    })
   }
 
   const clearImage = () => {
-    setImagePath(null)
-    setPreviewUrl(null)
+    patch({ imagePath: null, previewUrl: null })
   }
 
   const ingestFile = async (file: File) => {
     if (!isTauri()) {
-      setError("Image upload requires the desktop app.")
+      patch({ error: "Image upload requires the desktop app." })
       return
     }
     try {
@@ -189,7 +162,7 @@ export function ImageToPromptPanel() {
       const path = await saveTempToolImage(bytes, ext)
       applyImagePath(path)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      patch({ error: e instanceof Error ? e.message : String(e) })
     }
   }
 
@@ -201,7 +174,7 @@ export function ImageToPromptPanel() {
 
   const onDrop = (e: DragEvent) => {
     e.preventDefault()
-    setDragging(false)
+    patch({ galleryOpen: false })
     const file = e.dataTransfer.files?.[0]
     if (file?.type.startsWith("image/")) void ingestFile(file)
   }
@@ -226,101 +199,13 @@ export function ImageToPromptPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once paste listener
   }, [])
 
-  const applyResultText = useCallback(
-    (text: string, nextFormat: PromptFormatId) => {
-      setResult(text)
-      if (
-        nextFormat === "structured" ||
-        nextFormat === "json" ||
-        nextFormat === "graphicDesign"
-      ) {
-        setFields(parseStructuredPrompt(text))
-      } else {
-        setFields(null)
-      }
-    },
-    []
+  const displayPrompt = displayImageToPrompt(state)
+  const showStructured =
+    format === "structured" || format === "json" || format === "graphicDesign"
+  const imageGallery = gallery.filter(
+    (item) => galleryItemCategory(item) === "image"
   )
-
-  const displayPrompt = (() => {
-    if (fields && (format === "structured" || format === "json")) {
-      return flattenStructuredFields(fields)
-    }
-    return result
-  })()
-
-  const run = async () => {
-    if (!imagePath) {
-      setError("Choose an image first.")
-      return
-    }
-    if (!isTauri()) {
-      setError("Prompt Tools require the desktop app.")
-      return
-    }
-    setBusy(true)
-    setError(null)
-    setStatus("Starting…")
-    try {
-      await new Promise<void>((resolve, reject) => {
-        let settled = false
-        let currentJobId: string | null = null
-        void onJobProgress((p) => {
-          if (!currentJobId || p.jobId !== currentJobId || settled) return
-          if (p.message) setStatus(p.message)
-          if (p.stage === "done") {
-            settled = true
-            const text = p.result?.prompt ?? p.text ?? ""
-            if (!text) {
-              reject(new Error("No prompt returned"))
-              return
-            }
-            applyResultText(text, format)
-            setNegative(p.result?.negative ?? null)
-            setHistory((prev) =>
-              [
-                {
-                  id: currentJobId!,
-                  prompt: text,
-                  format,
-                  target,
-                  at: Date.now(),
-                },
-                ...prev,
-              ].slice(0, HISTORY_MAX)
-            )
-            resolve()
-          } else if (p.stage === "error") {
-            settled = true
-            reject(new Error(p.message || "Prompt tool failed"))
-          } else if (p.stage === "cancelled") {
-            settled = true
-            reject(new Error("Cancelled"))
-          }
-        }).then(() =>
-          runImageToPrompt({
-            imagePath,
-            format,
-            target,
-            arch: activeArch,
-          }).then((job) => {
-            currentJobId = job.id
-            setJobId(job.id)
-          }, reject)
-        )
-      })
-      setStatus(null)
-      notifySuccess("Prompt ready")
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      setError(msg)
-      notifyError(msg)
-      setStatus(null)
-    } finally {
-      setBusy(false)
-      setJobId(null)
-    }
-  }
+  const hasResult = Boolean(result.trim() || (fields && showStructured))
 
   const useInStudio = () => {
     const prompt = displayPrompt.trim()
@@ -333,11 +218,23 @@ export function ImageToPromptPanel() {
   }
 
   const pickGallery = (item: GalleryItem) => {
-    setGalleryOpen(false)
-    void applyImagePath(item.path)
+    patch({ galleryOpen: false })
+    applyImagePath(item.path)
   }
 
-  const hasResult = Boolean(result.trim() || (fields && showStructured))
+  const selectHistory = (h: ToolHistoryEntry) => {
+    const nextFormat = h.format as PromptFormatId
+    const structured =
+      nextFormat === "structured" ||
+      nextFormat === "json" ||
+      nextFormat === "graphicDesign"
+    patch({
+      format: nextFormat,
+      target: h.target,
+      result: h.prompt,
+      fields: structured ? parseStructuredPrompt(h.prompt) : null,
+    })
+  }
 
   return (
     <StudioPanel className="min-h-0 flex-1">
@@ -373,13 +270,11 @@ export function ImageToPromptPanel() {
                 <div
                   onDragOver={(e) => {
                     e.preventDefault()
-                    setDragging(true)
                   }}
-                  onDragLeave={() => setDragging(false)}
                   onDrop={onDrop}
                   className={cn(
                     "relative overflow-hidden rounded-lg border bg-muted/20 transition-colors",
-                    dragging ? "border-primary bg-primary/5" : "border-border",
+                    "border-border",
                     previewUrl ? "aspect-[16/9]" : "min-h-40"
                   )}
                 >
@@ -427,7 +322,7 @@ export function ImageToPromptPanel() {
                     size="sm"
                     variant={galleryOpen ? "default" : "secondary"}
                     className="min-h-9 gap-1.5"
-                    onClick={() => setGalleryOpen((o) => !o)}
+                    onClick={() => patch({ galleryOpen: !galleryOpen })}
                     disabled={busy}
                   >
                     <ImagesIcon className="size-3.5" />
@@ -488,22 +383,16 @@ export function ImageToPromptPanel() {
                 label="Format"
                 options={PROMPT_FORMATS}
                 value={format}
-                onChange={setFormat}
+                onChange={(v) => patch({ format: v })}
                 disabled={busy}
               />
               <ToolChipRow
                 label="Target"
                 options={PROMPT_TARGETS}
                 value={target}
-                onChange={setTarget}
+                onChange={(v) => patch({ target: v })}
                 disabled={busy}
               />
-
-              {hint ? (
-                <p className="text-xs leading-relaxed text-amber-600/90 dark:text-amber-400/85">
-                  {hint}
-                </p>
-              ) : null}
 
               <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
                 <Button
@@ -524,7 +413,7 @@ export function ImageToPromptPanel() {
                     type="button"
                     variant="ghost"
                     className="min-h-9"
-                    onClick={() => void cancelJob(jobId)}
+                    onClick={() => void cancel()}
                   >
                     Cancel
                   </Button>
@@ -586,10 +475,12 @@ export function ImageToPromptPanel() {
                       <Textarea
                         value={fields[key]}
                         onChange={(e) =>
-                          setFields((prev) => ({
-                            ...(prev ?? emptyStructuredFields()),
-                            [key]: e.target.value,
-                          }))
+                          patch({
+                            fields: {
+                              ...(fields ?? emptyStructuredFields()),
+                              [key]: e.target.value,
+                            },
+                          })
                         }
                         rows={2}
                         className="min-h-16 resize-y"
@@ -600,10 +491,9 @@ export function ImageToPromptPanel() {
               ) : (
                 <Textarea
                   value={result}
-                  onChange={(e) => {
-                    setResult(e.target.value)
-                    setFields(null)
-                  }}
+                  onChange={(e) =>
+                    patch({ result: e.target.value, fields: null })
+                  }
                   placeholder={busy ? "Working…" : "Prompt output"}
                   rows={10}
                   className="min-h-48 resize-y"
@@ -620,21 +510,13 @@ export function ImageToPromptPanel() {
                   <ScrollArea className="h-full" scrollbarGutter>
                     <SessionHistoryList
                       history={history}
-                      onSelect={(h) => {
-                        setFormat(h.format)
-                        setTarget(h.target)
-                        applyResultText(h.prompt, h.format)
-                      }}
+                      onSelect={selectHistory}
                     />
                   </ScrollArea>
                 ) : (
                   <SessionHistoryList
                     history={history}
-                    onSelect={(h) => {
-                      setFormat(h.format)
-                      setTarget(h.target)
-                      applyResultText(h.prompt, h.format)
-                    }}
+                    onSelect={selectHistory}
                   />
                 )}
               </div>

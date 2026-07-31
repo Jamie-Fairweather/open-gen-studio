@@ -81,6 +81,23 @@ pub struct ComfyStatus {
     pub runtime: Option<crate::db::RuntimeInstall>,
 }
 
+/// One entry in the serial ComfyUI work queue (`jobs://queue`).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct JobQueueItem {
+    pub job_id: String,
+    pub kind: String,
+    pub label: String,
+    pub status: String,
+}
+
+/// Snapshot of generate + Prompt Tools jobs waiting for / holding the GPU slot.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct JobQueueSnapshot {
+    pub items: Vec<JobQueueItem>,
+}
+
 /// Append `RECIPE_ARCHES` const to a Specta-generated TypeScript file.
 pub fn append_recipe_arches_const(ts_path: &std::path::Path) -> Result<(), String> {
     use crate::recipe::RecipeArch;

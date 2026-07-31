@@ -112,10 +112,11 @@ export const commands = {
   /**  Resolve a model page/file URL (Hugging Face, CivitAI, direct) to a download URL + filename. */
   resolveModelUrl: (url: string) =>
     __TAURI_INVOKE<ResolvedModelUrl>("resolve_model_url", { url }),
-  /**  Queue a generate job: returns immediately, runs Comfy /prompt in the background. */
+  /**  Queue a generate job: returns immediately, runs Comfy /prompt when the slot is free. */
   generateImage: (blueprintId: string, values: any) =>
     __TAURI_INVOKE<Job>("generate_image", { blueprintId, values }),
   cancelJob: (id: string) => __TAURI_INVOKE<Job>("cancel_job", { id }),
+  listJobQueue: () => __TAURI_INVOKE<JobQueueSnapshot>("list_job_queue"),
   freeComfyVram: () => __TAURI_INVOKE<null>("free_comfy_vram"),
   listPromptToolWeights: () =>
     __TAURI_INVOKE<PromptToolWeightInfo[]>("list_prompt_tool_weights"),
@@ -137,7 +138,7 @@ export const commands = {
     __TAURI_INVOKE<null>("cancel_download", { jobId }),
   saveTempToolImage: (bytes: number[], ext: string) =>
     __TAURI_INVOKE<string>("save_temp_tool_image", { bytes, ext }),
-  /**  Queue image→prompt utility job; returns job immediately; result via jobs://progress + invoke wait. */
+  /**  Queue image→prompt utility job; returns job immediately; result via jobs://progress. */
   runImageToPrompt: (args: RunImageToPromptArgs) =>
     __TAURI_INVOKE<Job>("run_image_to_prompt", { args }),
   runPromptEnhance: (args: RunPromptEnhanceArgs) =>
@@ -356,6 +357,19 @@ export type JobProgress = {
   previewPath?: string | null
   text?: string | null
   result?: PromptToolResult | null
+}
+
+/**  One entry in the serial ComfyUI work queue (`jobs://queue`). */
+export type JobQueueItem = {
+  jobId: string
+  kind: string
+  label: string
+  status: string
+}
+
+/**  Snapshot of generate + Prompt Tools jobs waiting for / holding the GPU slot. */
+export type JobQueueSnapshot = {
+  items: JobQueueItem[]
 }
 
 export type LoraPack = {

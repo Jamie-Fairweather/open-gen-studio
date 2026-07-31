@@ -8,7 +8,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import {
   selectActiveArch,
   selectHasNegativePrompt,
@@ -28,124 +28,64 @@ import {
 } from "@/components/tools/tool-shell"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  cancelJob,
-  isTauri,
-  onJobProgress,
-  onPromptToolsProgress,
-  runPromptEnhance,
-} from "@/lib/host"
-import { notifyError, notifySuccess } from "@/lib/notify"
+import { notifySuccess } from "@/lib/notify"
 import {
   ENHANCE_MODES,
   PROMPT_TARGETS,
   STYLE_LOOKS,
-  enhanceModePayload,
   targetFromArch,
-  type PromptTargetId,
 } from "@/lib/prompt-tools"
 
 export function PromptEnhancerPanel() {
   const router = useRouter()
-  const toolsHandoff = useStudioStore((s) => s.toolsHandoff)
-  const prompt = useStudioStore((s) => s.prompt)
+  const studioPrompt = useStudioStore((s) => s.prompt)
   const consumeToolsHandoff = useStudioStore((s) => s.consumeToolsHandoff)
   const setPrompt = useStudioStore((s) => s.setPrompt)
   const setControlValues = useStudioStore((s) => s.setControlValues)
+  const state = useStudioStore((s) => s.promptEnhance)
+  const patch = useStudioStore((s) => s.patchPromptEnhance)
+  const run = useStudioStore((s) => s.runPromptEnhanceTool)
+  const cancel = useStudioStore((s) => s.cancelPromptEnhanceTool)
   const activeArch = useStudioSelector(selectActiveArch)
   const hasNegativePrompt = useStudioSelector(selectHasNegativePrompt)
-  const [input, setInput] = useState(() => {
-    if (toolsHandoff?.prompt?.trim()) return toolsHandoff.prompt.trim()
-    return prompt.trim()
-  })
-  const [result, setResult] = useState("")
-  const [negative, setNegative] = useState<string | null>(null)
-  const [target, setTarget] = useState<PromptTargetId>(() =>
-    activeArch ? targetFromArch(activeArch) : "auto"
-  )
-  const [mode, setMode] = useState("expand")
-  const [styleLook, setStyleLook] = useState("cinematic")
-  const [busy, setBusy] = useState(false)
-  const [status, setStatus] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [jobId, setJobId] = useState<string | null>(null)
+
+  const {
+    input,
+    result,
+    negative,
+    target,
+    mode,
+    styleLook,
+    busy,
+    status,
+    error,
+    jobId,
+    seeded,
+  } = state
 
   useEffect(() => {
-    consumeToolsHandoff()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- consume once
-  }, [])
-
-  useEffect(() => {
-    let unlisten: (() => void) | undefined
-    void onPromptToolsProgress((p) => {
-      if (p.message) setStatus(p.message)
-    }).then((u) => {
-      unlisten = u
+    // Studio Enhance button seeds via seedPromptEnhance before navigate.
+    // This mount path covers Tools index / deep links only.
+    if (seeded) {
+      void consumeToolsHandoff()
+      return
+    }
+    if (useStudioStore.getState().promptEnhance.busy) {
+      patch({ seeded: true })
+      return
+    }
+    const handoff = consumeToolsHandoff()
+    const seed =
+      handoff?.prompt?.trim() ||
+      (!input.trim() ? studioPrompt.trim() : "") ||
+      input
+    patch({
+      seeded: true,
+      input: seed,
+      target: activeArch ? targetFromArch(activeArch) : target,
     })
-    return () => unlisten?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once
   }, [])
-
-  const run = async () => {
-    const prompt = input.trim()
-    if (!prompt) {
-      setError("Enter a prompt to enhance.")
-      return
-    }
-    if (!isTauri()) {
-      setError("Prompt Tools require the desktop app.")
-      return
-    }
-    setBusy(true)
-    setError(null)
-    setStatus("Starting…")
-    try {
-      await new Promise<void>((resolve, reject) => {
-        let settled = false
-        let currentJobId: string | null = null
-        void onJobProgress((p) => {
-          if (!currentJobId || p.jobId !== currentJobId || settled) return
-          if (p.message) setStatus(p.message)
-          if (p.stage === "done") {
-            settled = true
-            const text = p.result?.prompt ?? p.text ?? ""
-            if (!text) {
-              reject(new Error("No prompt returned"))
-              return
-            }
-            setResult(text)
-            setNegative(p.result?.negative ?? null)
-            resolve()
-          } else if (p.stage === "error") {
-            settled = true
-            reject(new Error(p.message || "Enhance failed"))
-          } else if (p.stage === "cancelled") {
-            settled = true
-            reject(new Error("Cancelled"))
-          }
-        }).then(() =>
-          runPromptEnhance({
-            prompt,
-            target,
-            arch: activeArch,
-            mode: enhanceModePayload(mode, styleLook),
-          }).then((job) => {
-            currentJobId = job.id
-            setJobId(job.id)
-          }, reject)
-        )
-      })
-      setStatus(null)
-      notifySuccess("Enhanced prompt ready")
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      setError(msg)
-      notifyError(msg)
-      setStatus(null)
-    } finally {
-      setBusy(false)
-      setJobId(null)
-    }
-  }
 
   const useInStudio = () => {
     const prompt = (result || input).trim()
@@ -184,7 +124,7 @@ export function PromptEnhancerPanel() {
                 <ToolFieldLabel>Your idea</ToolFieldLabel>
                 <Textarea
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  onChange={(e) => patch({ input: e.target.value })}
                   disabled={busy}
                   rows={6}
                   placeholder="A short subject or rough prompt…"
@@ -199,7 +139,7 @@ export function PromptEnhancerPanel() {
                   label: m.label,
                 }))}
                 value={mode}
-                onChange={setMode}
+                onChange={(v) => patch({ mode: v })}
                 disabled={busy}
               />
               {mode === "style" ? (
@@ -207,7 +147,7 @@ export function PromptEnhancerPanel() {
                   label="Look"
                   options={STYLE_LOOKS}
                   value={styleLook}
-                  onChange={setStyleLook}
+                  onChange={(v) => patch({ styleLook: v })}
                   disabled={busy}
                 />
               ) : null}
@@ -215,7 +155,7 @@ export function PromptEnhancerPanel() {
                 label="Target"
                 options={PROMPT_TARGETS}
                 value={target}
-                onChange={setTarget}
+                onChange={(v) => patch({ target: v })}
                 disabled={busy}
               />
 
@@ -238,7 +178,7 @@ export function PromptEnhancerPanel() {
                     type="button"
                     variant="ghost"
                     className="min-h-9"
-                    onClick={() => void cancelJob(jobId)}
+                    onClick={() => void cancel()}
                   >
                     Cancel
                   </Button>
@@ -295,7 +235,7 @@ export function PromptEnhancerPanel() {
               ) : (
                 <Textarea
                   value={result}
-                  onChange={(e) => setResult(e.target.value)}
+                  onChange={(e) => patch({ result: e.target.value })}
                   placeholder={busy ? "Working…" : "Enhanced prompt"}
                   rows={10}
                   className="min-h-48 resize-y"

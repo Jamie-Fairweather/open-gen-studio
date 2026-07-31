@@ -9,6 +9,7 @@
   <img src="https://img.shields.io/badge/platform-Windows-blue?style=for-the-badge" />
   <img src="https://img.shields.io/badge/GPU-NVIDIA-success?style=for-the-badge" />
   <img src="https://img.shields.io/badge/Built%20with-Tauri%202-7C3AED?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/license-Elastic%202.0-lightgrey?style=for-the-badge" />
 </p>
 
 ![Open Gen Studio preview 1](preview1.png)
@@ -112,6 +113,10 @@ bun run desktop:build    # production desktop build
 | [Official LoRAs](content/loras/README.md)                                      | Multi-arch LoRA packs           |
 
 ---
+
+# License
+
+[Elastic License 2.0](LICENSE) — free to use, modify, and share for local use. You may **not** offer Open Gen Studio to others as a hosted or managed service. The copyright holder retains the right to operate a commercial hosted product.
 
 # Status
 

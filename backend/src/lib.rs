@@ -16,6 +16,7 @@ mod process_cmd;
 mod prompt_tools;
 mod providers;
 mod recipe;
+mod spellcheck;
 mod upscale;
 
 pub use json_any::{JsonMap, JsonValue};
@@ -89,11 +90,14 @@ pub fn run() {
 
             download_manager::start_worker(app.handle().clone());
 
-            // Gallery / previews / user blueprints live under the human-readable data dir.
+            // Gallery / previews / tmp / user blueprints live under the human-readable data dir.
             let canonical_data = data_dir.canonicalize().unwrap_or(data_dir);
             let _ = app
                 .asset_protocol_scope()
                 .allow_directory(&canonical_data, true);
+
+            // Stale live-preview frames from crashed/interrupted jobs.
+            generate::clear_preview_dir(app.handle());
 
             // Blueprint thumbnails (Official + user app-data).
             if let Ok(dir) = blueprints::official_dir(app.handle()) {

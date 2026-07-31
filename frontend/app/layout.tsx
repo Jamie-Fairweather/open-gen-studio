@@ -1,7 +1,7 @@
 import { Geist_Mono, Outfit } from "next/font/google"
 
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
+import { NativeChrome } from "@/components/native-chrome"
 import { AnchoredToastProvider, ToastProvider } from "@/components/ui/toast"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
@@ -18,7 +18,6 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      suppressHydrationWarning
       className={cn(
         "dark antialiased",
         outfit.variable,
@@ -27,13 +26,12 @@ export default function RootLayout({
       )}
     >
       <body className="font-sans">
-        <ThemeProvider>
-          <TooltipProvider>
-            <ToastProvider position="bottom-right">
-              <AnchoredToastProvider>{children}</AnchoredToastProvider>
-            </ToastProvider>
-          </TooltipProvider>
-        </ThemeProvider>
+        <NativeChrome />
+        <TooltipProvider>
+          <ToastProvider position="bottom-right">
+            <AnchoredToastProvider>{children}</AnchoredToastProvider>
+          </ToastProvider>
+        </TooltipProvider>
       </body>
     </html>
   )

@@ -30,12 +30,6 @@ pub fn ensure_prompt_tools_provider(
 
 #[tauri::command]
 #[specta::specta]
-pub fn read_image_embedded_prompt(image_path: String) -> Result<Option<String>, String> {
-    prompt_tools::read_embedded_prompt(&image_path)
-}
-
-#[tauri::command]
-#[specta::specta]
 pub fn save_temp_tool_image(app: AppHandle, bytes: Vec<u8>, ext: String) -> Result<String, String> {
     prompt_tools::save_temp_image(&app, bytes, &ext)
 }

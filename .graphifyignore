@@ -1,6 +1,9 @@
 graphify-out/
 .agents/
 .cursor/
+.impeccable/
+.husky/
+.vscode/
 
 node_modules/
 dist/

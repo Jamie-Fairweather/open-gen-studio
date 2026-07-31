@@ -1,7 +1,6 @@
 //! Prompt Tools: Image→Prompt + Prompt Enhancer via Comfy utility workflows.
 //! Bidirectional VRAM free around runs; text-only history collect (no gallery).
 
-mod embedded;
 mod ensure;
 mod io;
 mod prompts;
@@ -9,7 +8,6 @@ mod run;
 mod types;
 mod workflows;
 
-pub use embedded::read_embedded_prompt;
 #[allow(unused_imports)]
 pub use ensure::{
     ensure_provider, install_qwenvl_python_deps, list_weights, provider_ready, qwenvl_http_files,

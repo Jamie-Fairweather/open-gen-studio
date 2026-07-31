@@ -48,7 +48,6 @@ import {
   isTauri,
   onJobProgress,
   onPromptToolsProgress,
-  readImageEmbeddedPrompt,
   runImageToPrompt,
   saveTempToolImage,
   type GalleryItem,
@@ -139,7 +138,6 @@ export function ImageToPromptPanel() {
   const [result, setResult] = useState("")
   const [negative, setNegative] = useState<string | null>(null)
   const [fields, setFields] = useState<StructuredFields | null>(null)
-  const [embedded, setEmbedded] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -156,19 +154,7 @@ export function ImageToPromptPanel() {
   )
 
   useEffect(() => {
-    const path = consumeToolsHandoff()?.imagePath
-    if (!path) return
-    let cancelled = false
-    void readImageEmbeddedPrompt(path)
-      .then((emb) => {
-        if (!cancelled && emb?.trim()) setEmbedded(emb.trim())
-      })
-      .catch(() => {
-        /* optional */
-      })
-    return () => {
-      cancelled = true
-    }
+    consumeToolsHandoff()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- consume once on mount
   }, [])
 
@@ -182,23 +168,15 @@ export function ImageToPromptPanel() {
     return () => unlisten?.()
   }, [])
 
-  const applyImagePath = async (path: string) => {
+  const applyImagePath = (path: string) => {
     setImagePath(path)
     setPreviewUrl(gallerySrc(path))
     setError(null)
-    setEmbedded(null)
-    try {
-      const emb = await readImageEmbeddedPrompt(path)
-      if (emb?.trim()) setEmbedded(emb.trim())
-    } catch {
-      /* optional */
-    }
   }
 
   const clearImage = () => {
     setImagePath(null)
     setPreviewUrl(null)
-    setEmbedded(null)
   }
 
   const ingestFile = async (file: File) => {
@@ -209,7 +187,7 @@ export function ImageToPromptPanel() {
     try {
       const { bytes, ext } = await bytesFromFile(file)
       const path = await saveTempToolImage(bytes, ext)
-      await applyImagePath(path)
+      applyImagePath(path)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -503,26 +481,6 @@ export function ImageToPromptPanel() {
                       )}
                     </div>
                   </ScrollArea>
-                </div>
-              ) : null}
-
-              {embedded ? (
-                <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    Embedded prompt found in this file.
-                  </p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="min-h-9 shrink-0"
-                    onClick={() => {
-                      applyResultText(embedded, format)
-                      setNegative(null)
-                    }}
-                  >
-                    Use embedded prompt
-                  </Button>
                 </div>
               ) : null}
 

@@ -11,12 +11,6 @@ export async function ensurePromptToolsProvider(
   await commands.ensurePromptToolsProvider(providerId)
 }
 
-export async function readImageEmbeddedPrompt(
-  imagePath: string
-): Promise<string | null> {
-  return commands.readImageEmbeddedPrompt(imagePath)
-}
-
 export async function saveTempToolImage(
   bytes: number[] | Uint8Array,
   ext: string

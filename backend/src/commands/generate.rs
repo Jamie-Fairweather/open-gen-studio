@@ -113,6 +113,8 @@ pub fn generate_image(
         if let Ok(mut cancelled) = state.cancelled_jobs.lock() {
             cancelled.remove(&job_bg.id);
         }
+        // Live latent frames are only needed while the job runs.
+        generate::cleanup_job_previews(&app_bg, &job_bg.id);
         if let Some(job) = updated {
             let _ = app_bg.emit("jobs://updated", &job);
         }

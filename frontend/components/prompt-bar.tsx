@@ -9,7 +9,17 @@ import {
   WandSparklesIcon,
   XIcon,
 } from "lucide-react"
-import { useLayoutEffect, useRef, type CSSProperties } from "react"
+import type { CSSProperties } from "react"
+import { useShallow } from "zustand/react/shallow"
+import {
+  selectCanGenerate,
+  selectHasNegativePrompt,
+  selectHasSizeControls,
+  selectSelected,
+  selectSizeLabel,
+  selectStudioLabel,
+} from "@/components/studio/selectors"
+import { useStudioSelector, useStudioStore } from "@/components/studio/store"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverPopup, PopoverTrigger } from "@/components/ui/popover"
 import { Slider } from "@/components/ui/slider"
@@ -81,31 +91,14 @@ export function PromptBar({
   onOpenPromptEnhancer,
 }: PromptBarProps) {
   const promptEmpty = !prompt.trim()
-  const promptRef = useRef<HTMLTextAreaElement>(null)
   const aspectMeta =
     ASPECT_RATIOS.find((a) => a.id === aspectId) ?? ASPECT_RATIOS[0]
-
-  // Creator unmounts the textarea; re-run when returning so height isn't stuck at rows={1}.
-  // Measure with overflow hidden - overflow-y:auto during measure can add a scrollbar, wrap the
-  // last line, and leave a blank row (common on near-full lines).
-  useLayoutEffect(() => {
-    const el = promptRef.current
-    if (!el) return
-    const min = 44
-    const max = 160
-    el.style.overflowY = "hidden"
-    el.style.height = "0px"
-    const next = Math.min(Math.max(el.scrollHeight, min), max)
-    el.style.height = `${next}px`
-    el.style.overflowY = next >= max ? "auto" : "hidden"
-  }, [prompt])
 
   return (
     <div className="pointer-events-none relative z-40 shrink-0 px-4 pt-1 pb-5 md:px-8">
       <div className="pointer-events-auto mx-auto max-w-3xl overflow-hidden rounded-3xl border border-border bg-card shadow-2xl backdrop-blur-xl">
         <div className="bg-background/50 px-4 pt-3.5 pb-3 md:px-5">
           <textarea
-            ref={promptRef}
             value={prompt}
             onChange={(e) => onPromptChange(e.target.value)}
             placeholder={
@@ -116,8 +109,7 @@ export function PromptBar({
             disabled={!canGenerate}
             rows={1}
             className={cn(
-              "min-h-11 w-full resize-none bg-transparent text-base leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70 disabled:opacity-60",
-              // Scroll only when height-capped (set in layout effect).
+              "field-sizing-content max-h-40 min-h-11 w-full resize-none overflow-y-auto bg-transparent text-base leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70 disabled:opacity-60",
               "[scrollbar-width:thin] [scrollbar-color:color-mix(in_oklab,var(--foreground)_20%,transparent)_transparent]",
               "[&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:bg-transparent",
               "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-foreground/20",
@@ -371,5 +363,65 @@ export function PromptBar({
         </div>
       </div>
     </div>
+  )
+}
+
+/** Subscribes to prompt state so keystrokes don't re-render MediaWorkspace. */
+export function StudioPromptBar() {
+  const canGenerate = useStudioSelector(selectCanGenerate)
+  const studioLabel = useStudioSelector(selectStudioLabel)
+  const hasNegativePrompt = useStudioSelector(selectHasNegativePrompt)
+  const hasSizeControls = useStudioSelector(selectHasSizeControls)
+  const sizeLabel = useStudioSelector(selectSizeLabel)
+  const selected = useStudioSelector(selectSelected)
+  const prompt = useStudioStore(
+    useShallow((s) => ({
+      value: s.prompt,
+      setPrompt: s.setPrompt,
+      controlValues: s.controlValues,
+      setControlValues: s.setControlValues,
+      generating: s.generating,
+      genStep: s.genStep,
+      aspectId: s.aspectId,
+      sideLength: s.sideLength,
+      applySize: s.applySize,
+      handleGenerate: s.handleGenerate,
+      handleCancel: s.handleCancel,
+      setPickerOpen: s.setPickerOpen,
+      openImageToPrompt: s.openImageToPrompt,
+      openPromptEnhancer: s.openPromptEnhancer,
+    }))
+  )
+
+  return (
+    <PromptBar
+      prompt={prompt.value}
+      onPromptChange={prompt.setPrompt}
+      showNegative={hasNegativePrompt}
+      negativePrompt={String(prompt.controlValues.negative ?? "")}
+      onNegativeChange={(value) =>
+        prompt.setControlValues((prev) => ({
+          ...prev,
+          negative: value,
+        }))
+      }
+      canGenerate={canGenerate}
+      studioLabel={studioLabel}
+      generating={prompt.generating}
+      genStep={prompt.genStep}
+      blueprintName={selected?.name ?? null}
+      onOpenBlueprintPicker={() => prompt.setPickerOpen(true)}
+      hasSizeControls={hasSizeControls}
+      aspectId={prompt.aspectId}
+      sideLength={prompt.sideLength}
+      sizeLabel={sizeLabel}
+      onApplySize={prompt.applySize}
+      onGenerate={() => void prompt.handleGenerate()}
+      onCancel={() => void prompt.handleCancel()}
+      onOpenImageToPrompt={() => prompt.openImageToPrompt()}
+      onOpenPromptEnhancer={() =>
+        prompt.openPromptEnhancer({ prompt: prompt.value })
+      }
+    />
   )
 }

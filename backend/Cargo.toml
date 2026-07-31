@@ -43,3 +43,10 @@ specta = { version = "=2.0.0-rc.25", features = ["derive", "function", "serde_js
 specta-serde = "=0.0.12"
 specta-typescript = "=0.0.12"
 tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Globalization",
+  "Win32_System_Com",
+] }

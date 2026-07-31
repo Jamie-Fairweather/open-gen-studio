@@ -7,12 +7,14 @@ mod wait;
 #[allow(unused_imports)]
 pub use api::{download_view, free_vram, interrupt, queue_prompt};
 #[allow(unused_imports)]
-pub use gallery::{ensure_gallery_thumbnails, gallery_dir, write_gallery_thumbnail};
+pub use gallery::{ensure_gallery_thumbnails, gallery_dir, previews_dir, write_gallery_thumbnail};
 pub use run::run_generate;
 #[allow(unused_imports)]
 pub use types::ComfyImageRef;
 #[allow(unused_imports)]
-pub use wait::{collect_text, wait_for_outputs, wait_for_text};
+pub use wait::{
+    cleanup_job_previews, clear_preview_dir, collect_text, wait_for_outputs, wait_for_text,
+};
 
 #[cfg(test)]
 mod tests {

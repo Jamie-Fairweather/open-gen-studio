@@ -6,7 +6,7 @@ import {
   Trash2Icon,
   TypeIcon,
 } from "lucide-react"
-import { memo, useCallback, useMemo, useState } from "react"
+import { memo, useMemo } from "react"
 import {
   SideRail,
   SideRailBody,
@@ -35,9 +35,8 @@ type GalleryTileProps = {
   selected: boolean
   canReusePrompt: boolean
   canReuseSettings: boolean
-  deleting: boolean
   onSelect: (id: string | null) => void
-  onDelete: (id: string) => void
+  onDelete: (id: string) => void | Promise<void>
   onReusePrompt: (item: GalleryItem) => void
   onReuseSettings: (item: GalleryItem) => void
   onImageToPrompt?: (item: GalleryItem) => void
@@ -48,7 +47,6 @@ const GalleryTile = memo(function GalleryTile({
   selected,
   canReusePrompt,
   canReuseSettings,
-  deleting,
   onSelect,
   onDelete,
   onReusePrompt,
@@ -141,8 +139,7 @@ const GalleryTile = memo(function GalleryTile({
           size="icon-xs"
           variant="destructive"
           className="absolute end-1.5 top-1.5 z-20 rounded-md opacity-0 shadow-md transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-          disabled={deleting}
-          onClick={() => onDelete(item.id)}
+          onClick={() => void onDelete(item.id)}
           aria-label="Delete"
         >
           <Trash2Icon />
@@ -163,8 +160,6 @@ export function GalleryPanel({
   onReuseSettings,
   onImageToPrompt,
 }: GalleryPanelProps) {
-  const [deleting, setDeleting] = useState(false)
-
   const tiles = useMemo(
     () =>
       items.map((item) => {
@@ -176,14 +171,6 @@ export function GalleryPanel({
         }
       }),
     [items]
-  )
-
-  const handleDelete = useCallback(
-    (id: string) => {
-      setDeleting(true)
-      void onDelete(id).finally(() => setDeleting(false))
-    },
-    [onDelete]
   )
 
   return (
@@ -203,9 +190,8 @@ export function GalleryPanel({
                 selected={selectedId === item.id}
                 canReusePrompt={canReusePrompt}
                 canReuseSettings={canReuseSettings}
-                deleting={deleting}
                 onSelect={onSelect}
-                onDelete={handleDelete}
+                onDelete={onDelete}
                 onReusePrompt={onReusePrompt}
                 onReuseSettings={onReuseSettings}
                 onImageToPrompt={onImageToPrompt}

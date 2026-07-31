@@ -116,6 +116,7 @@ dependencies = [
  "tungstenite",
  "url",
  "uuid",
+ "windows",
 ]
 
 [[package]]

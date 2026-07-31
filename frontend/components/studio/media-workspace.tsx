@@ -13,16 +13,13 @@ import { AdvancedControls } from "@/components/advanced-controls"
 import { AdvancedPanel } from "@/components/advanced-panel"
 import { GalleryPanel } from "@/components/gallery-panel"
 import { ImageLightbox } from "@/components/image-lightbox"
-import { PromptBar } from "@/components/prompt-bar"
+import { StudioPromptBar } from "@/components/prompt-bar"
 import { SideRailHandle } from "@/components/side-rail"
 import { StageImage } from "@/components/stage-image"
 import {
   selectActiveArch,
   selectActiveLoraStack,
   selectAdvancedControls,
-  selectCanGenerate,
-  selectHasNegativePrompt,
-  selectHasSizeControls,
   selectLatestGallerySeed,
   selectLoraInstallingKey,
   selectLoraQueuedKeys,
@@ -30,7 +27,6 @@ import {
   selectSelected,
   selectShowAdvancedRail,
   selectShowGalleryRail,
-  selectSizeLabel,
   selectStageDims,
   selectStageInsetLeft,
   selectStageInsetRight,
@@ -53,7 +49,6 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
   // Category is encoded in the route; store derives studioTab from pathname.
   void category
 
-  const canGenerate = useStudioSelector(selectCanGenerate)
   const showAdvancedRail = useStudioSelector(selectShowAdvancedRail)
   const showGalleryRail = useStudioSelector(selectShowGalleryRail)
   const studioLabel = useStudioSelector(selectStudioLabel)
@@ -68,27 +63,6 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
   const promotePendingPreview = useStudioStore((s) => s.promotePendingPreview)
   const sideRailWidth = useStudioStore((s) => s.SIDE_RAIL_WIDTH)
 
-  const prompt = useStudioStore(
-    useShallow((s) => ({
-      value: s.prompt,
-      setPrompt: s.setPrompt,
-      controlValues: s.controlValues,
-      setControlValues: s.setControlValues,
-      generating: s.generating,
-      genStep: s.genStep,
-      aspectId: s.aspectId,
-      sideLength: s.sideLength,
-      applySize: s.applySize,
-      handleGenerate: s.handleGenerate,
-      handleCancel: s.handleCancel,
-      setPickerOpen: s.setPickerOpen,
-      openImageToPrompt: s.openImageToPrompt,
-      openPromptEnhancer: s.openPromptEnhancer,
-    }))
-  )
-  const hasNegativePrompt = useStudioSelector(selectHasNegativePrompt)
-  const hasSizeControls = useStudioSelector(selectHasSizeControls)
-  const sizeLabel = useStudioSelector(selectSizeLabel)
   const selected = useStudioSelector(selectSelected)
 
   const advanced = useStudioStore(
@@ -202,35 +176,7 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
           )}
         </main>
 
-        <PromptBar
-          prompt={prompt.value}
-          onPromptChange={prompt.setPrompt}
-          showNegative={hasNegativePrompt}
-          negativePrompt={String(prompt.controlValues.negative ?? "")}
-          onNegativeChange={(value) =>
-            prompt.setControlValues((prev) => ({
-              ...prev,
-              negative: value,
-            }))
-          }
-          canGenerate={canGenerate}
-          studioLabel={studioLabel}
-          generating={prompt.generating}
-          genStep={prompt.genStep}
-          blueprintName={selected?.name ?? null}
-          onOpenBlueprintPicker={() => prompt.setPickerOpen(true)}
-          hasSizeControls={hasSizeControls}
-          aspectId={prompt.aspectId}
-          sideLength={prompt.sideLength}
-          sizeLabel={sizeLabel}
-          onApplySize={prompt.applySize}
-          onGenerate={() => void prompt.handleGenerate()}
-          onCancel={() => void prompt.handleCancel()}
-          onOpenImageToPrompt={() => prompt.openImageToPrompt()}
-          onOpenPromptEnhancer={() =>
-            prompt.openPromptEnhancer({ prompt: prompt.value })
-          }
-        />
+        <StudioPromptBar />
       </div>
 
       {showAdvancedRail ? (

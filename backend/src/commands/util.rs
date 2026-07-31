@@ -1,4 +1,5 @@
 use crate::gpu::{self, GpuInfo};
+use crate::spellcheck;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub(crate) fn now_secs() -> i64 {
@@ -12,6 +13,15 @@ pub(crate) fn now_secs() -> i64 {
 #[specta::specta]
 pub fn detect_gpu() -> GpuInfo {
     gpu::detect_nvidia()
+}
+
+/// OS spell suggestions for the custom editable context menu (empty if correct / unavailable).
+#[tauri::command]
+#[specta::specta]
+pub async fn spellcheck_suggestions(word: String) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || spellcheck::suggest(&word))
+        .await
+        .map_err(|e| format!("spellcheck join: {e}"))?
 }
 
 /// Open an http(s) URL in the user's default system browser.

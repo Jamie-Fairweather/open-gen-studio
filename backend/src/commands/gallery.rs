@@ -7,13 +7,16 @@ use tauri::{AppHandle, Emitter, State};
 
 #[tauri::command]
 #[specta::specta]
-pub fn list_gallery(state: State<'_, AppState>) -> Result<Vec<GalleryItem>, String> {
+pub fn list_gallery(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<GalleryItem>, String> {
     let items = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         db.list_gallery()?
     };
-    // Backfill missing thumbs without holding the DB lock (decode can be slow once).
-    let (items, updates) = generate::ensure_gallery_thumbnails(items);
+    // Backfill / migrate thumbs without holding the DB lock (decode can be slow once).
+    let (items, updates) = generate::ensure_gallery_thumbnails(&app, items);
     if !updates.is_empty() {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         for (id, path) in updates {
@@ -42,6 +45,45 @@ pub fn add_gallery_item(
     Ok(item)
 }
 
+fn remove_empty_gallery_folder(path: &std::path::Path, job_id: Option<&str>) {
+    let Some(parent) = path.parent() else {
+        return;
+    };
+    let name = parent.file_name().and_then(|s| s.to_str()).unwrap_or("");
+    let is_job_folder = job_id == Some(name);
+    let is_day_folder = name.len() == 10
+        && name.as_bytes().get(4) == Some(&b'-')
+        && name.as_bytes().get(7) == Some(&b'-')
+        && name.bytes().all(|b| b.is_ascii_digit() || b == b'-');
+    if is_job_folder || is_day_folder {
+        let _ = fs::remove_dir(parent);
+    }
+}
+
+fn remove_gallery_files(item: &GalleryItem) {
+    let path = PathBuf::from(&item.path);
+    if path.is_file() {
+        let _ = fs::remove_file(&path);
+    }
+    if let Some(thumb) = item.thumbnail_path.as_deref() {
+        let thumb = PathBuf::from(thumb);
+        if thumb.is_file() {
+            let _ = fs::remove_file(&thumb);
+        }
+        remove_empty_gallery_folder(&thumb, item.job_id.as_deref());
+    }
+    // Legacy sidecar next to the image (before thumbs lived under `previews/`).
+    let sidecar = path.with_file_name(format!(
+        "{}.thumb.jpg",
+        path.file_stem().and_then(|s| s.to_str()).unwrap_or("image")
+    ));
+    if sidecar.is_file() {
+        let _ = fs::remove_file(&sidecar);
+    }
+    // Remove empty day folder (YYYY-MM-DD) or legacy job folder (gallery/<job_id>/).
+    remove_empty_gallery_folder(&path, item.job_id.as_deref());
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn delete_gallery_item(
@@ -54,38 +96,9 @@ pub fn delete_gallery_item(
         db.delete_gallery_item(&id)?
     };
     if let Some(item) = item {
-        let path = PathBuf::from(&item.path);
-        if path.is_file() {
-            let _ = fs::remove_file(&path);
-        }
-        if let Some(thumb) = item.thumbnail_path.as_deref() {
-            let thumb = PathBuf::from(thumb);
-            if thumb.is_file() {
-                let _ = fs::remove_file(&thumb);
-            }
-        } else {
-            // Sidecar naming used before thumbnail_path was stored.
-            let sidecar = path.with_file_name(format!(
-                "{}.thumb.jpg",
-                path.file_stem().and_then(|s| s.to_str()).unwrap_or("image")
-            ));
-            if sidecar.is_file() {
-                let _ = fs::remove_file(&sidecar);
-            }
-        }
-        // Remove empty day folder (YYYY-MM-DD) or legacy job folder (gallery/<job_id>/).
-        if let Some(parent) = path.parent() {
-            let name = parent.file_name().and_then(|s| s.to_str()).unwrap_or("");
-            let is_job_folder = item.job_id.as_deref() == Some(name);
-            let is_day_folder = name.len() == 10
-                && name.as_bytes().get(4) == Some(&b'-')
-                && name.as_bytes().get(7) == Some(&b'-')
-                && name.bytes().all(|b| b.is_ascii_digit() || b == b'-');
-            if is_job_folder || is_day_folder {
-                let _ = fs::remove_dir(parent);
-            }
-        }
+        // Notify UI before disk I/O so deletes feel instant.
         let _ = app.emit("gallery://deleted", &id);
+        std::thread::spawn(move || remove_gallery_files(&item));
     }
     Ok(())
 }

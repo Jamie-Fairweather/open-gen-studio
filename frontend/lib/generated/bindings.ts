@@ -29,6 +29,9 @@ export const commands = {
   deleteGalleryItem: (id: string) =>
     __TAURI_INVOKE<null>("delete_gallery_item", { id }),
   detectGpu: () => __TAURI_INVOKE<GpuInfo>("detect_gpu"),
+  /**  OS spell suggestions for the custom editable context menu (empty if correct / unavailable). */
+  spellcheckSuggestions: (word: string) =>
+    __TAURI_INVOKE<string[]>("spellcheck_suggestions", { word }),
   downloadUrl: (
     url: string,
     relativePath: string,
@@ -132,8 +135,6 @@ export const commands = {
     __TAURI_INVOKE<null>("resume_download", { jobId }),
   cancelDownload: (jobId: string) =>
     __TAURI_INVOKE<null>("cancel_download", { jobId }),
-  readImageEmbeddedPrompt: (imagePath: string) =>
-    __TAURI_INVOKE<string | null>("read_image_embedded_prompt", { imagePath }),
   saveTempToolImage: (bytes: number[], ext: string) =>
     __TAURI_INVOKE<string>("save_temp_tool_image", { bytes, ext }),
   /**  Queue image→prompt utility job; returns job immediately; result via jobs://progress + invoke wait. */

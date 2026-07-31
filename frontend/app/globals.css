@@ -257,17 +257,31 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    @apply font-mono font-sans;
+    color-scheme: dark;
+  }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground select-none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Allow selection + spellcheck UX inside editable fields */
+  input,
+  textarea,
+  [contenteditable="true"] {
+    @apply select-text;
+  }
+  img,
+  svg,
+  video,
+  canvas {
+    -webkit-user-drag: none;
   }
   code,
   kbd,
   samp,
   pre {
     font-family: var(--font-mono);
-  }
-  html {
-    @apply font-mono font-sans;
   }
   /* Tauri frameless window: make drag regions work with pen/touch too */
   [data-tauri-drag-region] {

@@ -46,10 +46,21 @@ export const createGallerySlice: StateCreator<
     set((s) => ({ selectedGalleryId: applySet(s.selectedGalleryId, next) })),
 
   handleDeleteGalleryItem: async (id) => {
+    const prev = get().gallery
+    const selectedWas = get().selectedGalleryId
+    // Drop from UI immediately; disk cleanup finishes in the background.
+    set({
+      gallery: prev.filter((item) => item.id !== id),
+      selectedGalleryId: selectedWas === id ? null : selectedWas,
+    })
     try {
       await deleteGalleryItem(id)
       notifySuccess("Image deleted")
     } catch (e) {
+      set({
+        gallery: prev,
+        selectedGalleryId: selectedWas,
+      })
       notifyError(e instanceof Error ? e.message : String(e), "Delete failed")
       throw e
     }

@@ -36,7 +36,35 @@ pub(crate) fn connect_comfy_ws(port: u16, client_id: &str) -> Result<ComfySocket
 }
 
 fn preview_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(crate::app_paths::app_data_dir(app)?.join("previews"))
+    Ok(crate::app_paths::app_data_dir(app)?.join("tmp"))
+}
+
+/// Drop live latent-preview frames for one job (`{job_id}_0.*` / `{job_id}_1.*`).
+pub fn cleanup_job_previews(app: &AppHandle, job_id: &str) {
+    let Ok(dir) = preview_dir(app) else {
+        return;
+    };
+    let Ok(entries) = fs::read_dir(&dir) else {
+        return;
+    };
+    let prefix = format!("{job_id}_");
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        if name.starts_with(&prefix) {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
+}
+
+/// Wipe leftover live latent frames (e.g. after a crash). Safe at startup.
+pub fn clear_preview_dir(app: &AppHandle) {
+    let Ok(dir) = preview_dir(app) else {
+        return;
+    };
+    let _ = fs::remove_dir_all(&dir);
 }
 
 fn write_preview_frame(app: &AppHandle, job_id: &str, slot: u8, payload: &[u8]) -> Option<PathBuf> {

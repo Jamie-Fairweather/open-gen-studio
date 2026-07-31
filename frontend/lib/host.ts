@@ -131,7 +131,6 @@ export {
 export {
   listPromptToolWeights,
   ensurePromptToolsProvider,
-  readImageEmbeddedPrompt,
   saveTempToolImage,
   runImageToPrompt,
   runPromptEnhance,

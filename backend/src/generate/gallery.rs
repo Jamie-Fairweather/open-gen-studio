@@ -9,16 +9,20 @@ pub fn gallery_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(crate::app_paths::app_data_dir(app)?.join("gallery"))
 }
 
+pub fn previews_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(crate::app_paths::app_data_dir(app)?.join("previews"))
+}
+
 /// `gallery/YYYY-MM-DD` (local calendar day).
 pub(crate) fn gallery_day_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let day = chrono::Local::now().format("%Y-%m-%d").to_string();
     Ok(gallery_dir(app)?.join(day))
 }
 
-/// Sidecar JPEG for the gallery grid - keeps the rail from decoding full 2K–4K PNGs.
+/// Gallery-grid JPEG under `previews/` - keeps the rail from decoding full 2K–4K PNGs.
 const GALLERY_THUMB_MAX: u32 = 384;
 
-fn gallery_thumbnail_path(image_path: &Path) -> PathBuf {
+fn legacy_sidecar_thumb(image_path: &Path) -> PathBuf {
     let stem = image_path
         .file_stem()
         .and_then(|s| s.to_str())
@@ -26,14 +30,50 @@ fn gallery_thumbnail_path(image_path: &Path) -> PathBuf {
     image_path.with_file_name(format!("{stem}.thumb.jpg"))
 }
 
-/// Write a small JPEG next to `image_path`. Returns the thumbnail path.
-pub fn write_gallery_thumbnail(image_path: &Path) -> Result<PathBuf, String> {
+/// `gallery/<folder>/<stem>.png` → `previews/<folder>/<stem>.thumb.jpg`
+fn gallery_thumbnail_path(previews_root: &Path, image_path: &Path) -> PathBuf {
+    let stem = image_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("image");
+    let filename = format!("{stem}.thumb.jpg");
+    match image_path.parent().and_then(|p| p.file_name()) {
+        Some(folder) => previews_root.join(folder).join(filename),
+        None => previews_root.join(filename),
+    }
+}
+
+fn relocate_thumb(from: &Path, dest: &Path) -> bool {
+    if !from.is_file() || from == dest {
+        return dest.is_file();
+    }
+    if let Some(parent) = dest.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if fs::rename(from, dest).is_ok() {
+        return true;
+    }
+    if fs::copy(from, dest).is_ok() {
+        let _ = fs::remove_file(from);
+        return dest.is_file();
+    }
+    false
+}
+
+/// Write (or migrate) a small JPEG under `previews/`. Returns the thumbnail path.
+pub fn write_gallery_thumbnail(app: &AppHandle, image_path: &Path) -> Result<PathBuf, String> {
     if !image_path.is_file() {
         return Err(format!("gallery image missing: {}", image_path.display()));
     }
-    let dest = gallery_thumbnail_path(image_path);
+    let dest = gallery_thumbnail_path(&previews_dir(app)?, image_path);
     if dest.is_file() {
         return Ok(dest);
+    }
+    if relocate_thumb(&legacy_sidecar_thumb(image_path), &dest) {
+        return Ok(dest);
+    }
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("create previews dir: {e}"))?;
     }
     let img = image::open(image_path).map_err(|e| format!("open gallery image: {e}"))?;
     let thumb = img.thumbnail(GALLERY_THUMB_MAX, GALLERY_THUMB_MAX);
@@ -43,29 +83,45 @@ pub fn write_gallery_thumbnail(image_path: &Path) -> Result<PathBuf, String> {
     Ok(dest)
 }
 
-/// Ensure each item has a usable on-disk thumbnail.
+/// Ensure each item has a usable thumbnail under `previews/`.
 /// Returns updated items plus `(id, thumb_path)` pairs that should be persisted.
 pub fn ensure_gallery_thumbnails(
+    app: &AppHandle,
     items: Vec<GalleryItem>,
 ) -> (Vec<GalleryItem>, Vec<(String, String)>) {
+    let Ok(previews) = previews_dir(app) else {
+        return (items, Vec::new());
+    };
     let mut out = Vec::with_capacity(items.len());
     let mut updates = Vec::new();
     for mut item in items {
-        let thumb_ok = item
-            .thumbnail_path
-            .as_deref()
-            .map(|p| Path::new(p).is_file())
-            .unwrap_or(false);
-        if !thumb_ok {
-            match write_gallery_thumbnail(Path::new(&item.path)) {
-                Ok(thumb) => {
-                    let path = thumb.display().to_string();
+        let image = Path::new(&item.path);
+        let dest = gallery_thumbnail_path(&previews, image);
+        let dest_s = dest.display().to_string();
+        let already = item.thumbnail_path.as_deref() == Some(dest_s.as_str()) && dest.is_file();
+        if already {
+            out.push(item);
+            continue;
+        }
+        if !dest.is_file() {
+            if let Some(old) = item.thumbnail_path.as_deref().map(Path::new) {
+                let _ = relocate_thumb(old, &dest);
+            }
+        }
+        match if dest.is_file() {
+            Ok(dest.clone())
+        } else {
+            write_gallery_thumbnail(app, image)
+        } {
+            Ok(thumb) => {
+                let path = thumb.display().to_string();
+                if item.thumbnail_path.as_deref() != Some(path.as_str()) {
                     updates.push((item.id.clone(), path.clone()));
                     item.thumbnail_path = Some(path);
                 }
-                Err(e) => {
-                    log::warn!("gallery thumbnail skipped for {}: {e}", item.id);
-                }
+            }
+            Err(e) => {
+                log::warn!("gallery thumbnail skipped for {}: {e}", item.id);
             }
         }
         out.push(item);

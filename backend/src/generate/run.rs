@@ -208,7 +208,7 @@ pub fn run_generate(
             "values": values,
         })
         .to_string();
-        let thumb_path = write_gallery_thumbnail(&dest)
+        let thumb_path = write_gallery_thumbnail(app, &dest)
             .ok()
             .map(|p| p.display().to_string());
         let item = {

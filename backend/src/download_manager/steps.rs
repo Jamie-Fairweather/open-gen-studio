@@ -7,7 +7,7 @@ use crate::loras;
 use crate::prompt_tools;
 use crate::upscale;
 use serde_json::{json, Value};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
@@ -88,11 +88,12 @@ pub(crate) fn run_step(
                     None => true,
                 };
                 if complete {
+                    // Already on disk — mark complete so Downloads shows the step as done.
                     let state = app.state::<AppState>();
                     let db = state.db.lock().map_err(|e| e.to_string())?;
                     let _ = db.update_download_step_status(
                         &step.id,
-                        "running",
+                        "done",
                         None,
                         Some(len as i64),
                         Some(len as i64),
@@ -263,13 +264,24 @@ pub(crate) fn run_step(
                     if engine != comfy::ENGINE {
                         return Err(format!("unknown engine: {engine}"));
                     }
+                    let force = spec.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
                     comfy::emit_runtime_progress(app, "extract", "Extracting ComfyUI…");
                     let existing = {
                         let state = app.state::<AppState>();
                         let db = state.db.lock().map_err(|e| e.to_string())?;
                         db.get_runtime_by_engine(comfy::ENGINE)?
                     };
-                    comfy::extract_portable_core(app, existing.as_ref(), false)
+                    // Stop any running Comfy before wipe/extract (Windows file locks).
+                    {
+                        let state = app.state::<AppState>();
+                        let _ = comfy::stop(&state.processes);
+                    }
+                    if let Some(ref rt) = existing {
+                        if !rt.install_path.is_empty() {
+                            comfy::kill_portable_python(Path::new(&rt.install_path));
+                        }
+                    }
+                    comfy::extract_portable_core(app, existing.as_ref(), force)
                 }
                 "runtime_configure" => {
                     let engine = spec
@@ -279,13 +291,14 @@ pub(crate) fn run_step(
                     if engine != comfy::ENGINE {
                         return Err(format!("unknown engine: {engine}"));
                     }
+                    let force = spec.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
                     comfy::emit_runtime_progress(app, "configure", "Configuring ComfyUI…");
                     let existing = {
                         let state = app.state::<AppState>();
                         let db = state.db.lock().map_err(|e| e.to_string())?;
                         db.get_runtime_by_engine(comfy::ENGINE)?
                     };
-                    let runtime = comfy::configure_portable_core(app, existing.as_ref(), false)?;
+                    let runtime = comfy::configure_portable_core(app, existing.as_ref(), force)?;
                     {
                         let state = app.state::<AppState>();
                         let db = state.db.lock().map_err(|e| e.to_string())?;

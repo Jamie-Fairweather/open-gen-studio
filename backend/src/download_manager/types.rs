@@ -19,11 +19,15 @@ pub enum DownloadSpec {
     Runtime { engine: String },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct EnsureOpts {
     #[serde(default)]
     pub wait: bool,
+    /// Skip the ready check and re-run install steps (e.g. GPU vendor change / Reinstall).
+    /// HTTP steps still skip when the archive is already on disk (shown as done).
+    #[serde(default)]
+    pub force: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

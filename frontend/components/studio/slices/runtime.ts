@@ -1,7 +1,8 @@
 import type { Dispatch, SetStateAction } from "react"
 import type { StateCreator } from "zustand"
 import {
-  ensureDownload,
+  installComfyui,
+  listSettings,
   runtimePinsStatus,
   startComfyui,
   stopComfyui,
@@ -15,7 +16,7 @@ import {
   notifySuccess,
 } from "@/lib/notify"
 import type { StudioStore } from "../studio-store-types"
-import { applySet } from "./helpers"
+import { applySet, SETTING_GPU_VENDOR } from "./helpers"
 
 async function comfyInstallVersion(
   runtimes: RuntimeInstall[]
@@ -68,6 +69,20 @@ export const createRuntimeSlice: StateCreator<
 
   handleInstallComfy: async () => {
     const s = get()
+    const gpu = s.gpu
+    if (gpu?.needsVendorChoice) {
+      const settings = await listSettings().catch(
+        () => ({}) as Record<string, string>
+      )
+      if (!settings[SETTING_GPU_VENDOR]?.trim()) {
+        s.setGpuVendorDialogOpen(true)
+        notifyError(
+          "Choose which GPU to use before installing the runtime",
+          "GPU required"
+        )
+        return
+      }
+    }
     s.setRuntimeBusy(true)
     s.setRuntimeMessage("Queued ComfyUI install…")
     const ver = await comfyInstallVersion(s.runtimes)
@@ -77,12 +92,11 @@ export const createRuntimeSlice: StateCreator<
       "runtime-install"
     )
     try {
-      await ensureDownload(
-        { kind: "runtime", engine: "comfyui" },
-        { wait: false }
-      )
+      // Force reinstall so GPU vendor / portable pin changes replace the old build.
+      await installComfyui()
     } catch (e) {
       s.setRuntimeBusy(false)
+      s.setRuntimeMessage(null)
       notifyError(
         e instanceof Error ? e.message : String(e),
         "ComfyUI install failed"

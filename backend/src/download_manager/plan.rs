@@ -89,17 +89,20 @@ pub(crate) fn is_ready(app: &AppHandle, spec: &DownloadSpec) -> Result<bool, Str
             if engine != comfy::ENGINE {
                 return Err(format!("unknown runtime engine: {engine}"));
             }
+            // Must match the chosen GPU portable pin (e.g. nvidia vs amd), not just files on disk.
+            let Ok(kind) = comfy::portable_kind_for_app(app) else {
+                return Ok(false);
+            };
             let state = app.state::<AppState>();
             let db = state.db.lock().map_err(|e| e.to_string())?;
             match db.get_runtime_by_engine(comfy::ENGINE)? {
                 Some(rt) => {
+                    let path = PathBuf::from(&rt.install_path);
                     !rt.install_path.is_empty()
                         && rt.status != "error"
                         && rt.status != "installing"
-                        && PathBuf::from(&rt.install_path)
-                            .join("python_embeded")
-                            .join("python.exe")
-                            .is_file()
+                        && path.join("python_embeded").join("python.exe").is_file()
+                        && comfy::portable_pin_matches(&path, kind.as_str())
                 }
                 None => false,
             }
@@ -142,7 +145,11 @@ fn http_step(
     }
 }
 
-pub(crate) fn plan_steps(app: &AppHandle, spec: &DownloadSpec) -> Result<Vec<PlannedStep>, String> {
+pub(crate) fn plan_steps(
+    app: &AppHandle,
+    spec: &DownloadSpec,
+    force: bool,
+) -> Result<Vec<PlannedStep>, String> {
     match spec {
         DownloadSpec::PromptTools { .. } => {
             let mut steps = vec![
@@ -246,22 +253,35 @@ pub(crate) fn plan_steps(app: &AppHandle, spec: &DownloadSpec) -> Result<Vec<Pla
             if engine != comfy::ENGINE {
                 return Err(format!("unknown runtime engine: {engine}"));
             }
-            let gpu = crate::gpu::detect_nvidia();
-            let url = comfy::resolve_portable_url(&gpu)?;
-            let dest = comfy::portable_archive_path(app)?;
+            let kind = comfy::portable_kind_for_app(app)?;
+            let url = comfy::resolve_portable_url(kind)?;
+            let dest = comfy::portable_archive_path(app, kind)?;
             let ver = comfy::pinned_version();
             Ok(vec![
-                http_step(format!("Download ComfyUI {ver}"), url, &dest, None),
+                http_step(
+                    format!("Download ComfyUI {ver} ({})", kind.as_str()),
+                    url,
+                    &dest,
+                    None,
+                ),
                 PlannedStep {
                     step_kind: "action".into(),
                     label: "Extract".into(),
-                    spec: json!({ "action": "runtime_extract", "engine": engine }),
+                    spec: json!({
+                        "action": "runtime_extract",
+                        "engine": engine,
+                        "force": force,
+                    }),
                     bytes_total: None,
                 },
                 PlannedStep {
                     step_kind: "action".into(),
                     label: "Configure".into(),
-                    spec: json!({ "action": "runtime_configure", "engine": engine }),
+                    spec: json!({
+                        "action": "runtime_configure",
+                        "engine": engine,
+                        "force": force,
+                    }),
                     bytes_total: None,
                 },
                 PlannedStep {
@@ -301,11 +321,15 @@ pub(crate) fn enrich_title(app: &AppHandle, spec: &DownloadSpec) -> String {
     }
 }
 
-pub(crate) fn enqueue_job(app: &AppHandle, spec: &DownloadSpec) -> Result<String, String> {
+pub(crate) fn enqueue_job(
+    app: &AppHandle,
+    spec: &DownloadSpec,
+    force: bool,
+) -> Result<String, String> {
     let job_key = spec_job_key(spec);
     let title = enrich_title(app, spec);
     let kind = spec_kind(spec).to_string();
-    let planned = plan_steps(app, spec)?;
+    let planned = plan_steps(app, spec, force)?;
     let ts = now_secs();
     let job_id = Uuid::new_v4().to_string();
 

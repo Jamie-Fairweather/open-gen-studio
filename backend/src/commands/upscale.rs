@@ -32,7 +32,10 @@ pub fn install_upscaler(
     let _ = download_manager::ensure(
         &app,
         DownloadSpec::Upscale { id },
-        EnsureOpts { wait: false },
+        EnsureOpts {
+            wait: false,
+            ..Default::default()
+        },
     )?;
     Ok(())
 }
@@ -44,7 +47,10 @@ pub fn ensure_usdu_node(app: AppHandle, _state: State<'_, AppState>) -> Result<(
     let _ = download_manager::ensure(
         &app,
         DownloadSpec::Upscale { id: "usdu".into() },
-        EnsureOpts { wait: false },
+        EnsureOpts {
+            wait: false,
+            ..Default::default()
+        },
     )?;
     Ok(())
 }
@@ -56,7 +62,10 @@ pub fn ensure_supir_node(app: AppHandle, _state: State<'_, AppState>) -> Result<
     let _ = download_manager::ensure(
         &app,
         DownloadSpec::Upscale { id: "supir".into() },
-        EnsureOpts { wait: false },
+        EnsureOpts {
+            wait: false,
+            ..Default::default()
+        },
     )?;
     Ok(())
 }

@@ -109,6 +109,7 @@ bun run desktop:build    # production desktop build
 | [Coding standards](docs/contributing/coding-standards.md)                      | IPC: Rust → Specta → TypeScript |
 | [Adding a model architecture](docs/contributing/adding-model-architectures.md) | New `RecipeArch` end-to-end     |
 | [Product plan](docs/PLAN.md)                                                   | Vision, architecture, roadmap   |
+| [GPU support plan](docs/gpu-support-plan.md)                                   | NVIDIA / AMD / Intel roadmap    |
 | [Official Blueprints](content/blueprints/README.md)                            | Recipe manifest layout          |
 | [Official LoRAs](content/loras/README.md)                                      | Multi-arch LoRA packs           |
 

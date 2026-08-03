@@ -24,7 +24,10 @@ pub fn ensure_prompt_tools_provider(
         DownloadSpec::PromptTools {
             provider: provider_id,
         },
-        EnsureOpts { wait: false },
+        EnsureOpts {
+            wait: false,
+            ..Default::default()
+        },
     )?;
     Ok(())
 }

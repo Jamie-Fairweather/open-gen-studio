@@ -53,6 +53,11 @@ pub(crate) fn emit_progress(app: &AppHandle, stage: &str, message: &str) {
     );
 }
 
+/// Pin marker body: `{version}|{portable_kind}` e.g. `v0.28.0|nvidia_cu126`.
+pub fn pin_marker_value(portable_kind: &str) -> String {
+    format!("{COMFY_PINNED_VERSION}|{portable_kind}")
+}
+
 pub fn read_pin_marker(root: &Path) -> Option<String> {
     fs::read_to_string(root.join(COMFY_PIN_MARKER))
         .ok()
@@ -60,13 +65,15 @@ pub fn read_pin_marker(root: &Path) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
-pub(crate) fn write_pin_marker(root: &Path) -> Result<(), String> {
-    fs::write(root.join(COMFY_PIN_MARKER), COMFY_PINNED_VERSION).map_err(|e| e.to_string())
+pub(crate) fn write_pin_marker(root: &Path, portable_kind: &str) -> Result<(), String> {
+    fs::write(root.join(COMFY_PIN_MARKER), pin_marker_value(portable_kind))
+        .map_err(|e| e.to_string())
 }
 
-/// True when the extract looks ready and matches the app's Comfy pin.
-pub fn portable_pin_matches(root: &Path) -> bool {
-    portable_ready(root) && read_pin_marker(root).as_deref() == Some(COMFY_PINNED_VERSION)
+/// True when the extract looks ready and matches the app's Comfy pin + portable kind.
+pub fn portable_pin_matches(root: &Path, portable_kind: &str) -> bool {
+    portable_ready(root)
+        && read_pin_marker(root).as_deref() == Some(pin_marker_value(portable_kind).as_str())
 }
 
 pub fn runtimes_dir(app: &AppHandle) -> Result<PathBuf, String> {

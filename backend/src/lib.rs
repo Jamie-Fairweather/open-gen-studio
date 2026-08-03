@@ -85,7 +85,6 @@ pub fn run() {
             app.manage(AppState {
                 db: Mutex::new(db),
                 processes: Mutex::new(ProcessState::default()),
-                comfy_install_busy: Mutex::new(false),
                 cancelled_jobs: Mutex::new(Default::default()),
                 active_generate_jobs: std::sync::Arc::new(Mutex::new(Default::default())),
             });
@@ -119,11 +118,12 @@ pub fn run() {
             }
 
             // Auto-install ComfyUI portable in the background - most Blueprints need it.
+            // Skips when mixed GPU vendors and no gpu_vendor setting yet (user must pick).
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 std::thread::sleep(Duration::from_millis(800));
                 let state = handle.state::<AppState>();
-                let needs = commands::comfy_needs_install(&state).unwrap_or(true);
+                let needs = commands::comfy_needs_install(&handle, &state).unwrap_or(true);
                 if needs {
                     let _ = commands::enqueue_comfy_install(&handle, &state, false);
                 }

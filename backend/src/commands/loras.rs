@@ -27,7 +27,10 @@ pub fn install_lora_variant(
     let _ = download_manager::ensure(
         &app,
         DownloadSpec::Lora { id, arch },
-        EnsureOpts { wait: false },
+        EnsureOpts {
+            wait: false,
+            ..Default::default()
+        },
     )?;
     Ok(())
 }

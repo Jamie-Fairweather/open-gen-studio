@@ -42,6 +42,8 @@ export function computeActiveDetail(
 export const DEFAULT_UPSCALE_MODEL_ID = "4x-ultrasharp"
 
 export const SETTING_SELECTED_BLUEPRINT = "selected_blueprint_id"
+export const SETTING_GPU_VENDOR = "gpu_vendor"
+export const SETTING_NVIDIA_PORTABLE_OVERRIDE = "nvidia_portable_override"
 
 export function blueprintIdFromJobKey(jobKey: string): string | null {
   return jobKey.startsWith("blueprint:")

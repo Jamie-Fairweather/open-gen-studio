@@ -15,8 +15,8 @@ pub fn list_runtimes(state: State<'_, AppState>) -> Result<Vec<RuntimeInstall>, 
     db.list_runtimes()
 }
 
-/// Returns immediately with status=installing; heavy work runs on a background thread.
-/// Always force-reinstalls the **pinned** portable (Settings → Reinstall).
+/// Force-reinstall the pinned portable via the Download Manager (Settings → Reinstall).
+/// Already-downloaded archives still appear as a completed download step.
 #[tauri::command]
 #[specta::specta]
 pub fn install_comfyui(
@@ -26,7 +26,12 @@ pub fn install_comfyui(
     enqueue_comfy_install(&app, &state, true)
 }
 
-pub fn comfy_needs_install(state: &AppState) -> Result<bool, String> {
+pub fn comfy_needs_install(app: &AppHandle, state: &AppState) -> Result<bool, String> {
+    let kind = match comfy::portable_kind_for_app(app) {
+        Ok(k) => k,
+        // Mixed vendors unset — wait for first-run picker; do not auto-install.
+        Err(_) => return Ok(false),
+    };
     let db = state.db.lock().map_err(|e| e.to_string())?;
     match db.get_runtime_by_engine(comfy::ENGINE)? {
         Some(r) => {
@@ -34,7 +39,7 @@ pub fn comfy_needs_install(state: &AppState) -> Result<bool, String> {
             let path_ok = !r.install_path.is_empty()
                 && path.join("ComfyUI").is_dir()
                 && path.join("python_embeded").join("python.exe").is_file();
-            let pin_ok = path_ok && comfy::portable_pin_matches(path);
+            let pin_ok = path_ok && comfy::portable_pin_matches(path, kind.as_str());
             // "installing" after a crash means a stalled job - retry.
             // Pin mismatch → migrate to the version this app release requires.
             Ok(!path_ok || !pin_ok || r.status == "error" || r.status == "installing")
@@ -43,157 +48,36 @@ pub fn comfy_needs_install(state: &AppState) -> Result<bool, String> {
     }
 }
 
-/// `force` = wipe/reinstall even when already on the pin (user Reinstall).
+/// `force` = re-run Download Manager steps even when pin already matches (user Reinstall).
+/// Jobs always appear in Downloads; HTTP steps mark complete when the archive is cached.
 pub fn enqueue_comfy_install(
     app: &AppHandle,
     state: &AppState,
     force: bool,
 ) -> Result<RuntimeInstall, String> {
-    if !force {
-        let _ = download_manager::ensure(
-            app,
-            DownloadSpec::Runtime {
-                engine: comfy::ENGINE.into(),
-            },
-            EnsureOpts { wait: false },
-        )?;
-        let db = state.db.lock().map_err(|e| e.to_string())?;
-        if let Some(r) = db.get_runtime_by_engine(comfy::ENGINE)? {
-            return Ok(r);
-        }
-        // Row may appear after install completes; return a placeholder installing row.
-        return Ok(RuntimeInstall {
-            id: uuid::Uuid::new_v4().to_string(),
+    let _ = download_manager::ensure(
+        app,
+        DownloadSpec::Runtime {
             engine: comfy::ENGINE.into(),
-            version: comfy::pinned_version().into(),
-            install_path: String::new(),
-            port: Some(comfy::DEFAULT_PORT as i64),
-            status: "installing".into(),
-            error: None,
-            created_at: now_secs(),
-            updated_at: now_secs(),
-        });
+        },
+        EnsureOpts { wait: false, force },
+    )?;
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    if let Some(r) = db.get_runtime_by_engine(comfy::ENGINE)? {
+        return Ok(r);
     }
-
-    {
-        let mut busy = state.comfy_install_busy.lock().map_err(|e| e.to_string())?;
-        if *busy {
-            let db = state.db.lock().map_err(|e| e.to_string())?;
-            if let Some(r) = db.get_runtime_by_engine(comfy::ENGINE)? {
-                return Ok(r);
-            }
-            return Err("ComfyUI install already in progress".into());
-        }
-        *busy = true;
-    }
-
-    let existing = {
-        let db = state.db.lock().map_err(|e| e.to_string())?;
-        db.get_runtime_by_engine(comfy::ENGINE)?
-    };
-
-    let installing = if let Some(runtime) = existing.clone() {
-        let updated = {
-            let db = state.db.lock().map_err(|e| e.to_string())?;
-            db.update_runtime_status(&runtime.id, "installing", None, None)?
-        };
-        let _ = app.emit("runtimes://updated", &updated);
-        updated
-    } else {
-        let row = RuntimeInstall {
-            id: uuid::Uuid::new_v4().to_string(),
-            engine: comfy::ENGINE.into(),
-            version: comfy::pinned_version().into(),
-            install_path: String::new(),
-            port: Some(comfy::DEFAULT_PORT as i64),
-            status: "installing".into(),
-            error: None,
-            created_at: now_secs(),
-            updated_at: now_secs(),
-        };
-        {
-            let db = state.db.lock().map_err(|e| e.to_string())?;
-            db.upsert_runtime(&row)?;
-        }
-        let _ = app.emit("runtimes://updated", &row);
-        row
-    };
-
-    // Stop tracked Comfy + orphaned portable pythons before wipe (Windows locks otherwise).
-    let _ = comfy::stop(&state.processes);
-    if let Some(ref rt) = existing {
-        if !rt.install_path.is_empty() {
-            comfy::kill_portable_python(Path::new(&rt.install_path));
-        }
-    }
-
-    let app_bg = app.clone();
-    let job = installing.clone();
-    std::thread::spawn(move || {
-        let result = comfy::install_portable(&app_bg, Some(&job), force);
-        let state = app_bg.state::<AppState>();
-        match result {
-            Ok(runtime) => {
-                if let Ok(db) = state.db.lock() {
-                    let _ = db.upsert_runtime(&runtime);
-                }
-                let _ = app_bg.emit("runtimes://updated", &runtime);
-                let _ = app_bg.emit(
-                    "runtimes://progress",
-                    comfy::RuntimeProgress {
-                        engine: comfy::ENGINE.into(),
-                        stage: "done".into(),
-                        message: format!("ComfyUI {} installed", comfy::pinned_version()),
-                    },
-                );
-            }
-            Err(err) => {
-                let failed = if let Ok(db) = state.db.lock() {
-                    db.update_runtime_status(&job.id, "error", None, Some(&err))
-                        .unwrap_or_else(|_| RuntimeInstall {
-                            id: job.id.clone(),
-                            engine: comfy::ENGINE.into(),
-                            version: job.version.clone(),
-                            install_path: String::new(),
-                            port: job.port,
-                            status: "error".into(),
-                            error: Some(err.clone()),
-                            created_at: job.created_at,
-                            updated_at: now_secs(),
-                        })
-                } else {
-                    RuntimeInstall {
-                        id: job.id.clone(),
-                        engine: comfy::ENGINE.into(),
-                        version: job.version.clone(),
-                        install_path: String::new(),
-                        port: job.port,
-                        status: "error".into(),
-                        error: Some(err.clone()),
-                        created_at: job.created_at,
-                        updated_at: now_secs(),
-                    }
-                };
-                let _ = app_bg.emit("runtimes://updated", &failed);
-                let _ = app_bg.emit(
-                    "runtimes://progress",
-                    comfy::RuntimeProgress {
-                        engine: comfy::ENGINE.into(),
-                        stage: "error".into(),
-                        message: err,
-                    },
-                );
-            }
-        }
-        {
-            let mut busy = state.comfy_install_busy.lock().ok();
-            if let Some(ref mut b) = busy {
-                **b = false;
-            }
-        }
-    });
-
-    Ok(installing)
+    // Row may appear after install completes; return a placeholder installing row.
+    Ok(RuntimeInstall {
+        id: uuid::Uuid::new_v4().to_string(),
+        engine: comfy::ENGINE.into(),
+        version: comfy::pinned_version().into(),
+        install_path: String::new(),
+        port: Some(comfy::DEFAULT_PORT as i64),
+        status: "installing".into(),
+        error: None,
+        created_at: now_secs(),
+        updated_at: now_secs(),
+    })
 }
 
 /// Spawns ComfyUI and returns immediately; health wait runs in a background thread.

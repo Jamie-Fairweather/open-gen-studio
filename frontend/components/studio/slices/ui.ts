@@ -17,6 +17,7 @@ export type UiSlice = {
   pickerOpen: boolean
   editBlueprintId: string | null
   settingsOpen: boolean
+  gpuVendorDialogOpen: boolean
   modelsOpen: boolean
   loraPickerOpen: boolean
   galleryOpen: boolean
@@ -29,6 +30,7 @@ export type UiSlice = {
   setPickerOpen: Dispatch<SetStateAction<boolean>>
   setEditBlueprintId: Dispatch<SetStateAction<string | null>>
   setSettingsOpen: Dispatch<SetStateAction<boolean>>
+  setGpuVendorDialogOpen: Dispatch<SetStateAction<boolean>>
   setModelsOpen: Dispatch<SetStateAction<boolean>>
   setLoraPickerOpen: Dispatch<SetStateAction<boolean>>
   setGalleryOpen: Dispatch<SetStateAction<boolean>>
@@ -54,6 +56,7 @@ export const createUiSlice: StateCreator<StudioStore, [], [], UiSlice> = (
   pickerOpen: false,
   editBlueprintId: null,
   settingsOpen: false,
+  gpuVendorDialogOpen: false,
   modelsOpen: false,
   loraPickerOpen: false,
   galleryOpen: false,
@@ -74,6 +77,10 @@ export const createUiSlice: StateCreator<StudioStore, [], [], UiSlice> = (
     set((s) => ({ editBlueprintId: applySet(s.editBlueprintId, next) })),
   setSettingsOpen: (next) =>
     set((s) => ({ settingsOpen: applySet(s.settingsOpen, next) })),
+  setGpuVendorDialogOpen: (next) =>
+    set((s) => ({
+      gpuVendorDialogOpen: applySet(s.gpuVendorDialogOpen, next),
+    })),
   setModelsOpen: (next) =>
     set((s) => ({ modelsOpen: applySet(s.modelsOpen, next) })),
   setLoraPickerOpen: (next) =>

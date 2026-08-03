@@ -5,9 +5,9 @@ mod process;
 
 #[allow(unused_imports)]
 pub use install::{
-    comfy_pin_status, configure_portable_core, download_portable_archive, extract_portable_core,
-    install_portable, install_portable_core, pinned_version, portable_archive_path,
-    resolve_portable_url,
+    comfy_pin_status, configure_portable_core, download_portable_archive, effective_gpu_choice,
+    extract_portable_core, install_portable, install_portable_core, pinned_version,
+    portable_archive_path, portable_kind_for_app, resolve_portable_url,
 };
 #[allow(unused_imports)]
 pub use paths::{

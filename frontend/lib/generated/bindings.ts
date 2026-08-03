@@ -44,8 +44,8 @@ export const commands = {
     }),
   listRuntimes: () => __TAURI_INVOKE<RuntimeInstall[]>("list_runtimes"),
   /**
-   *  Returns immediately with status=installing; heavy work runs on a background thread.
-   *  Always force-reinstalls the **pinned** portable (Settings → Reinstall).
+   *  Force-reinstall the pinned portable via the Download Manager (Settings → Reinstall).
+   *  Already-downloaded archives still appear as a completed download step.
    */
   installComfyui: () => __TAURI_INVOKE<RuntimeInstall>("install_comfyui"),
   /**  Spawns ComfyUI and returns immediately; health wait runs in a background thread. */
@@ -127,6 +127,11 @@ export const commands = {
     spec: DownloadSpec,
     opts: {
       wait?: boolean
+      /**
+       *  Skip the ready check and re-run install steps (e.g. GPU vendor change / Reinstall).
+       *  HTTP steps still skip when the archive is already on disk (shown as done).
+       */
+      force?: boolean
     } | null
   ) => __TAURI_INVOKE<EnsureResult>("ensure_download", { spec, opts }),
   listDownloads: () => __TAURI_INVOKE<DownloadSnapshot>("list_downloads"),
@@ -312,6 +317,11 @@ export type EmbeddedModel = {
 
 export type EnsureOpts = {
   wait?: boolean
+  /**
+   *  Skip the ready check and re-run install steps (e.g. GPU vendor change / Reinstall).
+   *  HTTP steps still skip when the archive is already on disk (shown as done).
+   */
+  force?: boolean
 }
 
 export type EnsureResult = {
@@ -329,13 +339,29 @@ export type GalleryItem = {
   createdAt: number
 }
 
+export type GpuAdapter = {
+  vendor: GpuVendor
+  name: string
+  memoryTotal: string | null
+  driverVersion: string | null
+  computeCap: string | null
+  cudaVersion: string | null
+}
+
 export type GpuInfo = {
   available: boolean
   name: string | null
   memoryTotal: string | null
   driverVersion: string | null
+  vendor: GpuVendor | null
+  nvidiaVariant: NvidiaVariant | null
+  adapters: GpuAdapter[]
+  /**  True when ≥2 distinct vendors are present (caller checks persisted choice). */
+  needsVendorChoice: boolean
   error: string | null
 }
+
+export type GpuVendor = "nvidia" | "amd" | "intel"
 
 export type Job = {
   id: string
@@ -429,6 +455,8 @@ export type ModelFileEntry = {
   relativePath: string
   bytes: number
 }
+
+export type NvidiaVariant = "modern" | "cu126"
 
 export type PackagingSuggestions = {
   models: SuggestedModel[]

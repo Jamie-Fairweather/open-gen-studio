@@ -7,11 +7,17 @@ import type { ReactNode } from "react"
 import { useShallow } from "zustand/react/shallow"
 import { BlueprintPickerDialog } from "@/components/blueprint-picker-dialog"
 import { CivitaiTokenDialog } from "@/components/civitai-token-dialog"
+import {
+  GpuVendorDialog,
+  vendorOptionsFromAdapters,
+} from "@/components/gpu-vendor-dialog"
 import { HfTokenDialog } from "@/components/hf-token-dialog"
 import { LoraPickerDialog } from "@/components/lora-picker-dialog"
 import { ModelsLibraryDialog } from "@/components/models-library-dialog"
 import { JobQueuePopover } from "@/components/job-queue-popover"
 import { SettingsDialog } from "@/components/settings-dialog"
+import { SETTING_GPU_VENDOR } from "@/components/studio/slices/helpers"
+import { setSetting } from "@/lib/host"
 import {
   selectActiveArch,
   selectActiveDetail,
@@ -114,7 +120,13 @@ export function StudioChrome({ children }: { children: ReactNode }) {
       gpu: s.gpu,
     }))
   )
+  const gpuVendorDialogOpen = useStudioStore((s) => s.gpuVendorDialogOpen)
+  const setGpuVendorDialogOpen = useStudioStore((s) => s.setGpuVendorDialogOpen)
+  const handleInstallComfy = useStudioStore((s) => s.handleInstallComfy)
   const comfy = useStudioSelector(selectComfy)
+  const gpuVendorOptions = settings.gpu
+    ? vendorOptionsFromAdapters(settings.gpu.adapters)
+    : []
 
   if (!desktop) {
     return (
@@ -324,6 +336,20 @@ export function StudioChrome({ children }: { children: ReactNode }) {
         civitaiTokenSaving={settings.civitaiTokenSaving}
         onSaveCivitaiToken={() => void settings.onSaveCivitaiToken()}
         gpu={settings.gpu}
+      />
+
+      <GpuVendorDialog
+        open={gpuVendorDialogOpen}
+        dismissible={false}
+        onOpenChange={setGpuVendorDialogOpen}
+        options={gpuVendorOptions}
+        onConfirm={async (vendor) => {
+          await setSetting(SETTING_GPU_VENDOR, vendor)
+          setGpuVendorDialogOpen(false)
+          notifySuccess("GPU selected", "Installing the matching runtime…")
+          // Kick install now that a vendor is chosen (auto-install was skipped).
+          void handleInstallComfy()
+        }}
       />
     </div>
   )

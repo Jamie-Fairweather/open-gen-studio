@@ -105,7 +105,10 @@ pub fn install_official_blueprint(
     let _ = download_manager::ensure(
         &app,
         DownloadSpec::Blueprint { id },
-        EnsureOpts { wait: false },
+        EnsureOpts {
+            wait: false,
+            ..Default::default()
+        },
     )?;
     Ok(())
 }

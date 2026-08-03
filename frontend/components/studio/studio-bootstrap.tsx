@@ -15,6 +15,7 @@ import {
   listRuntimes,
   listSettings,
   listUpscalers,
+  setSetting,
   onBlueprintProbe,
   onBlueprintProgress,
   onBlueprintSizes,
@@ -56,7 +57,10 @@ import {
   notifySuccess,
 } from "@/lib/notify"
 import { EMPTY_DOWNLOAD_SNAPSHOT } from "@/components/studio/slices/downloads"
-import { SETTING_SELECTED_BLUEPRINT } from "@/components/studio/slices/helpers"
+import {
+  SETTING_GPU_VENDOR,
+  SETTING_SELECTED_BLUEPRINT,
+} from "@/components/studio/slices/helpers"
 import {
   selectActiveSelectedId,
   selectTabGallery,
@@ -262,6 +266,17 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
           settings[SETTING_SELECTED_BLUEPRINT]?.trim() || null
         const s = store()
         s.setGpu(gpuInfo)
+
+        const savedVendor = settings[SETTING_GPU_VENDOR]?.trim() || ""
+        if (gpuInfo.available && gpuInfo.adapters.length > 0) {
+          const vendors = [...new Set(gpuInfo.adapters.map((a) => a.vendor))]
+          if (vendors.length === 1 && !savedVendor) {
+            void setSetting(SETTING_GPU_VENDOR, vendors[0]).catch(() => {})
+          } else if (gpuInfo.needsVendorChoice && !savedVendor) {
+            s.setGpuVendorDialogOpen(true)
+          }
+        }
+
         s.setRuntimes(rts)
         s.setBlueprints(bps)
         s.setBlueprintsLoaded(true)

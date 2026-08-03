@@ -12,7 +12,7 @@ pub(crate) fn now_secs() -> i64 {
 #[tauri::command]
 #[specta::specta]
 pub fn detect_gpu() -> GpuInfo {
-    gpu::detect_nvidia()
+    gpu::detect_gpus()
 }
 
 /// OS spell suggestions for the custom editable context menu (empty if correct / unavailable).

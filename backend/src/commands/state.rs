@@ -6,7 +6,6 @@ use std::sync::{Arc, Mutex};
 pub struct AppState {
     pub db: Mutex<Db>,
     pub processes: Mutex<ProcessState>,
-    pub comfy_install_busy: Mutex<bool>,
     /// Job ids the user asked to cancel.
     pub cancelled_jobs: Mutex<HashSet<String>>,
     /// Generate jobs with a live worker thread (DB rows alone can lie after panic).

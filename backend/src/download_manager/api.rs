@@ -105,7 +105,7 @@ pub fn ensure(
     spec: DownloadSpec,
     opts: EnsureOpts,
 ) -> Result<EnsureResult, String> {
-    if is_ready(app, &spec)? {
+    if !opts.force && is_ready(app, &spec)? {
         return Ok(EnsureResult {
             status: "ready".into(),
             job_id: None,
@@ -122,11 +122,11 @@ pub fn ensure(
                 existing.id
             } else {
                 drop(db);
-                enqueue_job(app, &spec)?
+                enqueue_job(app, &spec, opts.force)?
             }
         } else {
             drop(db);
-            enqueue_job(app, &spec)?
+            enqueue_job(app, &spec, opts.force)?
         }
     };
 

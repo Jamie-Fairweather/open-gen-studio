@@ -1,31 +1,73 @@
+use crate::commands::AppState;
 use crate::db::RuntimeInstall;
 use crate::download;
-use crate::gpu::{self, GpuInfo};
-use crate::pins::{self, COMFY_NVIDIA_PORTABLE_URL, COMFY_PINNED_VERSION};
+use crate::gpu::{
+    self, GpuVendor, NvidiaVariant, PortableKind, SETTING_GPU_VENDOR,
+    SETTING_NVIDIA_PORTABLE_OVERRIDE,
+};
+use crate::pins::{
+    self, COMFY_AMD_PORTABLE_URL, COMFY_INTEL_PORTABLE_URL, COMFY_NVIDIA_CU126_PORTABLE_URL,
+    COMFY_NVIDIA_PORTABLE_URL, COMFY_PINNED_VERSION,
+};
 use crate::process_cmd;
 use sevenz_rust2::{ArchiveReader, Password};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::{Duration, Instant};
-use tauri::AppHandle;
-
-pub fn resolve_portable_url(gpu: &GpuInfo) -> Result<&'static str, String> {
-    if !cfg!(target_os = "windows") {
-        return Err("ComfyUI portable install is Windows-only for now".into());
-    }
-    if !gpu.available {
-        return Err(gpu
-            .error
-            .clone()
-            .unwrap_or_else(|| "NVIDIA GPU required for default portable".into()));
-    }
-    // Pinned NVIDIA portable - bump COMFY_PINNED_VERSION in pins.rs with app releases.
-    Ok(COMFY_NVIDIA_PORTABLE_URL)
-}
+use tauri::{AppHandle, Manager};
 
 pub fn pinned_version() -> &'static str {
     COMFY_PINNED_VERSION
+}
+
+/// Read persisted GPU choice + detection → portable kind for install.
+pub fn effective_gpu_choice(app: &AppHandle) -> Result<(GpuVendor, Option<NvidiaVariant>), String> {
+    let info = gpu::detect_gpus();
+    let state = app.state::<AppState>();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let vendor_setting = db.get_setting(SETTING_GPU_VENDOR)?;
+    let nvidia_override = db.get_setting(SETTING_NVIDIA_PORTABLE_OVERRIDE)?;
+    gpu::resolve_choice(&info, vendor_setting.as_deref(), nvidia_override.as_deref())
+}
+
+pub fn portable_kind_for_app(app: &AppHandle) -> Result<PortableKind, String> {
+    let (vendor, nvidia) = effective_gpu_choice(app)?;
+    Ok(PortableKind::from_choice(vendor, nvidia))
+}
+
+pub fn resolve_portable_url(kind: PortableKind) -> Result<&'static str, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("ComfyUI portable install is Windows-only for now".into());
+    }
+    Ok(match kind {
+        PortableKind::NvidiaModern => COMFY_NVIDIA_PORTABLE_URL,
+        PortableKind::NvidiaCu126 => COMFY_NVIDIA_CU126_PORTABLE_URL,
+        PortableKind::Amd => COMFY_AMD_PORTABLE_URL,
+        PortableKind::Intel => COMFY_INTEL_PORTABLE_URL,
+    })
+}
+
+#[cfg(test)]
+mod portable_url_tests {
+    use super::*;
+    use crate::gpu::PortableKind;
+
+    #[test]
+    fn urls_match_kind() {
+        assert!(resolve_portable_url(PortableKind::NvidiaModern)
+            .unwrap()
+            .ends_with("ComfyUI_windows_portable_nvidia.7z"));
+        assert!(resolve_portable_url(PortableKind::NvidiaCu126)
+            .unwrap()
+            .ends_with("ComfyUI_windows_portable_nvidia_cu126.7z"));
+        assert!(resolve_portable_url(PortableKind::Amd)
+            .unwrap()
+            .ends_with("ComfyUI_windows_portable_amd.7z"));
+        assert!(resolve_portable_url(PortableKind::Intel)
+            .unwrap()
+            .ends_with("ComfyUI_windows_portable_intel.7z"));
+    }
 }
 
 /// Copy `custom_nodes` to `backup_parent` (must be **outside** the extract tree -
@@ -309,11 +351,12 @@ pub(crate) fn extract_7z(app: &AppHandle, archive: &Path, dest: &Path) -> Result
     extract_with_rust(app, archive, dest)
 }
 
-pub fn portable_archive_path(app: &AppHandle) -> Result<PathBuf, String> {
+pub fn portable_archive_path(app: &AppHandle, kind: PortableKind) -> Result<PathBuf, String> {
     Ok(crate::app_paths::app_data_dir(app)?
         .join("downloads")
         .join(format!(
-            "ComfyUI_windows_portable_nvidia_{COMFY_PINNED_VERSION}.7z"
+            "ComfyUI_windows_portable_{}_{COMFY_PINNED_VERSION}.7z",
+            kind.as_str()
         )))
 }
 
@@ -326,15 +369,16 @@ pub fn archive_looks_complete(archive: &Path) -> bool {
 
 /// Download the pinned portable archive when missing/incomplete.
 pub fn download_portable_archive(app: &AppHandle) -> Result<PathBuf, String> {
-    let gpu = gpu::detect_nvidia();
-    let url = resolve_portable_url(&gpu)?;
-    let archive = portable_archive_path(app)?;
+    let kind = portable_kind_for_app(app)?;
+    let url = resolve_portable_url(kind)?;
+    let archive = portable_archive_path(app, kind)?;
     if archive_looks_complete(&archive) {
         super::paths::emit_progress(
             app,
             "download",
             &format!(
-                "Pinned archive {COMFY_PINNED_VERSION} already downloaded - skipping download"
+                "Pinned archive {COMFY_PINNED_VERSION} ({}) already downloaded - skipping download",
+                kind.as_str()
             ),
         );
         return Ok(archive);
@@ -342,7 +386,10 @@ pub fn download_portable_archive(app: &AppHandle) -> Result<PathBuf, String> {
     super::paths::emit_progress(
         app,
         "download",
-        &format!("Downloading ComfyUI {COMFY_PINNED_VERSION} Windows Portable…"),
+        &format!(
+            "Downloading ComfyUI {COMFY_PINNED_VERSION} ({})…",
+            kind.as_str()
+        ),
     );
     download::download_file(app, url, &archive, None)?;
     Ok(archive)
@@ -383,18 +430,22 @@ pub fn extract_portable_core(
     _existing: Option<&RuntimeInstall>,
     force: bool,
 ) -> Result<(), String> {
+    let kind = portable_kind_for_app(app)?;
     let base = super::paths::runtimes_dir(app)?;
-    let archive = portable_archive_path(app)?;
+    let archive = portable_archive_path(app, kind)?;
     let extract_to = base.join("portable");
     let backup_path = custom_nodes_backup_path(&base);
 
     if let Ok(root) = super::paths::find_portable_root(&extract_to) {
         if super::paths::portable_ready(&root) {
-            if super::paths::portable_pin_matches(&root) && !force {
+            if super::paths::portable_pin_matches(&root, kind.as_str()) && !force {
                 super::paths::emit_progress(
                     app,
                     "extract",
-                    &format!("ComfyUI {COMFY_PINNED_VERSION} already extracted"),
+                    &format!(
+                        "ComfyUI {COMFY_PINNED_VERSION} ({}) already extracted",
+                        kind.as_str()
+                    ),
                 );
                 return Ok(());
             }
@@ -480,7 +531,8 @@ pub fn configure_portable_core(
             let _ = fs::remove_dir_all(&backup_path);
         }
     }
-    super::paths::write_pin_marker(&root)?;
+    let kind = portable_kind_for_app(app)?;
+    super::paths::write_pin_marker(&root, kind.as_str())?;
     Ok(ready_runtime(id, created_at, &root))
 }
 
@@ -516,7 +568,10 @@ pub fn install_portable(
 }
 
 /// Status for Settings: expected pin vs installed marker / DB version.
-pub fn comfy_pin_status(_app: &AppHandle, runtime: Option<&RuntimeInstall>) -> pins::PinStatus {
+pub fn comfy_pin_status(app: &AppHandle, runtime: Option<&RuntimeInstall>) -> pins::PinStatus {
+    let expected = portable_kind_for_app(app)
+        .map(|k| super::paths::pin_marker_value(k.as_str()))
+        .unwrap_or_else(|_| COMFY_PINNED_VERSION.into());
     let installed = runtime.and_then(|r| {
         if r.install_path.is_empty() {
             None
@@ -531,10 +586,10 @@ pub fn comfy_pin_status(_app: &AppHandle, runtime: Option<&RuntimeInstall>) -> p
             })
         }
     });
-    let matches = installed.as_deref() == Some(COMFY_PINNED_VERSION);
+    let matches = installed.as_deref() == Some(expected.as_str());
     pins::PinStatus {
         id: super::paths::ENGINE.into(),
-        expected: COMFY_PINNED_VERSION.into(),
+        expected,
         installed,
         matches,
     }

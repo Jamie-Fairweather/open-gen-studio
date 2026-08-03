@@ -6,13 +6,31 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-/// ComfyUI Windows NVIDIA portable pin (release tag).
+/// ComfyUI Windows portable pin (release tag). Bump all vendor URLs together.
 pub const COMFY_PINNED_VERSION: &str = "v0.28.0";
 
 pub const COMFY_NVIDIA_PORTABLE_URL: &str = concat!(
     "https://github.com/comfyanonymous/ComfyUI/releases/download/",
     "v0.28.0",
     "/ComfyUI_windows_portable_nvidia.7z"
+);
+
+pub const COMFY_NVIDIA_CU126_PORTABLE_URL: &str = concat!(
+    "https://github.com/comfyanonymous/ComfyUI/releases/download/",
+    "v0.28.0",
+    "/ComfyUI_windows_portable_nvidia_cu126.7z"
+);
+
+pub const COMFY_AMD_PORTABLE_URL: &str = concat!(
+    "https://github.com/comfyanonymous/ComfyUI/releases/download/",
+    "v0.28.0",
+    "/ComfyUI_windows_portable_amd.7z"
+);
+
+pub const COMFY_INTEL_PORTABLE_URL: &str = concat!(
+    "https://github.com/comfyanonymous/ComfyUI/releases/download/",
+    "v0.28.0",
+    "/ComfyUI_windows_portable_intel.7z"
 );
 
 /// Marker file written into the portable root after a successful pin install.

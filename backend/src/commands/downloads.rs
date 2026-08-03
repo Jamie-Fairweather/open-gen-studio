@@ -38,7 +38,14 @@ pub fn ensure_download(
     spec: DownloadSpec,
     opts: Option<EnsureOpts>,
 ) -> Result<EnsureResult, String> {
-    download_manager::ensure(&app, spec, opts.unwrap_or(EnsureOpts { wait: false }))
+    download_manager::ensure(
+        &app,
+        spec,
+        opts.unwrap_or(EnsureOpts {
+            wait: false,
+            ..Default::default()
+        }),
+    )
 }
 
 #[tauri::command]

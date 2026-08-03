@@ -255,6 +255,8 @@ How we ship/install ComfyUI under the host (researched against current Comfy-Org
 - NVIDIA (older / CUDA 12.6): `ComfyUI_windows_portable_nvidia_cu126.7z`
 - AMD / Intel: matching official portable when we expand GPU support
 
+Detailed matrix, detection, and phased rollout: [`gpu-support-plan.md`](./gpu-support-plan.md).
+
 Flow:
 
 ```

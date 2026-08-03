@@ -31,6 +31,13 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             jobs::list_jobs,
             jobs::create_job,
             jobs::update_job_status,
+            jobs::list_job_history,
+            jobs::pause_job,
+            jobs::resume_job,
+            jobs::reorder_job_queue,
+            jobs::clear_job_queue,
+            jobs::delete_job_history_item,
+            jobs::clear_job_history,
             gallery::list_gallery,
             gallery::add_gallery_item,
             gallery::delete_gallery_item,
@@ -93,6 +100,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<crate::ipc::JobProgress>()
         .typ::<crate::ipc::JobQueueItem>()
         .typ::<crate::ipc::JobQueueSnapshot>()
+        .typ::<crate::ipc::JobHistoryItem>()
         .typ::<crate::ipc::LoraProgress>()
         .typ::<crate::ipc::PromptToolsProgress>()
         .typ::<crate::ipc::ComfyStatus>()

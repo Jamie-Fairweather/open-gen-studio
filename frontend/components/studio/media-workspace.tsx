@@ -56,8 +56,10 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
   const stageInsetLeft = useStudioSelector(selectStageInsetLeft)
   const stageInsetRight = useStudioSelector(selectStageInsetRight)
   const stageDims = useStudioSelector(selectStageDims)
+  const followLive = useStudioStore((s) => s.followLive)
   const livePreviewSrc = useStudioStore((s) => s.livePreviewSrc)
   const pendingPreviewSrc = useStudioStore((s) => s.pendingPreviewSrc)
+  const enterFollowLive = useStudioStore((s) => s.enterFollowLive)
   const previewItem = useStudioSelector(selectPreviewItem)
   const gallerySrc = useStudioStore((s) => s.gallerySrc)
   const promotePendingPreview = useStudioStore((s) => s.promotePendingPreview)
@@ -111,7 +113,7 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
       open: s.galleryOpen,
       setOpen: s.setGalleryOpen,
       selectedId: s.selectedGalleryId,
-      setSelectedId: s.setSelectedGalleryId,
+      selectItem: s.selectGalleryItem,
       onDelete: s.handleDeleteGalleryItem,
       onReusePrompt: s.handleReuseGalleryPrompt,
       onReuseSettings: s.handleReuseGallerySettings,
@@ -121,8 +123,15 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
   const tabGallery = useStudioSelector(selectTabGallery)
 
   const [lightboxOpen, setLightboxOpen] = useState(false)
-  const stageSrc =
-    livePreviewSrc ?? (previewItem ? gallerySrc(previewItem.path) : null)
+  const showLiveStage =
+    followLive && Boolean(livePreviewSrc || pendingPreviewSrc)
+  // Ghost only while preview frames exist — hides in the same update as ingest.
+  const showLiveGhost = Boolean(livePreviewSrc || pendingPreviewSrc)
+  const stageSrc = showLiveStage
+    ? (livePreviewSrc ?? pendingPreviewSrc)
+    : previewItem
+      ? gallerySrc(previewItem.path)
+      : null
 
   return (
     <>
@@ -134,7 +143,7 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
         }}
       >
         <main className="relative flex min-h-0 flex-1 items-center justify-center px-5 py-4 md:px-10">
-          {livePreviewSrc || pendingPreviewSrc ? (
+          {showLiveStage ? (
             <div className="[container-type:size] relative flex h-full min-h-0 w-full items-center justify-center">
               {livePreviewSrc ? (
                 <StageImage
@@ -283,13 +292,23 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
             title={`${studioLabel} Gallery`}
             items={tabGallery}
             selectedId={gallery.selectedId}
-            onSelect={gallery.setSelectedId}
+            onSelect={gallery.selectItem}
             onDelete={gallery.onDelete}
             onReusePrompt={gallery.onReusePrompt}
             onReuseSettings={gallery.onReuseSettings}
             onImageToPrompt={(item) =>
               gallery.openImageToPrompt({ imagePath: item.path })
             }
+            showLive={showLiveGhost}
+            livePreviewSrc={livePreviewSrc ?? pendingPreviewSrc}
+            followLive={followLive}
+            onSelectLive={() => {
+              if (followLive) {
+                gallery.selectItem(gallery.selectedId)
+              } else {
+                enterFollowLive()
+              }
+            }}
           />
         </>
       ) : null}
@@ -301,7 +320,7 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
           onOpenChange={setLightboxOpen}
           src={stageSrc}
           onImageToPrompt={
-            previewItem
+            !showLiveStage && previewItem
               ? () => gallery.openImageToPrompt({ imagePath: previewItem.path })
               : undefined
           }

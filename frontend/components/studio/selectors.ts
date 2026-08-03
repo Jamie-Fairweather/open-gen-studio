@@ -152,7 +152,7 @@ export function selectStageDims(s: StudioStore): {
     return null
   }
   const resolved = selectResolvedSize(s)
-  if (s.livePreviewSrc || s.pendingPreviewSrc) {
+  if (s.followLive && (s.livePreviewSrc || s.pendingPreviewSrc)) {
     return (
       fromPair(s.controlValues.width, s.controlValues.height) ?? {
         width: resolved.width,
@@ -242,8 +242,17 @@ export function selectShowTools(s: StudioStore): boolean {
   return s.studioTab === "tools"
 }
 
+export function selectShowSettings(s: StudioStore): boolean {
+  return s.studioTab === "settings"
+}
+
 export function selectShowGalleryRail(s: StudioStore): boolean {
-  return !selectShowCreator(s) && !selectShowDownloads(s) && !selectShowTools(s)
+  return (
+    !selectShowCreator(s) &&
+    !selectShowDownloads(s) &&
+    !selectShowTools(s) &&
+    !selectShowSettings(s)
+  )
 }
 
 export function selectShowAdvancedRail(s: StudioStore): boolean {

@@ -1,12 +1,38 @@
+import {
+  DownloadIcon,
+  PenLineIcon,
+  SettingsIcon,
+  WrenchIcon,
+  type LucideIcon,
+} from "lucide-react"
 import type { StudioTab } from "@/lib/host"
 
-export const STUDIO_TABS: { id: StudioTab; label: string }[] = [
+export const MEDIA_TABS: { id: StudioTab; label: string }[] = [
   { id: "image", label: "Image" },
   { id: "video", label: "Video" },
   { id: "audio", label: "Audio" },
-  { id: "tools", label: "Tools" },
-  { id: "creator", label: "Creator" },
-  { id: "downloads", label: "Downloads" },
+]
+
+export const UTILITY_TABS: {
+  id: StudioTab
+  label: string
+  icon: LucideIcon
+}[] = [
+  { id: "tools", label: "Tools", icon: WrenchIcon },
+  { id: "creator", label: "Creator", icon: PenLineIcon },
+  { id: "downloads", label: "Downloads", icon: DownloadIcon },
+]
+
+export const SETTINGS_TAB: {
+  id: StudioTab
+  label: string
+  icon: LucideIcon
+} = { id: "settings", label: "Settings", icon: SettingsIcon }
+
+export const STUDIO_TABS: { id: StudioTab; label: string }[] = [
+  ...MEDIA_TABS,
+  ...UTILITY_TABS,
+  SETTINGS_TAB,
 ]
 
 export function tabFromPath(pathname: string): StudioTab {
@@ -16,7 +42,8 @@ export function tabFromPath(pathname: string): StudioTab {
     seg === "audio" ||
     seg === "creator" ||
     seg === "downloads" ||
-    seg === "tools"
+    seg === "tools" ||
+    seg === "settings"
   ) {
     return seg
   }

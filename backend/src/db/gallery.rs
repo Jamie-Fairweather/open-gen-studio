@@ -84,6 +84,78 @@ impl Db {
         Ok(item)
     }
 
+    pub fn list_gallery_by_job(&self, job_id: &str) -> Result<Vec<GalleryItem>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, job_id, path, thumbnail_path, metadata_json, created_at
+                 FROM gallery_items WHERE job_id = ?1 ORDER BY created_at DESC",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![job_id], |row| {
+                Ok(GalleryItem {
+                    id: row.get(0)?,
+                    job_id: row.get(1)?,
+                    path: row.get(2)?,
+                    thumbnail_path: row.get(3)?,
+                    metadata_json: row.get(4)?,
+                    created_at: row.get(5)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+
+    /// All gallery rows that still point at a job (for history list join).
+    pub fn list_gallery_with_job(&self) -> Result<Vec<GalleryItem>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, job_id, path, thumbnail_path, metadata_json, created_at
+                 FROM gallery_items
+                 WHERE job_id IS NOT NULL
+                 ORDER BY created_at DESC",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(GalleryItem {
+                    id: row.get(0)?,
+                    job_id: row.get(1)?,
+                    path: row.get(2)?,
+                    thumbnail_path: row.get(3)?,
+                    metadata_json: row.get(4)?,
+                    created_at: row.get(5)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn delete_gallery_by_job(&self, job_id: &str) -> Result<Vec<GalleryItem>, String> {
+        let items = self.list_gallery_by_job(job_id)?;
+        self.conn
+            .execute(
+                "DELETE FROM gallery_items WHERE job_id = ?1",
+                params![job_id],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(items)
+    }
+
+    pub fn clear_gallery_job_link(&self, job_id: &str) -> Result<(), String> {
+        self.conn
+            .execute(
+                "UPDATE gallery_items SET job_id = NULL WHERE job_id = ?1",
+                params![job_id],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     pub fn set_gallery_thumbnail(&self, id: &str, thumbnail_path: &str) -> Result<(), String> {
         self.conn
             .execute(

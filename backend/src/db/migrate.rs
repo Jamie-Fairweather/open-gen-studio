@@ -123,6 +123,24 @@ impl Db {
                 .map_err(|e| e.to_string())?;
         }
 
+        let version: i32 = self
+            .conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .map_err(|e| e.to_string())?;
+
+        if version < 4 {
+            self.conn
+                .execute_batch(
+                    r#"
+                    ALTER TABLE jobs ADD COLUMN queue_order INTEGER NOT NULL DEFAULT 0;
+                    "#,
+                )
+                .map_err(|e| e.to_string())?;
+            self.conn
+                .pragma_update(None, "user_version", 4)
+                .map_err(|e| e.to_string())?;
+        }
+
         Ok(())
     }
 }

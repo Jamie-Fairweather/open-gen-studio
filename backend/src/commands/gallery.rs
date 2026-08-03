@@ -60,7 +60,7 @@ fn remove_empty_gallery_folder(path: &std::path::Path, job_id: Option<&str>) {
     }
 }
 
-fn remove_gallery_files(item: &GalleryItem) {
+pub(crate) fn remove_gallery_files(item: &GalleryItem) {
     let path = PathBuf::from(&item.path);
     if path.is_file() {
         let _ = fs::remove_file(&path);
@@ -96,6 +96,12 @@ pub fn delete_gallery_item(
         db.delete_gallery_item(&id)?
     };
     if let Some(item) = item {
+        // Two-way link: removing a gallery image drops the completed job history row.
+        if let Some(job_id) = item.job_id.as_deref() {
+            let db = state.db.lock().map_err(|e| e.to_string())?;
+            let _ = db.delete_job_by_id_if_history(job_id);
+            let _ = app.emit("jobs://history", true);
+        }
         // Notify UI before disk I/O so deletes feel instant.
         let _ = app.emit("gallery://deleted", &id);
         std::thread::spawn(move || remove_gallery_files(&item));

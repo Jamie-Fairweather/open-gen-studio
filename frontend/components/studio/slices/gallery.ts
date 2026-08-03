@@ -26,6 +26,10 @@ export type GallerySlice = {
   selectedGalleryId: string | null
   setGallery: Dispatch<SetStateAction<GalleryItem[]>>
   setSelectedGalleryId: Dispatch<SetStateAction<string | null>>
+  /** Select a real gallery item and leave follow-live stage mode. */
+  selectGalleryItem: (id: string | null) => void
+  /** Insert result and drop live preview in one update so Live never overlaps it. */
+  ingestGalleryItem: (item: GalleryItem) => void
   handleDeleteGalleryItem: (id: string) => Promise<void>
   handleReuseGalleryPrompt: (item: GalleryItem) => void
   handleReuseGallerySettings: (item: GalleryItem) => void
@@ -44,6 +48,25 @@ export const createGallerySlice: StateCreator<
 
   setSelectedGalleryId: (next) =>
     set((s) => ({ selectedGalleryId: applySet(s.selectedGalleryId, next) })),
+
+  selectGalleryItem: (id) => set({ selectedGalleryId: id, followLive: false }),
+
+  ingestGalleryItem: (item) => {
+    studioRefs.livePreviewSrc = null
+    studioRefs.pendingPreviewSrc = null
+    set((s) => {
+      const gallery = s.gallery.some((x) => x.id === item.id)
+        ? s.gallery
+        : [item, ...s.gallery]
+      return {
+        gallery,
+        selectedGalleryId: s.followLive ? item.id : s.selectedGalleryId,
+        livePreviewSrc: null,
+        pendingPreviewSrc: null,
+        genStep: null,
+      }
+    })
+  },
 
   handleDeleteGalleryItem: async (id) => {
     const prev = get().gallery
@@ -72,7 +95,7 @@ export const createGallerySlice: StateCreator<
       notifyInfo("No prompt", "This image has no reusable prompt.", "reuse")
       return
     }
-    set({ selectedGalleryId: item.id })
+    set({ selectedGalleryId: item.id, followLive: false })
     get().setPrompt(recipe.prompt)
     notifySuccess("Prompt loaded", "From gallery image")
   },
@@ -86,7 +109,7 @@ export const createGallerySlice: StateCreator<
 
     const state = get()
     state.navigateTab(recipe.category)
-    set({ selectedGalleryId: item.id })
+    set({ selectedGalleryId: item.id, followLive: false })
 
     if (recipe.prompt) {
       state.setPrompt(recipe.prompt)

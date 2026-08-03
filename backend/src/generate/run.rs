@@ -16,9 +16,10 @@ use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
 /// `seed: 0` means “pick a random seed” (common Comfy / UI convention).
-fn resolve_random_seeds(values: &mut HashMap<String, Value>) {
+/// Returns true when a concrete seed was written (caller should persist params).
+pub fn resolve_random_seeds(values: &mut HashMap<String, Value>) -> bool {
     let Some(seed) = values.get("seed") else {
-        return;
+        return false;
     };
     let is_zero = match seed {
         Value::Number(n) => {
@@ -31,13 +32,29 @@ fn resolve_random_seeds(values: &mut HashMap<String, Value>) {
         _ => false,
     };
     if !is_zero {
-        return;
+        return false;
     }
     // Keep within JS-safe integer range for UI reuse.
     let random = (Uuid::new_v4().as_u128() % 9_007_199_254_740_991) as i64;
     // Avoid landing on 0 again (would look like “random” on reuse).
     let random = if random == 0 { 1 } else { random };
     values.insert("seed".into(), json!(random));
+    true
+}
+
+fn persist_generate_values(db: &Mutex<Db>, job: &Job, values: &HashMap<String, Value>) {
+    let Ok(mut params) = serde_json::from_str::<Value>(&job.params_json) else {
+        return;
+    };
+    let Some(obj) = params.as_object_mut() else {
+        return;
+    };
+    let map: serde_json::Map<String, Value> =
+        values.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    obj.insert("values".into(), Value::Object(map));
+    if let Ok(db) = db.lock() {
+        let _ = db.update_job_params(&job.id, &params.to_string());
+    }
 }
 
 /// Full generate pipeline (blocking) - call from a background thread.
@@ -63,7 +80,10 @@ pub fn run_generate(
         ));
     }
 
-    resolve_random_seeds(&mut values);
+    if resolve_random_seeds(&mut values) {
+        // Persist before GPU work so pause/resume / rehydrate keep the same seed.
+        persist_generate_values(db, job, &values);
+    }
     let (manifest, workflow) = {
         let (_dir, manifest) = blueprints::load_manifest(app, blueprint_id)?;
         if manifest.capabilities.loras {

@@ -1,5 +1,5 @@
 import { commands } from "@/lib/generated/bindings"
-import type { Job } from "./types"
+import type { Job, JobHistoryItem, JobQueueSnapshot } from "./types"
 
 export async function listJobs(): Promise<Job[]> {
   return commands.listJobs()
@@ -31,8 +31,41 @@ export async function cancelJob(id: string): Promise<Job> {
   return commands.cancelJob(id)
 }
 
-export async function listJobQueue() {
+export async function listJobQueue(): Promise<JobQueueSnapshot> {
   return commands.listJobQueue()
+}
+
+export async function listJobHistory(): Promise<JobHistoryItem[]> {
+  return commands.listJobHistory()
+}
+
+export async function pauseJob(id: string): Promise<Job> {
+  return commands.pauseJob(id)
+}
+
+export async function resumeJob(id: string): Promise<Job> {
+  return commands.resumeJob(id)
+}
+
+export async function reorderJobQueue(
+  orderedIds: string[]
+): Promise<JobQueueSnapshot> {
+  return commands.reorderJobQueue(orderedIds)
+}
+
+export async function clearJobQueue(): Promise<void> {
+  await commands.clearJobQueue()
+}
+
+export async function deleteJobHistoryItem(
+  id: string,
+  deleteGallery: boolean
+): Promise<void> {
+  await commands.deleteJobHistoryItem(id, deleteGallery)
+}
+
+export async function clearJobHistory(deleteGallery: boolean): Promise<void> {
+  await commands.clearJobHistory(deleteGallery)
 }
 
 export async function freeComfyVram(): Promise<void> {

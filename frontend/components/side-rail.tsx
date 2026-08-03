@@ -104,17 +104,23 @@ export function SideRailHandle({
   children,
   ...props
 }: SideRailHandleProps) {
-  const edgeStyle: CSSProperties =
-    side === "left"
-      ? { left: open ? offset : 0, ...style }
-      : { right: open ? offset : 0, ...style }
+  // Match SideRail: transform + duration-300 ease-out (not left/right).
+  const edgeStyle: CSSProperties = {
+    ...(side === "left" ? { left: 0 } : { right: 0 }),
+    transform: open
+      ? side === "left"
+        ? `translate(${offset}, -50%)`
+        : `translate(calc(-1 * ${offset}), -50%)`
+      : "translate(0, -50%)",
+    ...style,
+  }
 
   return (
     <WithTooltip label={tooltip} side={side === "left" ? "right" : "left"}>
       <button
         type="button"
         className={cn(
-          "absolute top-1/2 z-30 flex h-20 w-9 -translate-y-1/2 flex-col items-center justify-center gap-1.5 border border-border bg-card py-2.5 text-muted-foreground shadow-xl transition-[left,right,colors] duration-300 hover:bg-muted hover:text-foreground",
+          "absolute top-1/2 z-30 flex h-20 w-9 flex-col items-center justify-center gap-1.5 border border-border bg-card py-2.5 text-muted-foreground shadow-xl transition-[transform,colors] duration-300 ease-out hover:bg-muted hover:text-foreground",
           side === "left"
             ? open
               ? "rounded-l-none rounded-r-xl border-l-0"

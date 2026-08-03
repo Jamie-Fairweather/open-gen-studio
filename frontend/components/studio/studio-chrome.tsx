@@ -14,8 +14,10 @@ import {
 import { HfTokenDialog } from "@/components/hf-token-dialog"
 import { LoraPickerDialog } from "@/components/lora-picker-dialog"
 import { ModelsLibraryDialog } from "@/components/models-library-dialog"
-import { JobQueuePopover } from "@/components/job-queue-popover"
-import { SettingsDialog } from "@/components/settings-dialog"
+import {
+  JobQueueExpandDialog,
+  JobQueueRail,
+} from "@/components/job-queue-chrome"
 import { SETTING_GPU_VENDOR } from "@/components/studio/slices/helpers"
 import { setSetting } from "@/lib/host"
 import {
@@ -23,7 +25,6 @@ import {
   selectActiveDetail,
   selectActiveLoraStack,
   selectActiveSelectedId,
-  selectComfy,
   selectInstallingId,
   selectInstallQueue,
   selectLoraInstallingKey,
@@ -31,7 +32,11 @@ import {
   selectTabBlueprints,
 } from "@/components/studio/selectors"
 import { useStudioSelector, useStudioStore } from "@/components/studio/store"
-import { STUDIO_TABS } from "@/components/studio/studio-tabs"
+import {
+  MEDIA_TABS,
+  SETTINGS_TAB,
+  UTILITY_TABS,
+} from "@/components/studio/studio-tabs"
 import { Titlebar } from "@/components/titlebar"
 import { Button } from "@/components/ui/button"
 import { WithTooltip } from "@/components/ui/tooltip"
@@ -42,7 +47,6 @@ export function StudioChrome({ children }: { children: ReactNode }) {
   const desktop = useStudioStore((s) => s.desktop)
   const studioTab = useStudioStore((s) => s.studioTab)
   const downloadSnapshot = useStudioStore((s) => s.downloadSnapshot)
-  const setSettingsOpen = useStudioStore((s) => s.setSettingsOpen)
 
   const picker = useStudioStore(
     useShallow((s) => ({
@@ -95,38 +99,11 @@ export function StudioChrome({ children }: { children: ReactNode }) {
     }))
   )
 
-  const settings = useStudioStore(
-    useShallow((s) => ({
-      open: s.settingsOpen,
-      onOpenChange: s.setSettingsOpen,
-      comfyHealthy: s.comfyHealthy,
-      runtimeMessage: s.runtimeMessage,
-      runtimeBusy: s.runtimeBusy,
-      onInstallComfy: s.handleInstallComfy,
-      onStartComfy: s.handleStartComfy,
-      onStopComfy: s.handleStopComfy,
-      hfToken: s.hfToken,
-      setHfToken: s.setHfToken,
-      setHfTokenDirty: s.setHfTokenDirty,
-      hfTokenDirty: s.hfTokenDirty,
-      hfTokenSaving: s.hfTokenSaving,
-      onSaveHfToken: s.handleSaveHfToken,
-      civitaiToken: s.civitaiToken,
-      setCivitaiToken: s.setCivitaiToken,
-      setCivitaiTokenDirty: s.setCivitaiTokenDirty,
-      civitaiTokenDirty: s.civitaiTokenDirty,
-      civitaiTokenSaving: s.civitaiTokenSaving,
-      onSaveCivitaiToken: s.handleSaveCivitaiToken,
-      gpu: s.gpu,
-    }))
-  )
+  const gpu = useStudioStore((s) => s.gpu)
   const gpuVendorDialogOpen = useStudioStore((s) => s.gpuVendorDialogOpen)
   const setGpuVendorDialogOpen = useStudioStore((s) => s.setGpuVendorDialogOpen)
   const handleInstallComfy = useStudioStore((s) => s.handleInstallComfy)
-  const comfy = useStudioSelector(selectComfy)
-  const gpuVendorOptions = settings.gpu
-    ? vendorOptionsFromAdapters(settings.gpu.adapters)
-    : []
+  const gpuVendorOptions = gpu ? vendorOptionsFromAdapters(gpu.adapters) : []
 
   if (!desktop) {
     return (
@@ -156,9 +133,8 @@ export function StudioChrome({ children }: { children: ReactNode }) {
         }
       >
         <nav className="flex min-w-0 [scrollbar-width:none] items-center gap-0.5 overflow-x-auto text-sm [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-          {STUDIO_TABS.map((tab) => {
+          {MEDIA_TABS.map((tab) => {
             const active = studioTab === tab.id
-            const showDot = tab.id === "downloads" && downloading
             return (
               <Link
                 key={tab.id}
@@ -170,15 +146,7 @@ export function StudioChrome({ children }: { children: ReactNode }) {
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                <span className="inline-flex items-center gap-1.5">
-                  {tab.label}
-                  {showDot ? (
-                    <span
-                      className="size-1.5 rounded-full bg-primary"
-                      aria-label="Download in progress"
-                    />
-                  ) : null}
-                </span>
+                {tab.label}
                 {active ? (
                   <span className="absolute inset-x-2 -bottom-0.5 h-0.5 rounded-full bg-primary sm:inset-x-2.5" />
                 ) : null}
@@ -187,15 +155,44 @@ export function StudioChrome({ children }: { children: ReactNode }) {
           })}
           <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-border" />
           <div className="flex shrink-0 items-center gap-0.5">
-            <JobQueuePopover />
-            <WithTooltip label="Settings">
+            {UTILITY_TABS.map((tab) => {
+              const active = studioTab === tab.id
+              const showDot = tab.id === "downloads" && downloading
+              const Icon = tab.icon
+              return (
+                <WithTooltip key={tab.id} label={tab.label}>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    className={cn("relative shrink-0", active && "bg-accent")}
+                    aria-label={tab.label}
+                    aria-current={active ? "page" : undefined}
+                    render={<Link href={`/${tab.id}`} />}
+                  >
+                    <Icon />
+                    {showDot ? (
+                      <span
+                        className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-primary"
+                        aria-label="Download in progress"
+                      />
+                    ) : null}
+                  </Button>
+                </WithTooltip>
+              )
+            })}
+            <WithTooltip label={SETTINGS_TAB.label}>
               <Button
-                type="button"
                 size="icon-sm"
                 variant="ghost"
-                className="shrink-0"
-                aria-label="Settings"
-                onClick={() => setSettingsOpen(true)}
+                className={cn(
+                  "relative shrink-0",
+                  studioTab === SETTINGS_TAB.id && "bg-accent"
+                )}
+                aria-label={SETTINGS_TAB.label}
+                aria-current={
+                  studioTab === SETTINGS_TAB.id ? "page" : undefined
+                }
+                render={<Link href="/settings" />}
               >
                 <SettingsIcon />
               </Button>
@@ -205,6 +202,10 @@ export function StudioChrome({ children }: { children: ReactNode }) {
       </Titlebar>
 
       <div className="relative min-h-0 flex-1 overflow-hidden">{children}</div>
+
+      <JobQueueRail />
+
+      <JobQueueExpandDialog />
 
       <BlueprintPickerDialog
         open={picker.open}
@@ -306,36 +307,6 @@ export function StudioChrome({ children }: { children: ReactNode }) {
             : null
         }
         onConfirm={tokens.handleCivitaiConfirm}
-      />
-
-      <SettingsDialog
-        open={settings.open}
-        onOpenChange={settings.onOpenChange}
-        onBrowseModels={() => setModelsOpen(true)}
-        comfy={comfy}
-        comfyHealthy={settings.comfyHealthy}
-        runtimeMessage={settings.runtimeMessage}
-        runtimeBusy={settings.runtimeBusy}
-        onInstallComfy={() => void settings.onInstallComfy()}
-        onStartComfy={() => void settings.onStartComfy()}
-        onStopComfy={() => void settings.onStopComfy()}
-        hfToken={settings.hfToken}
-        onHfTokenChange={(value) => {
-          settings.setHfToken(value)
-          settings.setHfTokenDirty(true)
-        }}
-        hfTokenDirty={settings.hfTokenDirty}
-        hfTokenSaving={settings.hfTokenSaving}
-        onSaveHfToken={() => void settings.onSaveHfToken()}
-        civitaiToken={settings.civitaiToken}
-        onCivitaiTokenChange={(value) => {
-          settings.setCivitaiToken(value)
-          settings.setCivitaiTokenDirty(true)
-        }}
-        civitaiTokenDirty={settings.civitaiTokenDirty}
-        civitaiTokenSaving={settings.civitaiTokenSaving}
-        onSaveCivitaiToken={() => void settings.onSaveCivitaiToken()}
-        gpu={settings.gpu}
       />
 
       <GpuVendorDialog

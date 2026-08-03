@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from "react"
 import type { StateCreator } from "zustand"
 import {
   gallerySrc,
+  setSetting,
   type JobQueueItem,
   type StudioTab,
   type ToolsHandoff,
@@ -9,32 +10,49 @@ import {
 import { SIDE_RAIL_WIDTH } from "@/components/side-rail"
 import type { StudioStore } from "../studio-store-types"
 import { studioRefs } from "../studio-refs"
-import { applySet } from "./helpers"
+import {
+  applySet,
+  SETTING_ADVANCED_OPEN,
+  SETTING_GALLERY_OPEN,
+} from "./helpers"
+
+function persistBool(key: string, value: boolean) {
+  void setSetting(key, value ? "1" : "0").catch(() => {})
+}
+
+const FRESH_CHIP_MS = 2000
+let freshChipTimer: ReturnType<typeof setTimeout> | null = null
 
 export type UiSlice = {
   desktop: boolean
   studioTab: StudioTab
   pickerOpen: boolean
   editBlueprintId: string | null
-  settingsOpen: boolean
   gpuVendorDialogOpen: boolean
   modelsOpen: boolean
   loraPickerOpen: boolean
   galleryOpen: boolean
   advancedOpen: boolean
+  queueExpandOpen: boolean
+  /** Bumps on successful enqueue — prompt bar expose feedback. */
+  queuePulseToken: number
+  /** Job id that just landed on the lane (chip entrance). */
+  lastQueuedJobId: string | null
   toolsHandoff: ToolsHandoff | null
   jobQueue: JobQueueItem[]
   navigateTab: (tab: StudioTab) => void
+  /** Pulse chrome after a successful enqueue. */
+  acknowledgeQueuedJob: (jobId: string) => void
   setDesktop: Dispatch<SetStateAction<boolean>>
   setStudioTab: Dispatch<SetStateAction<StudioTab>>
   setPickerOpen: Dispatch<SetStateAction<boolean>>
   setEditBlueprintId: Dispatch<SetStateAction<string | null>>
-  setSettingsOpen: Dispatch<SetStateAction<boolean>>
   setGpuVendorDialogOpen: Dispatch<SetStateAction<boolean>>
   setModelsOpen: Dispatch<SetStateAction<boolean>>
   setLoraPickerOpen: Dispatch<SetStateAction<boolean>>
   setGalleryOpen: Dispatch<SetStateAction<boolean>>
   setAdvancedOpen: Dispatch<SetStateAction<boolean>>
+  setQueueExpandOpen: Dispatch<SetStateAction<boolean>>
   setToolsHandoff: Dispatch<SetStateAction<ToolsHandoff | null>>
   setJobQueue: Dispatch<SetStateAction<JobQueueItem[]>>
   /** Read and clear handoff (call once on tool page mount). */
@@ -55,14 +73,28 @@ export const createUiSlice: StateCreator<StudioStore, [], [], UiSlice> = (
   studioTab: "image",
   pickerOpen: false,
   editBlueprintId: null,
-  settingsOpen: false,
   gpuVendorDialogOpen: false,
   modelsOpen: false,
   loraPickerOpen: false,
   galleryOpen: false,
   advancedOpen: false,
+  queueExpandOpen: false,
+  queuePulseToken: 0,
+  lastQueuedJobId: null,
   toolsHandoff: null,
   jobQueue: [],
+
+  acknowledgeQueuedJob: (jobId) => {
+    if (freshChipTimer) clearTimeout(freshChipTimer)
+    set((s) => ({
+      queuePulseToken: s.queuePulseToken + 1,
+      lastQueuedJobId: jobId,
+    }))
+    freshChipTimer = setTimeout(() => {
+      freshChipTimer = null
+      set((s) => (s.lastQueuedJobId === jobId ? { lastQueuedJobId: null } : {}))
+    }, FRESH_CHIP_MS)
+  },
 
   navigateTab: (tab) => {
     studioRefs.navigateTab(tab)
@@ -75,8 +107,6 @@ export const createUiSlice: StateCreator<StudioStore, [], [], UiSlice> = (
     set((s) => ({ pickerOpen: applySet(s.pickerOpen, next) })),
   setEditBlueprintId: (next) =>
     set((s) => ({ editBlueprintId: applySet(s.editBlueprintId, next) })),
-  setSettingsOpen: (next) =>
-    set((s) => ({ settingsOpen: applySet(s.settingsOpen, next) })),
   setGpuVendorDialogOpen: (next) =>
     set((s) => ({
       gpuVendorDialogOpen: applySet(s.gpuVendorDialogOpen, next),
@@ -86,9 +116,19 @@ export const createUiSlice: StateCreator<StudioStore, [], [], UiSlice> = (
   setLoraPickerOpen: (next) =>
     set((s) => ({ loraPickerOpen: applySet(s.loraPickerOpen, next) })),
   setGalleryOpen: (next) =>
-    set((s) => ({ galleryOpen: applySet(s.galleryOpen, next) })),
+    set((s) => {
+      const galleryOpen = applySet(s.galleryOpen, next)
+      persistBool(SETTING_GALLERY_OPEN, galleryOpen)
+      return { galleryOpen }
+    }),
   setAdvancedOpen: (next) =>
-    set((s) => ({ advancedOpen: applySet(s.advancedOpen, next) })),
+    set((s) => {
+      const advancedOpen = applySet(s.advancedOpen, next)
+      persistBool(SETTING_ADVANCED_OPEN, advancedOpen)
+      return { advancedOpen }
+    }),
+  setQueueExpandOpen: (next) =>
+    set((s) => ({ queueExpandOpen: applySet(s.queueExpandOpen, next) })),
 
   setToolsHandoff: (next) =>
     set((s) => {

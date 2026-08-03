@@ -4,11 +4,16 @@ use super::ensure::ensure_comfy_running;
 use crate::comfy::{self, ProcessState};
 use crate::db::Db;
 use crate::generate;
+use image::imageops::FilterType;
+use image::GenericImageView;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::AppHandle;
 use uuid::Uuid;
+
+/// Longest edge for Image→Prompt inputs. Larger frames can lock up QwenVL.
+const PROMPT_INPUT_MAX_EDGE: u32 = 1920;
 
 fn comfy_input_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let portable = comfy::find_portable_root(&comfy::runtimes_dir(app)?.join("portable"))
@@ -23,14 +28,33 @@ pub(crate) fn stage_input_image(app: &AppHandle, image_path: &str) -> Result<Str
     if !src.is_file() {
         return Err(format!("image not found: {image_path}"));
     }
-    let ext = src
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("png")
-        .to_ascii_lowercase();
-    let filename = format!("oga_prompt_{}.{}", Uuid::new_v4().simple(), ext);
-    let dest = comfy_input_dir(app)?.join(&filename);
-    fs::copy(&src, &dest).map_err(|e| format!("failed to stage image: {e}"))?;
+
+    let img = image::open(&src).map_err(|e| format!("open input image: {e}"))?;
+    let (w, h) = img.dimensions();
+    let input_dir = comfy_input_dir(app)?;
+
+    if w <= PROMPT_INPUT_MAX_EDGE && h <= PROMPT_INPUT_MAX_EDGE {
+        let ext = src
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("png")
+            .to_ascii_lowercase();
+        let filename = format!("oga_prompt_{}.{}", Uuid::new_v4().simple(), ext);
+        let dest = input_dir.join(&filename);
+        fs::copy(&src, &dest).map_err(|e| format!("failed to stage image: {e}"))?;
+        return Ok(filename);
+    }
+
+    let resized = img.resize(
+        PROMPT_INPUT_MAX_EDGE,
+        PROMPT_INPUT_MAX_EDGE,
+        FilterType::Triangle,
+    );
+    let filename = format!("oga_prompt_{}.jpg", Uuid::new_v4().simple());
+    let dest = input_dir.join(&filename);
+    resized
+        .save_with_format(&dest, image::ImageFormat::Jpeg)
+        .map_err(|e| format!("failed to stage downscaled image: {e}"))?;
     Ok(filename)
 }
 

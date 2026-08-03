@@ -58,6 +58,8 @@ import {
 } from "@/lib/notify"
 import { EMPTY_DOWNLOAD_SNAPSHOT } from "@/components/studio/slices/downloads"
 import {
+  SETTING_ADVANCED_OPEN,
+  SETTING_GALLERY_OPEN,
   SETTING_GPU_VENDOR,
   SETTING_SELECTED_BLUEPRINT,
 } from "@/components/studio/slices/helpers"
@@ -175,10 +177,9 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
     }
   }, [activeSelectedId, desktop])
 
-  // Settings dialog: load tokens when opened.
-  const settingsOpen = useStudioStore((s) => s.settingsOpen)
+  // Settings page: load tokens when opened.
   useEffect(() => {
-    if (!settingsOpen || !isTauri()) return
+    if (studioTab !== "settings" || !isTauri()) return
     let cancelled = false
     void listSettings()
       .then((settings) => {
@@ -195,7 +196,7 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [settingsOpen])
+  }, [studioTab])
 
   // Tauri event listeners + initial load.
   useEffect(() => {
@@ -288,6 +289,8 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
         s.setHfTokenDirty(false)
         s.setCivitaiToken(settings.civitai_api_key ?? "")
         s.setCivitaiTokenDirty(false)
+        if (settings[SETTING_GALLERY_OPEN] === "1") s.setGalleryOpen(true)
+        if (settings[SETTING_ADVANCED_OPEN] === "1") s.setAdvancedOpen(true)
         s.setComfyHealthy(status.healthy)
         s.setSelectedId((prev) =>
           pickDefaultBlueprintId(bps, prev ?? studioRefs.preferredBlueprintId)
@@ -482,12 +485,16 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
     })
 
     void onJobsUpdated((job) => {
-      if (job.kind !== "generate") return
-      if (
+      const terminal =
         job.status === "completed" ||
         job.status === "failed" ||
         job.status === "cancelled"
-      ) {
+      if (terminal) {
+        // Defensive: prune even if jobs://queue was missed (ghost "running" chips).
+        store().setJobQueue((prev) => prev.filter((i) => i.jobId !== job.id))
+      }
+      if (job.kind !== "generate") return
+      if (terminal) {
         const stillGenerating = store().jobQueue.some(
           (i) => i.kind === "generate" && i.jobId !== job.id
         )
@@ -513,7 +520,11 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
       }
       if (p.stage === "step") {
         if (p.step != null && p.max != null && p.max > 0) {
-          store().setGenStep({ step: p.step, max: p.max })
+          store().setGenStep({
+            jobId: p.jobId,
+            step: p.step,
+            max: p.max,
+          })
         }
         return
       }
@@ -522,14 +533,15 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
         return
       }
       if (p.stage === "done") {
+        store().setJobQueue((prev) => prev.filter((i) => i.jobId !== p.jobId))
         const stillGenerating = store().jobQueue.some(
           (i) => i.kind === "generate" && i.jobId !== p.jobId
         )
         store().setGenerating(stillGenerating)
         store().setActiveJobId((id) => (id === p.jobId ? null : id))
         if (!stillGenerating) store().clearLivePreview()
-        notifySuccess("Generation complete", p.message)
       } else if (p.stage === "cancelled") {
+        store().setJobQueue((prev) => prev.filter((i) => i.jobId !== p.jobId))
         const stillGenerating = store().jobQueue.some(
           (i) => i.kind === "generate" && i.jobId !== p.jobId
         )
@@ -538,6 +550,7 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
         if (!stillGenerating) store().clearLivePreview()
         notifyInfo("Cancelled", p.message, "job")
       } else if (p.stage === "error") {
+        store().setJobQueue((prev) => prev.filter((i) => i.jobId !== p.jobId))
         const stillGenerating = store().jobQueue.some(
           (i) => i.kind === "generate" && i.jobId !== p.jobId
         )
@@ -572,12 +585,7 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
     })
 
     void onGalleryUpdated((item) => {
-      store().setGallery((prev) => {
-        if (prev.some((x) => x.id === item.id)) return prev
-        return [item, ...prev]
-      })
-      // Select the new item but do not force-navigate away from the current page.
-      store().setSelectedGalleryId(item.id)
+      store().ingestGalleryItem(item)
     }).then((u) => {
       unlistenGallery = u
     })

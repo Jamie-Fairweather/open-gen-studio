@@ -95,6 +95,10 @@ export function onJobQueue(
   return listen<JobQueueSnapshot>("jobs://queue", (e) => handler(e.payload))
 }
 
+export function onJobHistory(handler: () => void): Promise<UnlistenFn> {
+  return listen("jobs://history", () => handler())
+}
+
 export function onBlueprintProgress(
   handler: (progress: BlueprintProgress) => void
 ): Promise<UnlistenFn> {

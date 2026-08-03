@@ -89,6 +89,10 @@ pub struct JobQueueItem {
     pub kind: String,
     pub label: String,
     pub status: String,
+    /// Truncated positive prompt (generate / enhance), when known.
+    pub prompt: Option<String>,
+    /// Compact settings line, e.g. `1024×1024 · seed 0`.
+    pub meta: Option<String>,
 }
 
 /// Snapshot of generate + Prompt Tools jobs waiting for / holding the GPU slot.
@@ -96,6 +100,21 @@ pub struct JobQueueItem {
 #[serde(rename_all = "camelCase")]
 pub struct JobQueueSnapshot {
     pub items: Vec<JobQueueItem>,
+}
+
+/// Finished job row for the expand History view (with linked gallery items).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct JobHistoryItem {
+    pub job_id: String,
+    pub kind: String,
+    pub label: String,
+    pub status: String,
+    pub error: Option<String>,
+    pub params_json: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub gallery_items: Vec<crate::db::GalleryItem>,
 }
 
 /// Append `RECIPE_ARCHES` const to a Specta-generated TypeScript file.

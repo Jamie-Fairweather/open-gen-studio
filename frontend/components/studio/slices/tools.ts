@@ -26,16 +26,6 @@ import {
   computeTabBlueprints,
 } from "./helpers"
 
-const HISTORY_MAX = 12
-
-export type ToolHistoryEntry = {
-  id: string
-  prompt: string
-  format: PromptFormatId
-  target: PromptTargetId
-  at: number
-}
-
 export type ImageToPromptToolState = {
   imagePath: string | null
   previewUrl: string | null
@@ -47,7 +37,6 @@ export type ImageToPromptToolState = {
   busy: boolean
   status: string | null
   error: string | null
-  history: ToolHistoryEntry[]
   jobId: string | null
   galleryOpen: boolean
 }
@@ -94,7 +83,6 @@ const initialImageToPrompt = (): ImageToPromptToolState => ({
   busy: false,
   status: null,
   error: null,
-  history: [],
   jobId: null,
   galleryOpen: false,
 })
@@ -226,16 +214,6 @@ export const createToolsSlice: StateCreator<StudioStore, [], [], ToolsSlice> = (
             jobId: null,
             status: null,
             error: null,
-            history: [
-              {
-                id: p.jobId,
-                prompt: text,
-                format: cur.format,
-                target: cur.target,
-                at: Date.now(),
-              },
-              ...cur.history,
-            ].slice(0, HISTORY_MAX),
           },
         })
         notifySuccess("Prompt ready")

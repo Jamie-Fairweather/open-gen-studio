@@ -28,6 +28,11 @@ type GalleryPanelProps = {
   onReusePrompt: (item: GalleryItem) => void
   onReuseSettings: (item: GalleryItem) => void
   onImageToPrompt?: (item: GalleryItem) => void
+  /** Show the Live ghost tile while a generate job can be followed. */
+  showLive?: boolean
+  livePreviewSrc?: string | null
+  followLive?: boolean
+  onSelectLive?: () => void
 }
 
 type GalleryTileProps = {
@@ -149,6 +154,62 @@ const GalleryTile = memo(function GalleryTile({
   )
 })
 
+const LiveGalleryTile = memo(function LiveGalleryTile({
+  previewSrc,
+  selected,
+  onSelect,
+}: {
+  previewSrc: string | null
+  selected: boolean
+  onSelect: () => void
+}) {
+  return (
+    <div
+      className={cn(
+        "group relative aspect-square overflow-hidden rounded-lg bg-muted/80",
+        !selected && "hover:brightness-110"
+      )}
+    >
+      <button
+        type="button"
+        onClick={onSelect}
+        className="absolute inset-0 outline-none"
+        aria-label={
+          selected ? "Stop following live preview" : "Follow live preview"
+        }
+        aria-pressed={selected}
+      >
+        {previewSrc ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={previewSrc}
+            alt=""
+            decoding="async"
+            draggable={false}
+            className="size-full object-cover"
+          />
+        ) : (
+          <span className="flex size-full items-center justify-center bg-primary/10">
+            <ImageIcon className="size-6 text-primary/80" />
+          </span>
+        )}
+      </button>
+      <span
+        aria-hidden
+        className="pointer-events-none absolute start-1.5 top-1.5 z-20 rounded bg-primary px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-primary-foreground uppercase"
+      >
+        Live
+      </span>
+      {selected ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-10 rounded-lg border-2 border-primary shadow-[inset_0_0_0_1px_rgba(0,0,0,0.35)]"
+        />
+      ) : null}
+    </div>
+  )
+})
+
 export function GalleryPanel({
   open,
   title = "Gallery",
@@ -159,6 +220,10 @@ export function GalleryPanel({
   onReusePrompt,
   onReuseSettings,
   onImageToPrompt,
+  showLive = false,
+  livePreviewSrc = null,
+  followLive = false,
+  onSelectLive,
 }: GalleryPanelProps) {
   const tiles = useMemo(
     () =>
@@ -173,21 +238,30 @@ export function GalleryPanel({
     [items]
   )
 
+  const empty = items.length === 0 && !showLive
+
   return (
     <SideRail open={open} side="right" width={SIDE_RAIL_WIDTH}>
       <SideRailHeader title={title} count={items.length} />
       <SideRailBody>
-        {items.length === 0 ? (
+        {empty ? (
           <p className="px-1 py-16 text-center text-sm text-muted-foreground">
             Generate something to fill this shelf.
           </p>
         ) : (
           <div className="grid grid-cols-2 gap-2">
+            {showLive && onSelectLive ? (
+              <LiveGalleryTile
+                previewSrc={livePreviewSrc}
+                selected={followLive}
+                onSelect={onSelectLive}
+              />
+            ) : null}
             {tiles.map(({ item, canReusePrompt, canReuseSettings }) => (
               <GalleryTile
                 key={item.id}
                 item={item}
-                selected={selectedId === item.id}
+                selected={!followLive && selectedId === item.id}
                 canReusePrompt={canReusePrompt}
                 canReuseSettings={canReuseSettings}
                 onSelect={onSelect}

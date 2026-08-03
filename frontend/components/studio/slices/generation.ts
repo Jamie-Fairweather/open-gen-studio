@@ -21,20 +21,25 @@ export type GenerationSlice = {
   controlValues: Record<string, unknown>
   generating: boolean
   activeJobId: string | null
+  /** Stage follows live preview when true; gallery selection wins when false. */
+  followLive: boolean
   livePreviewSrc: string | null
   pendingPreviewSrc: string | null
-  genStep: { step: number; max: number } | null
+  genStep: { jobId: string; step: number; max: number } | null
   applySize: (nextAspectId: string, nextSideLength: number) => void
   clearLivePreview: () => void
   queueLivePreview: (path: string) => void
   promotePendingPreview: (loaded: string) => void
+  enterFollowLive: () => void
   handleGenerate: () => Promise<void>
   handleCancel: () => Promise<void>
   setPrompt: Dispatch<SetStateAction<string>>
   setControlValues: Dispatch<SetStateAction<Record<string, unknown>>>
   setGenerating: Dispatch<SetStateAction<boolean>>
   setActiveJobId: Dispatch<SetStateAction<string | null>>
-  setGenStep: Dispatch<SetStateAction<{ step: number; max: number } | null>>
+  setGenStep: Dispatch<
+    SetStateAction<{ jobId: string; step: number; max: number } | null>
+  >
   setAspectId: Dispatch<SetStateAction<string>>
   setSideLength: Dispatch<SetStateAction<number>>
 }
@@ -55,6 +60,7 @@ export const createGenerationSlice: StateCreator<
     controlValues: {},
     generating: false,
     activeJobId: null,
+    followLive: true,
     livePreviewSrc: null,
     pendingPreviewSrc: null,
     genStep: null,
@@ -81,7 +87,9 @@ export const createGenerationSlice: StateCreator<
 
     queueLivePreview: (path) => {
       const next = `${gallerySrc(path)}?t=${Date.now()}`
-      if (!studioRefs.livePreviewSrc) {
+      // Crossfade buffer only while the stage is following live; browsing
+      // updates the ghost thumb immediately.
+      if (!get().followLive || !studioRefs.livePreviewSrc) {
         studioRefs.livePreviewSrc = next
         studioRefs.pendingPreviewSrc = null
         set({ livePreviewSrc: next, pendingPreviewSrc: null })
@@ -99,6 +107,8 @@ export const createGenerationSlice: StateCreator<
         set({ pendingPreviewSrc: null })
       }
     },
+
+    enterFollowLive: () => set({ followLive: true }),
 
     handleGenerate: async () => {
       const state = get()
@@ -143,8 +153,18 @@ export const createGenerationSlice: StateCreator<
         return
       }
 
+      const runningId =
+        state.jobQueue.find((i) => i.status === "running")?.jobId ?? null
+      // Generate re-enters follow-live; Add to queue leaves browse alone.
+      if (!state.generating) {
+        set({ followLive: true })
+      }
       state.setGenerating(true)
-      state.clearLivePreview()
+      // Only reset stage preview/step when starting a fresh lane — queueing
+      // while something is already running must not blank the live preview.
+      if (!runningId) {
+        state.clearLivePreview()
+      }
       try {
         const values: Record<string, unknown> = {
           ...state.controlValues,
@@ -200,10 +220,12 @@ export const createGenerationSlice: StateCreator<
         }
 
         const job = await generateImage(selected.id, values)
-        state.setActiveJobId(job.id)
+        // Cancel / step UI track the GPU lane holder, not the newest enqueue.
+        state.setActiveJobId(runningId ?? job.id)
+        get().acknowledgeQueuedJob(job.id)
       } catch (e) {
         state.setGenerating(false)
-        state.setActiveJobId(null)
+        if (!runningId) state.setActiveJobId(null)
         notifyError(
           e instanceof Error ? e.message : String(e),
           "Generation failed"
@@ -212,7 +234,10 @@ export const createGenerationSlice: StateCreator<
     },
 
     handleCancel: async () => {
-      const jobId = get().activeJobId
+      const runningId = get().jobQueue.find(
+        (i) => i.status === "running"
+      )?.jobId
+      const jobId = runningId ?? get().activeJobId
       if (!jobId) return
       try {
         await cancelJob(jobId)

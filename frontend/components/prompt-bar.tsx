@@ -7,9 +7,9 @@ import {
   RatioIcon,
   SparklesIcon,
   WandSparklesIcon,
-  XIcon,
 } from "lucide-react"
 import type { CSSProperties } from "react"
+import { useEffect, useState } from "react"
 import { useShallow } from "zustand/react/shallow"
 import {
   selectCanGenerate,
@@ -53,7 +53,7 @@ type PromptBarProps = {
   canGenerate: boolean
   studioLabel: string
   generating: boolean
-  genStep: { step: number; max: number } | null
+  genStep: { jobId: string; step: number; max: number } | null
   blueprintName: string | null
   onOpenBlueprintPicker: () => void
   hasSizeControls: boolean
@@ -61,8 +61,9 @@ type PromptBarProps = {
   sideLength: number
   sizeLabel: string
   onApplySize: (aspectId: string, sideLength: number) => void
-  onGenerate: () => void
-  onCancel: () => void
+  onGenerate: () => void | Promise<void>
+  /** Bumps when a job lands — drives the expose flash. */
+  queuePulseToken: number
   /** Empty prompt → Image to Prompt; non-empty → Prompt Enhancer. */
   onOpenImageToPrompt?: () => void
   onOpenPromptEnhancer?: () => void
@@ -86,16 +87,41 @@ export function PromptBar({
   sizeLabel,
   onApplySize,
   onGenerate,
-  onCancel,
+  queuePulseToken,
   onOpenImageToPrompt,
   onOpenPromptEnhancer,
 }: PromptBarProps) {
   const promptEmpty = !prompt.trim()
   const aspectMeta =
     ASPECT_RATIOS.find((a) => a.id === aspectId) ?? ASPECT_RATIOS[0]
+  const [pulseEpoch, setPulseEpoch] = useState(0)
+  const [expose, setExpose] = useState(false)
+  const [pending, setPending] = useState(false)
+  const [liveMessage, setLiveMessage] = useState("")
+
+  if (queuePulseToken !== pulseEpoch) {
+    setPulseEpoch(queuePulseToken)
+    if (queuePulseToken > 0) {
+      setExpose(true)
+      setLiveMessage("On the lane")
+    }
+  }
+
+  useEffect(() => {
+    if (queuePulseToken <= 0) return
+    const clearFlash = window.setTimeout(() => setExpose(false), 450)
+    const clearLive = window.setTimeout(() => setLiveMessage(""), 1200)
+    return () => {
+      window.clearTimeout(clearFlash)
+      window.clearTimeout(clearLive)
+    }
+  }, [queuePulseToken])
 
   return (
     <div className="pointer-events-none relative z-40 shrink-0 px-4 pt-1 pb-5 md:px-8">
+      <div aria-live="polite" className="sr-only">
+        {liveMessage}
+      </div>
       <div className="pointer-events-auto mx-auto max-w-3xl overflow-hidden rounded-3xl border border-border bg-card shadow-2xl backdrop-blur-xl">
         <div className="bg-background/50 px-4 pt-3.5 pb-3 md:px-5">
           <textarea
@@ -331,31 +357,26 @@ export function PromptBar({
                 </Button>
               </WithTooltip>
             ) : null}
-            {generating ? (
-              <Button
-                type="button"
-                size="lg"
-                variant="outline"
-                className="rounded-full px-4 before:hidden"
-                onClick={onCancel}
-              >
-                <XIcon />
-                Cancel
-              </Button>
-            ) : null}
             <Button
               type="button"
               size="lg"
-              className="rounded-full px-5 font-semibold"
-              disabled={!canGenerate}
-              onClick={onGenerate}
+              className={cn(
+                "rounded-full px-5 font-semibold transition-transform duration-150 ease-out active:scale-[0.97]",
+                expose && "animate-expose-flash",
+                pending && "scale-[0.98]"
+              )}
+              disabled={!canGenerate || pending}
+              onClick={() => {
+                setPending(true)
+                void Promise.resolve(onGenerate()).finally(() =>
+                  setPending(false)
+                )
+              }}
             >
-              <SparklesIcon />
-              {generating
-                ? genStep
-                  ? `Queue · ${genStep.step}/${genStep.max}`
-                  : "Add to queue"
-                : "Generate"}
+              <SparklesIcon
+                className={cn(expose && "text-primary-foreground")}
+              />
+              {generating ? "Add to queue" : "Generate"}
             </Button>
           </div>
         </div>
@@ -384,7 +405,7 @@ export function StudioPromptBar() {
       sideLength: s.sideLength,
       applySize: s.applySize,
       handleGenerate: s.handleGenerate,
-      handleCancel: s.handleCancel,
+      queuePulseToken: s.queuePulseToken,
       setPickerOpen: s.setPickerOpen,
       openImageToPrompt: s.openImageToPrompt,
       openPromptEnhancer: s.openPromptEnhancer,
@@ -414,8 +435,8 @@ export function StudioPromptBar() {
       sideLength={prompt.sideLength}
       sizeLabel={sizeLabel}
       onApplySize={prompt.applySize}
-      onGenerate={() => void prompt.handleGenerate()}
-      onCancel={() => void prompt.handleCancel()}
+      onGenerate={() => prompt.handleGenerate()}
+      queuePulseToken={prompt.queuePulseToken}
       onOpenImageToPrompt={() => prompt.openImageToPrompt()}
       onOpenPromptEnhancer={() =>
         prompt.openPromptEnhancer({ prompt: prompt.value })

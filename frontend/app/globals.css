@@ -141,6 +141,42 @@
       opacity: 0;
     }
   }
+  /* Darkroom expose: Generate / queue acknowledge (respect reduced motion below). */
+  @keyframes expose-flash {
+    0% {
+      box-shadow: 0 0 0 0
+        color-mix(in srgb, var(--color-primary) 55%, transparent);
+      filter: brightness(1);
+    }
+    35% {
+      box-shadow: 0 0 0 4px
+        color-mix(in srgb, var(--color-primary) 28%, transparent);
+      filter: brightness(1.08);
+    }
+    100% {
+      box-shadow: 0 0 0 0 transparent;
+      filter: brightness(1);
+    }
+  }
+  @keyframes queue-chip-in {
+    0% {
+      opacity: 0;
+      transform: translateY(4px) scale(0.96);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .animate-expose-flash {
+    animation: expose-flash 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-queue-chip-in {
+    animation: queue-chip-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
 }
 
 :root {

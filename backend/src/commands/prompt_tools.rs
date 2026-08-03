@@ -2,7 +2,8 @@ use super::state::AppState;
 use crate::comfy_queue;
 use crate::db::Job;
 use crate::download_manager::{self, DownloadSpec, EnsureOpts};
-use crate::prompt_tools::{self, PromptToolResult, PromptToolWeightInfo};
+use crate::job_spawn;
+use crate::prompt_tools::{self, PromptToolWeightInfo};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
@@ -94,7 +95,7 @@ pub fn run_image_to_prompt(
             )
         }))
         .unwrap_or_else(|_| Err("Prompt Tools worker crashed".into()));
-        finish_prompt_tool_job(&app_bg, &state, &job_bg, result);
+        job_spawn::finish_prompt_tool_job(&app_bg, &state, &job_bg, result);
     });
 
     Ok(job)
@@ -155,71 +156,8 @@ pub fn run_prompt_enhance(
             )
         }))
         .unwrap_or_else(|_| Err("Prompt Tools worker crashed".into()));
-        finish_prompt_tool_job(&app_bg, &state, &job_bg, result);
+        job_spawn::finish_prompt_tool_job(&app_bg, &state, &job_bg, result);
     });
 
     Ok(job)
-}
-
-fn finish_prompt_tool_job(
-    app: &AppHandle,
-    state: &AppState,
-    job: &Job,
-    result: Result<PromptToolResult, String>,
-) {
-    let updated = match result {
-        Ok(payload) => {
-            let _ = app.emit(
-                "jobs://progress",
-                serde_json::json!({
-                    "jobId": job.id,
-                    "stage": "done",
-                    "message": "Done",
-                    "result": payload,
-                }),
-            );
-            if let Ok(db) = state.db.lock() {
-                db.update_job_status(&job.id, "completed", None).ok()
-            } else {
-                None
-            }
-        }
-        Err(err) if err == "cancelled" => {
-            let _ = app.emit(
-                "jobs://progress",
-                serde_json::json!({
-                    "jobId": job.id,
-                    "stage": "cancelled",
-                    "message": "Cancelled",
-                }),
-            );
-            if let Ok(db) = state.db.lock() {
-                db.update_job_status(&job.id, "cancelled", Some("Cancelled by user"))
-                    .ok()
-            } else {
-                None
-            }
-        }
-        Err(err) => {
-            let _ = app.emit(
-                "jobs://progress",
-                serde_json::json!({
-                    "jobId": job.id,
-                    "stage": "error",
-                    "message": err,
-                }),
-            );
-            if let Ok(db) = state.db.lock() {
-                db.update_job_status(&job.id, "failed", Some(&err)).ok()
-            } else {
-                None
-            }
-        }
-    };
-    if let Ok(mut cancelled) = state.cancelled_jobs.lock() {
-        cancelled.remove(&job.id);
-    }
-    if let Some(job) = updated {
-        let _ = app.emit("jobs://updated", &job);
-    }
 }

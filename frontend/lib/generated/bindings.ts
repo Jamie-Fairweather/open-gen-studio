@@ -13,6 +13,17 @@ export const commands = {
     __TAURI_INVOKE<Job>("create_job", { kind, paramsJson }),
   updateJobStatus: (id: string, status: string, error: string | null) =>
     __TAURI_INVOKE<Job>("update_job_status", { id, status, error }),
+  listJobHistory: () => __TAURI_INVOKE<JobHistoryItem[]>("list_job_history"),
+  pauseJob: (id: string) => __TAURI_INVOKE<Job>("pause_job", { id }),
+  resumeJob: (id: string) => __TAURI_INVOKE<Job>("resume_job", { id }),
+  reorderJobQueue: (orderedIds: string[]) =>
+    __TAURI_INVOKE<JobQueueSnapshot>("reorder_job_queue", { orderedIds }),
+  clearJobQueue: () => __TAURI_INVOKE<null>("clear_job_queue"),
+  deleteJobHistoryItem: (id: string, deleteGallery: boolean) =>
+    __TAURI_INVOKE<null>("delete_job_history_item", { id, deleteGallery }),
+  /**  Remove cancelled / failed history rows only. Completed jobs are never bulk-deleted. */
+  clearJobHistory: (deleteGallery: boolean) =>
+    __TAURI_INVOKE<null>("clear_job_history", { deleteGallery }),
   listGallery: () => __TAURI_INVOKE<GalleryItem[]>("list_gallery"),
   addGalleryItem: (
     path: string,
@@ -373,6 +384,19 @@ export type Job = {
   updatedAt: number
 }
 
+/**  Finished job row for the expand History view (with linked gallery items). */
+export type JobHistoryItem = {
+  jobId: string
+  kind: string
+  label: string
+  status: string
+  error: string | null
+  paramsJson: string
+  createdAt: number
+  updatedAt: number
+  galleryItems: GalleryItem[]
+}
+
 /**  `jobs://progress` payload (generate + prompt tools). */
 export type JobProgress = {
   jobId: string
@@ -391,6 +415,10 @@ export type JobQueueItem = {
   kind: string
   label: string
   status: string
+  /**  Truncated positive prompt (generate / enhance), when known. */
+  prompt: string | null
+  /**  Compact settings line, e.g. `1024×1024 · seed 0`. */
+  meta: string | null
 }
 
 /**  Snapshot of generate + Prompt Tools jobs waiting for / holding the GPU slot. */

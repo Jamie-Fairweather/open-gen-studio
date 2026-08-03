@@ -8,7 +8,7 @@ mod wait;
 pub use api::{download_view, free_vram, interrupt, queue_prompt};
 #[allow(unused_imports)]
 pub use gallery::{ensure_gallery_thumbnails, gallery_dir, previews_dir, write_gallery_thumbnail};
-pub use run::run_generate;
+pub use run::{resolve_random_seeds, run_generate};
 #[allow(unused_imports)]
 pub use types::ComfyImageRef;
 #[allow(unused_imports)]

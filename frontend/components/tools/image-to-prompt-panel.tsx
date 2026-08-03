@@ -22,7 +22,6 @@ import { useStudioSelector, useStudioStore } from "@/components/studio/store"
 import {
   displayImageToPrompt,
   emptyStructuredFields,
-  type ToolHistoryEntry,
 } from "@/components/studio/slices/tools"
 import {
   StudioPanel,
@@ -51,9 +50,7 @@ import {
   PROMPT_FORMATS,
   PROMPT_TARGETS,
   STRUCTURED_FIELDS,
-  parseStructuredPrompt,
   targetFromArch,
-  type PromptFormatId,
 } from "@/lib/prompt-tools"
 import { cn } from "@/lib/utils"
 
@@ -66,30 +63,6 @@ async function bytesFromFile(
     file.type.split("/").pop() ||
     "png"
   return { bytes: new Uint8Array(buf), ext }
-}
-
-function SessionHistoryList({
-  history,
-  onSelect,
-}: {
-  history: ToolHistoryEntry[]
-  onSelect: (entry: ToolHistoryEntry) => void
-}) {
-  return (
-    <ul className="divide-y divide-border">
-      {history.map((h) => (
-        <li key={h.id}>
-          <button
-            type="button"
-            className="w-full px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-            onClick={() => onSelect(h)}
-          >
-            <span className="line-clamp-2">{h.prompt}</span>
-          </button>
-        </li>
-      ))}
-    </ul>
-  )
 }
 
 export function ImageToPromptPanel() {
@@ -117,7 +90,6 @@ export function ImageToPromptPanel() {
     busy,
     status,
     error,
-    history,
     jobId,
     galleryOpen,
   } = state
@@ -220,20 +192,6 @@ export function ImageToPromptPanel() {
   const pickGallery = (item: GalleryItem) => {
     patch({ galleryOpen: false })
     applyImagePath(item.path)
-  }
-
-  const selectHistory = (h: ToolHistoryEntry) => {
-    const nextFormat = h.format as PromptFormatId
-    const structured =
-      nextFormat === "structured" ||
-      nextFormat === "json" ||
-      nextFormat === "graphicDesign"
-    patch({
-      format: nextFormat,
-      target: h.target,
-      result: h.prompt,
-      fields: structured ? parseStructuredPrompt(h.prompt) : null,
-    })
   }
 
   return (
@@ -501,27 +459,6 @@ export function ImageToPromptPanel() {
               )}
             </div>
           </ToolSurface>
-
-          {history.length > 0 ? (
-            <ToolSurface>
-              <ToolSurfaceHeader title="This session" />
-              <div className={history.length > 3 ? "h-56" : undefined}>
-                {history.length > 3 ? (
-                  <ScrollArea className="h-full" scrollbarGutter>
-                    <SessionHistoryList
-                      history={history}
-                      onSelect={selectHistory}
-                    />
-                  </ScrollArea>
-                ) : (
-                  <SessionHistoryList
-                    history={history}
-                    onSelect={selectHistory}
-                  />
-                )}
-              </div>
-            </ToolSurface>
-          ) : null}
         </ToolModelGate>
       </StudioPanelBody>
     </StudioPanel>

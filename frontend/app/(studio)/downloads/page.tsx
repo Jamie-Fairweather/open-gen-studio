@@ -33,7 +33,7 @@ export default function DownloadsStudioPage() {
   const resumeDownload = useStudioStore((s) => s.resumeDownload)
   const cancelDownload = useStudioStore((s) => s.cancelDownload)
   const setPickerOpen = useStudioStore((s) => s.setPickerOpen)
-  const setSettingsOpen = useStudioStore((s) => s.setSettingsOpen)
+  const navigateTab = useStudioStore((s) => s.navigateTab)
   const [keysWarningDismissed, setKeysWarningDismissed] = useState(
     readKeysWarningDismissed
   )
@@ -89,7 +89,7 @@ export default function DownloadsStudioPage() {
                 <Button
                   type="button"
                   size="xs"
-                  onClick={() => setSettingsOpen(true)}
+                  onClick={() => navigateTab("settings")}
                 >
                   Open Settings
                 </Button>

@@ -8,6 +8,8 @@ pub struct AppState {
     pub processes: Mutex<ProcessState>,
     /// Job ids the user asked to cancel.
     pub cancelled_jobs: Mutex<HashSet<String>>,
+    /// Job ids the user asked to pause (also appear in cancelled_jobs to stop workers).
+    pub paused_jobs: Mutex<HashSet<String>>,
     /// Generate jobs with a live worker thread (DB rows alone can lie after panic).
     pub active_generate_jobs: Arc<Mutex<HashSet<String>>>,
 }

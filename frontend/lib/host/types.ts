@@ -20,6 +20,7 @@ export type {
   GpuVendor,
   NvidiaVariant,
   Job,
+  JobHistoryItem,
   JobProgress,
   JobQueueItem,
   JobQueueSnapshot,
@@ -56,7 +57,8 @@ export type BlueprintModelEntry = BlueprintModelInfo
 export type ModelProvider = ProviderKind
 
 export type MediaCategory = "image" | "video" | "audio"
-export type StudioTab = MediaCategory | "creator" | "downloads" | "tools"
+export type StudioTab =
+  MediaCategory | "creator" | "downloads" | "tools" | "settings"
 
 /** In-memory handoff into Tools pages (not URL query - prompts can be large). */
 export type ToolsHandoff = {

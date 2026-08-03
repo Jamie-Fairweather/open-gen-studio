@@ -38,7 +38,8 @@ pub fn start(
 
     super::paths::emit_progress(app, "start", "Starting runtime…");
 
-    let child = process_cmd::new(&python)
+    // Below Normal so the studio WebView keeps getting scheduled while Comfy saturates the GPU.
+    let child = process_cmd::new_below_normal(&python)
         .args([
             "-s",
             main_py.to_str().ok_or("invalid main.py path")?,

@@ -10,6 +10,7 @@ mod download_manager;
 mod generate;
 mod gpu;
 pub mod ipc;
+mod job_spawn;
 mod json_any;
 mod loras;
 mod pins;
@@ -58,7 +59,15 @@ pub fn run() {
         // let _ = ipc::export_typescript_bindings();
     }
 
-    tauri::Builder::default()
+    #[allow(unused_mut)]
+    let mut tauri_builder = tauri::Builder::default();
+
+    #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
+    {
+        tauri_builder = tauri_builder.plugin(tauri_plugin_window_state::Builder::default().build());
+    }
+
+    tauri_builder
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
@@ -79,15 +88,18 @@ pub fn run() {
             if let Ok(token) = db.get_setting(download::SETTING_CIVITAI_TOKEN) {
                 download::set_stored_civitai_token(token);
             }
-            // Background job threads do not survive process exit.
-            let _ = db.fail_interrupted_jobs_on_startup();
-
             app.manage(AppState {
                 db: Mutex::new(db),
                 processes: Mutex::new(ProcessState::default()),
                 cancelled_jobs: Mutex::new(Default::default()),
+                paused_jobs: Mutex::new(Default::default()),
                 active_generate_jobs: std::sync::Arc::new(Mutex::new(Default::default())),
             });
+
+            // Background job threads do not survive process exit — rehydrate instead.
+            if let Err(e) = job_spawn::rehydrate_jobs_on_startup(app.handle()) {
+                log::warn!("job rehydrate: {e}");
+            }
 
             // Restore remote model sizes so installed blueprints look ready immediately.
             blueprints::load_remote_size_cache(app.handle());

@@ -4,6 +4,7 @@ use crate::comfy;
 use crate::comfy_queue;
 use crate::db::Job;
 use crate::generate;
+use crate::job_spawn;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 /// Queue a generate job: returns immediately, runs Comfy /prompt when the slot is free.
@@ -15,7 +16,10 @@ pub fn generate_image(
     blueprint_id: String,
     values: crate::JsonMap,
 ) -> Result<Job, String> {
-    let values = values.0;
+    let mut values = values.0;
+    // Resolve seed:0 → concrete seed before the job is stored, so queue chips and
+    // pause/resume use the same seed the run will.
+    let _ = generate::resolve_random_seeds(&mut values);
     let runtime = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         db.get_runtime_by_engine(comfy::ENGINE)?
@@ -95,67 +99,22 @@ pub fn generate_image(
                 &runtime_bg,
             )
         });
-
-        let updated = match result {
-            Ok(_) => {
-                if let Ok(db) = state.db.lock() {
-                    db.update_job_status(&job_bg.id, "completed", None).ok()
-                } else {
-                    None
-                }
-            }
-            Err(err) if err == "cancelled" => {
-                let _ = app_bg.emit(
-                    "jobs://progress",
-                    serde_json::json!({
-                        "jobId": job_bg.id,
-                        "stage": "cancelled",
-                        "message": "Cancelled",
-                    }),
-                );
-                if let Ok(db) = state.db.lock() {
-                    db.update_job_status(&job_bg.id, "cancelled", Some("Cancelled by user"))
-                        .ok()
-                } else {
-                    None
-                }
-            }
-            Err(err) => {
-                let _ = app_bg.emit(
-                    "jobs://progress",
-                    serde_json::json!({
-                        "jobId": job_bg.id,
-                        "stage": "error",
-                        "message": err,
-                    }),
-                );
-                if let Ok(db) = state.db.lock() {
-                    db.update_job_status(&job_bg.id, "failed", Some(&err)).ok()
-                } else {
-                    None
-                }
-            }
-        };
-        if let Ok(mut cancelled) = state.cancelled_jobs.lock() {
-            cancelled.remove(&job_bg.id);
-        }
-        generate::cleanup_job_previews(&app_bg, &job_bg.id);
-        if let Some(job) = updated {
-            let _ = app_bg.emit("jobs://updated", &job);
-        }
+        job_spawn::finish_generate_job(&app_bg, &state, &job_bg, result);
     });
 
     Ok(job)
 }
 
-#[tauri::command]
-#[specta::specta]
-pub fn cancel_job(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<Job, String> {
+pub fn cancel_job_inner(app: &AppHandle, state: &AppState, id: &str) -> Result<Job, String> {
+    {
+        let mut paused = state.paused_jobs.lock().map_err(|e| e.to_string())?;
+        paused.remove(id);
+    }
     {
         let mut cancelled = state.cancelled_jobs.lock().map_err(|e| e.to_string())?;
-        cancelled.insert(id.clone());
+        cancelled.insert(id.to_string());
     }
-    comfy_queue::release(&app, &id);
+    comfy_queue::release(app, id);
 
     let port = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -167,9 +126,10 @@ pub fn cancel_job(app: AppHandle, state: State<'_, AppState>, id: String) -> Res
 
     let job = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
-        db.update_job_status(&id, "cancelled", Some("Cancelled by user"))?
+        db.update_job_status(id, "cancelled", Some("Cancelled by user"))?
     };
     let _ = app.emit("jobs://updated", &job);
+    let _ = app.emit("jobs://history", true);
     let _ = app.emit(
         "jobs://progress",
         serde_json::json!({
@@ -179,6 +139,12 @@ pub fn cancel_job(app: AppHandle, state: State<'_, AppState>, id: String) -> Res
         }),
     );
     Ok(job)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn cancel_job(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<Job, String> {
+    cancel_job_inner(&app, &state, &id)
 }
 
 #[tauri::command]

@@ -11,7 +11,10 @@ pub(crate) use cache::probe_remote_size;
 pub use cache::{clear_remote_size_cache, load_remote_size_cache};
 pub(crate) use crud::load_manifest;
 #[allow(unused_imports)]
-pub use crud::{delete_user_blueprint, get_detail, save_user_blueprint};
+pub use crud::{
+    clear_user_blueprint_thumbnail, delete_user_blueprint, get_detail, save_user_blueprint,
+    set_user_blueprint_thumbnail,
+};
 pub(crate) use install::install_custom_nodes;
 #[allow(unused_imports)]
 pub use install::install_models;
@@ -21,6 +24,7 @@ pub use list::{enqueue_size_probe, list_blueprints};
 pub use models_fs::{list_model_files, open_models_dir};
 #[allow(unused_imports)]
 pub use paths::{official_dir, open_user_blueprints_dir, user_dir};
+pub(crate) use paths::{open_dir_in_os, path_for_asset_protocol};
 pub(crate) use types::ManifestFile;
 #[allow(unused_imports)]
 pub use types::{

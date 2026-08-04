@@ -41,7 +41,7 @@ import {
 import { Titlebar } from "@/components/titlebar"
 import { Button } from "@/components/ui/button"
 import { WithTooltip } from "@/components/ui/tooltip"
-import { notifyError, notifySuccess } from "@/lib/notify"
+import { notifySuccess } from "@/lib/notify"
 import { cn } from "@/lib/utils"
 
 export function StudioChrome({ children }: { children: ReactNode }) {
@@ -55,7 +55,6 @@ export function StudioChrome({ children }: { children: ReactNode }) {
       onOpenChange: s.setPickerOpen,
       onSelect: s.selectBlueprint,
       onInstall: s.handleInstallBlueprint,
-      onEdit: s.openCreatorEdit,
       sizesProbing: s.sizesProbing,
     }))
   )
@@ -71,9 +70,6 @@ export function StudioChrome({ children }: { children: ReactNode }) {
       packs: s.loraPacks,
       setLoraStack: s.setLoraStack,
       beginLoraInstall: s.beginLoraInstall,
-      deleteUserLora: s.deleteUserLora,
-      listLoras: s.listLoras,
-      setLoraPacks: s.setLoraPacks,
     }))
   )
   const activeArch = useStudioSelector(selectActiveArch)
@@ -222,7 +218,6 @@ export function StudioChrome({ children }: { children: ReactNode }) {
         sizesProbing={picker.sizesProbing}
         onSelect={picker.onSelect}
         onInstall={(id) => void picker.onInstall(id)}
-        onEdit={picker.onEdit}
       />
 
       <LoraPickerDialog
@@ -244,20 +239,6 @@ export function StudioChrome({ children }: { children: ReactNode }) {
         onInstall={(id, arch) => {
           if (!isRecipeArch(arch)) return
           void lora.beginLoraInstall(id, arch)
-        }}
-        onDeleteUser={(id) => {
-          void lora
-            .deleteUserLora(id)
-            .then(() => {
-              lora.setLoraStack((prev) =>
-                prev.filter((entry) => entry.id !== id)
-              )
-              notifySuccess("LoRA removed")
-              return lora.listLoras().then(lora.setLoraPacks)
-            })
-            .catch((e) =>
-              notifyError(e instanceof Error ? e.message : String(e))
-            )
         }}
       />
 

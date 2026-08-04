@@ -89,6 +89,11 @@ export const commands = {
     __TAURI_INVOKE<LoraPack>("save_user_lora", { args }),
   deleteUserLora: (id: string) =>
     __TAURI_INVOKE<null>("delete_user_lora", { id }),
+  openUserLorasDir: () => __TAURI_INVOKE<string>("open_user_loras_dir"),
+  setUserLoraThumbnail: (id: string, bytes: number[], ext: string) =>
+    __TAURI_INVOKE<string>("set_user_lora_thumbnail", { id, bytes, ext }),
+  clearUserLoraThumbnail: (id: string) =>
+    __TAURI_INVOKE<null>("clear_user_lora_thumbnail", { id }),
   listUpscalers: () => __TAURI_INVOKE<UpscaleModelInfo[]>("list_upscalers"),
   /**  Enqueue upscale weight install via Download Manager. */
   installUpscaler: (id: string) =>
@@ -111,6 +116,10 @@ export const commands = {
     __TAURI_INVOKE<null>("delete_user_blueprint", { id }),
   openUserBlueprintsDir: () =>
     __TAURI_INVOKE<string>("open_user_blueprints_dir"),
+  setUserBlueprintThumbnail: (id: string, bytes: number[], ext: string) =>
+    __TAURI_INVOKE<string>("set_user_blueprint_thumbnail", { id, bytes, ext }),
+  clearUserBlueprintThumbnail: (id: string) =>
+    __TAURI_INVOKE<null>("clear_user_blueprint_thumbnail", { id }),
   /**  Open an http(s) URL in the user's default system browser. */
   openExternalUrl: (url: string) =>
     __TAURI_INVOKE<null>("open_external_url", { url }),
@@ -129,6 +138,9 @@ export const commands = {
   /**  Resolve a model page/file URL (Hugging Face, CivitAI, direct) to a download URL + filename. */
   resolveModelUrl: (url: string) =>
     __TAURI_INVOKE<ResolvedModelUrl>("resolve_model_url", { url }),
+  /**  Expand a CivitAI model URL into latest download URLs per supported architecture. */
+  expandCivitaiLoraUrl: (url: string) =>
+    __TAURI_INVOKE<CivitaiLoraExpand>("expand_civitai_lora_url", { url }),
   /**  Queue a generate job: returns immediately, runs Comfy /prompt when the slot is free. */
   generateImage: (blueprintId: string, values: any) =>
     __TAURI_INVOKE<Job>("generate_image", { blueprintId, values }),
@@ -234,6 +246,8 @@ export type BlueprintDetail = {
   scheduler?: string
   models?: BlueprintModelInfo[]
   defaults?: any
+  /**  Absolute path to pack `thumbnail.*` when present. */
+  thumbnailPath?: string | null
 }
 
 export type BlueprintModelInfo = {
@@ -264,6 +278,28 @@ export type BlueprintProgress = {
 export type CapturedWorkflow = {
   workflow: any
   embeddedModels?: EmbeddedModel[]
+}
+
+/**  One downloadable file suggested for a RecipeArch (latest published version). */
+export type CivitaiExpandedVariant = {
+  arch: RecipeArch
+  /**  CivitAI download URL (token appended when available). */
+  url: string
+  filename: string | null
+  baseModel: string
+  versionName: string
+  versionId: number
+  publishedAt: string | null
+}
+
+/**  Expand a CivitAI model page into latest-per-architecture download rows. */
+export type CivitaiLoraExpand = {
+  modelId: number
+  name: string
+  modelType: string | null
+  variants: CivitaiExpandedVariant[]
+  /**  CivitAI `baseModel` values we could not map to a RecipeArch. */
+  skippedBaseModels: string[]
 }
 
 /**  Return type of `comfyui_status`. */
@@ -447,6 +483,8 @@ export type LoraPack = {
   /**  Count of variants whose file is on disk. */
   variantsReady: number
   variantCount: number
+  /**  Absolute path to pack `thumbnail.*` when present. */
+  thumbnailPath?: string | null
 }
 
 /**  `loras://progress` payload. */

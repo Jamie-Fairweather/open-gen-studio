@@ -1,6 +1,6 @@
 use crate::download;
 use crate::download_manager::{self, DownloadSnapshot, DownloadSpec, EnsureOpts, EnsureResult};
-use crate::providers::{self, ResolvedModelUrl};
+use crate::providers::{self, CivitaiLoraExpand, ResolvedModelUrl};
 use std::path::PathBuf;
 use tauri::AppHandle;
 
@@ -9,6 +9,13 @@ use tauri::AppHandle;
 #[specta::specta]
 pub fn resolve_model_url(url: String) -> Result<ResolvedModelUrl, String> {
     providers::resolve(&url)
+}
+
+/// Expand a CivitAI model URL into latest download URLs per supported architecture.
+#[tauri::command]
+#[specta::specta]
+pub fn expand_civitai_lora_url(url: String) -> Result<CivitaiLoraExpand, String> {
+    providers::expand_lora_url(&url)
 }
 
 #[tauri::command]

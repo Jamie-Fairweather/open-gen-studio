@@ -7,14 +7,14 @@ use crate::download;
 use crate::providers::{self, ProviderKind};
 
 use super::install::{model_is_ready, validate_model_paths};
-use super::paths::{official_dir, user_dir, validate_blueprint_id};
+use super::paths::{official_dir, path_for_asset_protocol, user_dir, validate_blueprint_id};
 use super::types::{
     BlueprintDetail, BlueprintModelInfo, ManifestFile, ModelEntry, RecipeCapabilities,
 };
 
 pub fn get_detail(app: &AppHandle, blueprint_id: &str) -> Result<BlueprintDetail, String> {
     let models_root = comfy::models_dir(app)?;
-    let (_dir, manifest) = load_manifest(app, blueprint_id)?;
+    let (dir, manifest) = load_manifest(app, blueprint_id)?;
     if manifest.arch.trim().is_empty() {
         return Err(format!(
             "Blueprint '{blueprint_id}' is missing arch - only recipe blueprints are supported"
@@ -75,7 +75,42 @@ pub fn get_detail(app: &AppHandle, blueprint_id: &str) -> Result<BlueprintDetail
         scheduler: manifest.scheduler.clone(),
         models,
         defaults: manifest.defaults.clone(),
+        thumbnail_path: crate::thumbnails::find_in_dir(&dir).map(path_for_asset_protocol),
     })
+}
+
+/// Write or replace the user blueprint thumbnail. Official packs are rejected.
+pub fn set_user_blueprint_thumbnail(
+    app: &AppHandle,
+    id: &str,
+    bytes: Vec<u8>,
+    ext: &str,
+) -> Result<String, String> {
+    validate_blueprint_id(id)?;
+    if official_has_id(app, id) {
+        return Err("cannot change Official blueprint thumbnails".into());
+    }
+    let dir = user_dir(app)?.join(id);
+    if !dir.join("manifest.json").is_file() {
+        return Err(format!("User blueprint not found: {id}"));
+    }
+    let path = crate::thumbnails::write_in_dir(&dir, &bytes, ext)?;
+    let _ = app.emit("blueprints://updated", id);
+    Ok(path_for_asset_protocol(path))
+}
+
+pub fn clear_user_blueprint_thumbnail(app: &AppHandle, id: &str) -> Result<(), String> {
+    validate_blueprint_id(id)?;
+    if official_has_id(app, id) {
+        return Err("cannot change Official blueprint thumbnails".into());
+    }
+    let dir = user_dir(app)?.join(id);
+    if !dir.join("manifest.json").is_file() {
+        return Err(format!("User blueprint not found: {id}"));
+    }
+    crate::thumbnails::clear_in_dir(&dir)?;
+    let _ = app.emit("blueprints://updated", id);
+    Ok(())
 }
 
 pub(crate) fn load_manifest(
@@ -156,6 +191,7 @@ pub fn save_user_blueprint(
                 }
             }
         }
+        model.url = providers::sanitize_url_for_storage(&model.url);
         // Re-probe anonymously so the flag stays correct even if the UI skipped it.
         model.gated = download::url_is_gated(&model.url);
     }

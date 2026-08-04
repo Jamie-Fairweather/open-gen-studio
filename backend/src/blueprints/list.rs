@@ -236,16 +236,7 @@ fn read_blueprint(dir: &Path, models_root: &Path, probe_remote: bool) -> Option<
         None
     };
 
-    let thumbnail_path = [
-        "thumbnail.png",
-        "thumbnail.jpg",
-        "thumbnail.jpeg",
-        "thumbnail.webp",
-    ]
-    .into_iter()
-    .map(|name| dir.join(name))
-    .find(|path| path.is_file())
-    .map(path_for_asset_protocol);
+    let thumbnail_path = crate::thumbnails::find_in_dir(dir).map(path_for_asset_protocol);
 
     Some(Blueprint {
         id: manifest.id,

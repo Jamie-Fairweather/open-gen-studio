@@ -24,10 +24,20 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { WithTooltip } from "@/components/ui/tooltip"
 import {
+  CreatorThumbnailField,
+  type PendingThumbnail,
+} from "@/components/creator-thumbnail-field"
+import {
   COMFY_SAMPLER_ITEMS,
   COMFY_SCHEDULER_ITEMS,
 } from "@/lib/comfy-samplers"
-import { getBlueprint, resolveModelUrl, saveUserBlueprint } from "@/lib/host"
+import {
+  clearUserBlueprintThumbnail,
+  getBlueprint,
+  resolveModelUrl,
+  saveUserBlueprint,
+  setUserBlueprintThumbnail,
+} from "@/lib/host"
 import { notifyError, notifySuccess } from "@/lib/notify"
 import { cn } from "@/lib/utils"
 import {
@@ -102,12 +112,14 @@ type RecipeBlueprintFormProps = {
   /** When set, load this blueprint and save updates to the same id. */
   editBlueprintId?: string | null
   onEditCleared?: () => void
+  onDelete?: () => void
 }
 
 export function RecipeBlueprintForm({
   onSaved,
   editBlueprintId = null,
   onEditCleared,
+  onDelete,
 }: RecipeBlueprintFormProps) {
   const [busy, setBusy] = useState(false)
   const [loadingEdit, setLoadingEdit] = useState(() => Boolean(editBlueprintId))
@@ -127,6 +139,10 @@ export function RecipeBlueprintForm({
   const [allowNegative, setAllowNegative] = useState(
     ARCHES[0].capabilities.negative
   )
+  const [thumbnailPath, setThumbnailPath] = useState<string | null>(null)
+  const [pendingThumb, setPendingThumb] = useState<PendingThumbnail | null>(
+    null
+  )
   const editing = Boolean(editBlueprintId)
 
   const arch = useMemo(
@@ -145,14 +161,6 @@ export function RecipeBlueprintForm({
     setCfg(next.defaults.cfg)
     setGuidance(next.defaults.guidance ?? 3.5)
     setAllowNegative(next.capabilities.negative)
-  }
-
-  function resetForm() {
-    setName("")
-    setIdManual("")
-    setIdTouched(false)
-    setDescription("")
-    applyArch("z-image")
   }
 
   useEffect(() => {
@@ -211,6 +219,11 @@ export function RecipeBlueprintForm({
             }
           })
         )
+        setThumbnailPath(detail.thumbnailPath ?? null)
+        setPendingThumb((prev) => {
+          if (prev) URL.revokeObjectURL(prev.previewUrl)
+          return null
+        })
       })
       .catch((e) => {
         if (!cancelled) {
@@ -395,12 +408,21 @@ export function RecipeBlueprintForm({
         defaults,
         models: modelEntries,
       })
+      if (pendingThumb) {
+        const path = await setUserBlueprintThumbnail(
+          trimmedId,
+          pendingThumb.bytes,
+          pendingThumb.ext
+        )
+        URL.revokeObjectURL(pendingThumb.previewUrl)
+        setPendingThumb(null)
+        setThumbnailPath(path)
+      }
       notifySuccess(
         editing ? "Blueprint updated" : "Blueprint saved",
         trimmedId
       )
       onSaved(trimmedId)
-      if (!editing) resetForm()
     } catch (e) {
       notifyError(e instanceof Error ? e.message : String(e), "Save failed")
     } finally {
@@ -444,6 +466,45 @@ export function RecipeBlueprintForm({
           <StudioPanelColumn className="gap-4">
             <section className="space-y-2.5 rounded-xl border border-border/50 bg-muted/10 p-4">
               <h2 className={sectionTitle}>Recipe</h2>
+              <div className="space-y-1.5">
+                <span className={fieldLabel}>Thumbnail</span>
+                <CreatorThumbnailField
+                  savedPath={thumbnailPath}
+                  pending={pendingThumb}
+                  disabled={busy || loadingEdit}
+                  onPick={async (next) => {
+                    if (pendingThumb) {
+                      URL.revokeObjectURL(pendingThumb.previewUrl)
+                    }
+                    if (editing && editBlueprintId) {
+                      const path = await setUserBlueprintThumbnail(
+                        editBlueprintId,
+                        next.bytes,
+                        next.ext
+                      )
+                      URL.revokeObjectURL(next.previewUrl)
+                      setPendingThumb(null)
+                      setThumbnailPath(path)
+                      notifySuccess("Thumbnail updated")
+                      return
+                    }
+                    setPendingThumb(next)
+                  }}
+                  onClear={async () => {
+                    if (pendingThumb) {
+                      URL.revokeObjectURL(pendingThumb.previewUrl)
+                      setPendingThumb(null)
+                    }
+                    if (editing && editBlueprintId && thumbnailPath) {
+                      await clearUserBlueprintThumbnail(editBlueprintId)
+                      setThumbnailPath(null)
+                      notifySuccess("Thumbnail removed")
+                    } else {
+                      setThumbnailPath(null)
+                    }
+                  }}
+                />
+              </div>
               <div className="grid gap-2.5 sm:grid-cols-2">
                 <label className="flex flex-col gap-1 sm:col-span-2">
                   <span className={fieldLabel}>Name</span>
@@ -705,18 +766,16 @@ export function RecipeBlueprintForm({
               : footerStatus}
         </p>
         <div className="flex shrink-0 items-center gap-2">
-          {editing ? (
+          {editing && onDelete ? (
             <Button
               type="button"
               size="sm"
               variant="outline"
               disabled={busy || loadingEdit}
-              onClick={() => {
-                resetForm()
-                onEditCleared?.()
-              }}
+              className="text-destructive"
+              onClick={onDelete}
             >
-              New recipe
+              Delete
             </Button>
           ) : null}
           <Button

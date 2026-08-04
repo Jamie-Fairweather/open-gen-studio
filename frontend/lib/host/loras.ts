@@ -1,7 +1,18 @@
 import { commands } from "@/lib/generated/bindings"
 import type { RecipeArch } from "@/lib/arch"
-import type { SaveUserLoraArgs } from "@/lib/generated/bindings"
+import type {
+  CivitaiLoraExpand,
+  SaveUserLoraArgs,
+} from "@/lib/generated/bindings"
 import type { LoraPack } from "./types"
+
+export type { CivitaiLoraExpand }
+
+export async function expandCivitaiLoraUrl(
+  url: string
+): Promise<CivitaiLoraExpand> {
+  return commands.expandCivitaiLoraUrl(url)
+}
 
 export async function listLoras(): Promise<LoraPack[]> {
   return commands.listLoras()
@@ -24,4 +35,20 @@ export async function saveUserLora(input: SaveUserLoraArgs): Promise<LoraPack> {
 
 export async function deleteUserLora(id: string): Promise<void> {
   await commands.deleteUserLora(id)
+}
+
+export async function openUserLorasDir(): Promise<string> {
+  return commands.openUserLorasDir()
+}
+
+export async function setUserLoraThumbnail(
+  id: string,
+  bytes: number[],
+  ext: string
+): Promise<string> {
+  return commands.setUserLoraThumbnail(id, bytes, ext)
+}
+
+export async function clearUserLoraThumbnail(id: string): Promise<void> {
+  await commands.clearUserLoraThumbnail(id)
 }

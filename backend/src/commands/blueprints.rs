@@ -94,6 +94,23 @@ pub fn open_user_blueprints_dir(app: AppHandle) -> Result<String, String> {
     blueprints::open_user_blueprints_dir(&app)
 }
 
+#[tauri::command]
+#[specta::specta]
+pub fn set_user_blueprint_thumbnail(
+    app: AppHandle,
+    id: String,
+    bytes: Vec<u8>,
+    ext: String,
+) -> Result<String, String> {
+    blueprints::set_user_blueprint_thumbnail(&app, &id, bytes, &ext)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn clear_user_blueprint_thumbnail(app: AppHandle, id: String) -> Result<(), String> {
+    blueprints::clear_user_blueprint_thumbnail(&app, &id)
+}
+
 /// Enqueue blueprint install via Download Manager (soft / non-blocking).
 #[tauri::command]
 #[specta::specta]

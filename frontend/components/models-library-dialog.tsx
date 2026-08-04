@@ -1,6 +1,6 @@
 "use client"
 
-import { DownloadIcon, FolderOpenIcon, Trash2Icon } from "lucide-react"
+import { DownloadIcon, FolderOpenIcon } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -13,9 +13,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
 import {
-  deleteUserLora,
   listLoras,
   listModelFiles,
   listUpscalers,
@@ -24,18 +22,14 @@ import {
   onUpscaleProgress,
   onUpscalersUpdated,
   openModelsDir,
-  resolveModelUrl,
-  saveUserLora,
   type LoraPack,
   type ModelFileEntry,
   type UpscaleModelInfo,
 } from "@/lib/host"
 import { formatBytes } from "@/lib/format"
-import { notifyError, notifySuccess } from "@/lib/notify"
+import { notifyError } from "@/lib/notify"
 import { cn } from "@/lib/utils"
-import { RECIPE_ARCHES, isRecipeArch, type RecipeArch } from "@/lib/arch"
-
-const ARCH_OPTIONS = RECIPE_ARCHES
+import { isRecipeArch, type RecipeArch } from "@/lib/arch"
 
 type ModelsLibraryDialogProps = {
   open: boolean
@@ -62,12 +56,6 @@ function ModelsLibraryBody({
   const [packs, setPacks] = useState<LoraPack[] | null>(null)
   const [upscalers, setUpscalers] = useState<UpscaleModelInfo[] | null>(null)
   const [busyKeys, setBusyKeys] = useState<string[]>([])
-  const [adding, setAdding] = useState(false)
-  const [newName, setNewName] = useState("")
-  const [newId, setNewId] = useState("")
-  const [newArch, setNewArch] = useState<string>("krea2")
-  const [newUrl, setNewUrl] = useState("")
-  const [saving, setSaving] = useState(false)
 
   const refresh = useCallback(() => {
     void listLoras()
@@ -153,48 +141,6 @@ function ModelsLibraryBody({
     onInstallLora?.(pack.id, arch)
   }
 
-  async function handleSaveUser() {
-    const name = newName.trim()
-    const id =
-      newId.trim() ||
-      name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "")
-    if (!name || !id || !newUrl.trim()) {
-      notifyError("Name and URL are required", "Add LoRA")
-      return
-    }
-    setSaving(true)
-    try {
-      const resolved = await resolveModelUrl(newUrl.trim())
-      const filename =
-        resolved.filename?.trim() || `${id}-${newArch}.safetensors`
-      await saveUserLora({
-        id,
-        name,
-        variants: [
-          {
-            arch: newArch,
-            filename,
-            path: "loras",
-            url: resolved.downloadUrl || newUrl.trim(),
-          },
-        ],
-      })
-      notifySuccess("LoRA pack saved", name)
-      setAdding(false)
-      setNewName("")
-      setNewId("")
-      setNewUrl("")
-      refresh()
-    } catch (e) {
-      notifyError(e instanceof Error ? e.message : String(e), "Add LoRA")
-    } finally {
-      setSaving(false)
-    }
-  }
-
   return (
     <>
       <DialogHeader>
@@ -261,41 +207,17 @@ function ModelsLibraryBody({
                     key={pack.id}
                     className="rounded-xl border border-border/50 bg-card/40 px-3 py-2.5"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">
-                          {pack.name}
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">
-                          {pack.source === "official" ? "Official" : "Mine"}
-                          {" · "}
-                          {pack.variantsReady}/{pack.variantCount} files
-                          {" · "}
-                          {pack.arches.join(", ")}
-                        </p>
-                      </div>
-                      {pack.source === "user" ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="shrink-0 rounded-full px-2"
-                          onClick={() => {
-                            void deleteUserLora(pack.id)
-                              .then(() => {
-                                notifySuccess("LoRA removed")
-                                refresh()
-                              })
-                              .catch((e) =>
-                                notifyError(
-                                  e instanceof Error ? e.message : String(e)
-                                )
-                              )
-                          }}
-                        >
-                          <Trash2Icon className="size-3.5" />
-                        </Button>
-                      ) : null}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {pack.name}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        {pack.source === "official" ? "Official" : "Mine"}
+                        {" · "}
+                        {pack.variantsReady}/{pack.variantCount} files
+                        {" · "}
+                        {pack.arches.join(", ")}
+                      </p>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {pack.variants.map((v) => {
@@ -331,66 +253,6 @@ function ModelsLibraryBody({
                   </li>
                 ))}
               </ul>
-            )}
-
-            {adding ? (
-              <div className="space-y-2 rounded-xl border border-border/60 p-3">
-                <p className="text-xs font-medium">Add My LoRA</p>
-                <Input
-                  placeholder="Name"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                />
-                <Input
-                  placeholder="Id (optional)"
-                  value={newId}
-                  onChange={(e) => setNewId(e.target.value)}
-                />
-                <select
-                  className="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"
-                  value={newArch}
-                  onChange={(e) => setNewArch(e.target.value)}
-                >
-                  {ARCH_OPTIONS.map((a) => (
-                    <option key={a} value={a}>
-                      {a}
-                    </option>
-                  ))}
-                </select>
-                <Input
-                  placeholder="CivitAI / download URL"
-                  value={newUrl}
-                  onChange={(e) => setNewUrl(e.target.value)}
-                />
-                <div className="flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setAdding(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={saving}
-                    onClick={() => void handleSaveUser()}
-                  >
-                    Save
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="w-full before:hidden"
-                onClick={() => setAdding(true)}
-              >
-                Add My LoRA
-              </Button>
             )}
           </div>
         ) : tab === "upscale" ? (

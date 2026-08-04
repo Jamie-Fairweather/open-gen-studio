@@ -46,3 +46,26 @@ pub fn save_user_lora(app: AppHandle, args: SaveUserLoraArgs) -> Result<LoraPack
 pub fn delete_user_lora(app: AppHandle, id: String) -> Result<(), String> {
     loras::delete_user_lora(&app, &id)
 }
+
+#[tauri::command]
+#[specta::specta]
+pub fn open_user_loras_dir(app: AppHandle) -> Result<String, String> {
+    loras::open_user_loras_dir(&app)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn set_user_lora_thumbnail(
+    app: AppHandle,
+    id: String,
+    bytes: Vec<u8>,
+    ext: String,
+) -> Result<String, String> {
+    loras::set_user_lora_thumbnail(&app, &id, bytes, &ext)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn clear_user_lora_thumbnail(app: AppHandle, id: String) -> Result<(), String> {
+    loras::clear_user_lora_thumbnail(&app, &id)
+}

@@ -118,6 +118,9 @@ pub struct BlueprintDetail {
     #[serde(default)]
     #[specta(type = specta_typescript::Any)]
     pub defaults: serde_json::Map<String, serde_json::Value>,
+    /// Absolute path to pack `thumbnail.*` when present.
+    #[serde(default)]
+    pub thumbnail_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, Type)]

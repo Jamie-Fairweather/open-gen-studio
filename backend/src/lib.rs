@@ -20,6 +20,7 @@ mod providers;
 mod recipe;
 mod secrets;
 mod spellcheck;
+mod thumbnails;
 mod upscale;
 
 pub use json_any::{JsonMap, JsonValue};

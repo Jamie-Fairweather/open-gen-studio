@@ -9,7 +9,7 @@ use specta::Type;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
-pub use civitai::SETTING_CIVITAI_TOKEN;
+pub use civitai::{expand_lora_url, CivitaiLoraExpand, SETTING_CIVITAI_TOKEN};
 pub use huggingface::SETTING_HF_TOKEN;
 
 static RESOLVE_CACHE: OnceLock<Mutex<HashMap<String, ResolvedModelUrl>>> = OnceLock::new();
@@ -95,6 +95,14 @@ pub fn authorize_download_url(url: &str) -> String {
     match detect(url) {
         ProviderKind::CivitAi => civitai::url_with_token(url),
         _ => url.to_string(),
+    }
+}
+
+/// Strip secrets (e.g. CivitAI `?token=`) before writing URLs into manifests.
+pub fn sanitize_url_for_storage(url: &str) -> String {
+    match detect(url) {
+        ProviderKind::CivitAi => civitai::strip_token(url),
+        _ => url.trim().to_string(),
     }
 }
 

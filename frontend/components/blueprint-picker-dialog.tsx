@@ -5,7 +5,6 @@ import {
   DownloadIcon,
   ImageIcon,
   KeyRoundIcon,
-  PencilIcon,
   SearchIcon,
 } from "lucide-react"
 import { useMemo, useState } from "react"
@@ -64,8 +63,6 @@ type BlueprintPickerDialogProps = {
   sizesProbing: boolean
   onSelect: (id: string) => void
   onInstall: (id: string) => void
-  /** Open Creator with this user blueprint loaded for editing. */
-  onEdit?: (id: string) => void
 }
 
 export function BlueprintPickerDialog({
@@ -78,7 +75,6 @@ export function BlueprintPickerDialog({
   sizesProbing,
   onSelect,
   onInstall,
-  onEdit,
 }: BlueprintPickerDialogProps) {
   const [query, setQuery] = useState("")
 
@@ -156,14 +152,6 @@ export function BlueprintPickerDialog({
                           onOpenChange(false)
                         }}
                         onInstall={() => onInstall(bp.id)}
-                        onEdit={
-                          onEdit
-                            ? () => {
-                                onEdit(bp.id)
-                                onOpenChange(false)
-                              }
-                            : undefined
-                        }
                       />
                     ))}
                   </div>
@@ -232,7 +220,6 @@ function BlueprintCard({
   sizesProbing,
   onSelect,
   onInstall,
-  onEdit,
 }: {
   bp: Blueprint
   selected: boolean
@@ -241,7 +228,6 @@ function BlueprintCard({
   sizesProbing: boolean
   onSelect: () => void
   onInstall: () => void
-  onEdit?: () => void
 }) {
   const installed = isInstalled(bp)
   const sizeTotal = bp.totalSizeBytes
@@ -372,19 +358,6 @@ function BlueprintCard({
               "Select"
             )}
           </Button>
-          {onEdit ? (
-            <WithTooltip label="Edit in Creator">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={onEdit}
-              >
-                <PencilIcon />
-                Edit
-              </Button>
-            </WithTooltip>
-          ) : null}
           {installing ? (
             <WithTooltip label="Downloading models">
               <Button type="button" size="sm" variant="outline" disabled>

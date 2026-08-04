@@ -1,13 +1,7 @@
 "use client"
 
 import { isRecipeArch, type RecipeArch } from "@/lib/arch"
-import {
-  CheckIcon,
-  DownloadIcon,
-  LayersIcon,
-  SearchIcon,
-  Trash2Icon,
-} from "lucide-react"
+import { CheckIcon, DownloadIcon, LayersIcon, SearchIcon } from "lucide-react"
 import { useMemo, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -22,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { WithTooltip } from "@/components/ui/tooltip"
-import type { LoraPack } from "@/lib/host"
+import { gallerySrc, type LoraPack } from "@/lib/host"
 import { cn } from "@/lib/utils"
 
 type LoraPickerDialogProps = {
@@ -38,7 +32,6 @@ type LoraPickerDialogProps = {
   queuedKeys?: string[]
   onSelect: (id: string) => void
   onInstall: (id: string, arch: RecipeArch) => void
-  onDeleteUser?: (id: string) => void
 }
 
 function variantForArch(pack: LoraPack, arch: string | null | undefined) {
@@ -61,7 +54,6 @@ export function LoraPickerDialog({
   queuedKeys = [],
   onSelect,
   onInstall,
-  onDeleteUser,
 }: LoraPickerDialogProps) {
   const [query, setQuery] = useState("")
 
@@ -144,9 +136,6 @@ export function LoraPickerDialog({
                           const a = arch ?? pack.arches[0]
                           if (a && isRecipeArch(a)) onInstall(pack.id, a)
                         }}
-                        onDelete={
-                          onDeleteUser ? () => onDeleteUser(pack.id) : undefined
-                        }
                       />
                     ))}
                   </div>
@@ -224,7 +213,6 @@ function LoraCard({
   queued,
   onSelect,
   onInstall,
-  onDelete,
 }: {
   pack: LoraPack
   arch?: string | null
@@ -233,7 +221,6 @@ function LoraCard({
   queued: boolean
   onSelect: () => void
   onInstall: () => void
-  onDelete?: () => void
 }) {
   const variant = variantForArch(pack, arch)
   const ready = variant?.ready ?? false
@@ -258,9 +245,18 @@ function LoraCard({
         className="group relative aspect-[4/3] w-full cursor-pointer overflow-hidden bg-muted text-left"
         onClick={onSelect}
       >
-        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-950">
-          <LayersIcon className="size-10 text-muted-foreground opacity-40 transition-opacity group-hover:opacity-70" />
-        </div>
+        {pack.thumbnailPath ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={gallerySrc(pack.thumbnailPath)}
+            alt=""
+            className="absolute inset-0 size-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-950">
+            <LayersIcon className="size-10 text-muted-foreground opacity-40 transition-opacity group-hover:opacity-70" />
+          </div>
+        )}
         <div className="absolute inset-x-0 bottom-0 flex flex-wrap gap-1.5 p-2">
           <Badge
             variant="secondary"
@@ -314,19 +310,6 @@ function LoraCard({
               "Add"
             )}
           </Button>
-          {onDelete ? (
-            <WithTooltip label="Remove pack">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={onDelete}
-                aria-label="Remove pack"
-              >
-                <Trash2Icon />
-              </Button>
-            </WithTooltip>
-          ) : null}
           {installing ? (
             <Button type="button" size="sm" variant="outline" disabled>
               <Spinner className="size-3.5" />

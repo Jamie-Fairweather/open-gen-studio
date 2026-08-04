@@ -60,3 +60,15 @@ export async function deleteUserBlueprint(id: string): Promise<void> {
 export async function openUserBlueprintsDir(): Promise<string> {
   return commands.openUserBlueprintsDir()
 }
+
+export async function setUserBlueprintThumbnail(
+  id: string,
+  bytes: number[],
+  ext: string
+): Promise<string> {
+  return commands.setUserBlueprintThumbnail(id, bytes, ext)
+}
+
+export async function clearUserBlueprintThumbnail(id: string): Promise<void> {
+  await commands.clearUserBlueprintThumbnail(id)
+}

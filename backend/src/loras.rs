@@ -82,6 +82,9 @@ pub struct LoraPack {
     /// Count of variants whose file is on disk.
     pub variants_ready: u32,
     pub variant_count: u32,
+    /// Absolute path to pack `thumbnail.*` when present.
+    #[serde(default)]
+    pub thumbnail_path: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Type)]
@@ -149,6 +152,12 @@ pub fn user_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .join("user");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
+}
+
+pub fn open_user_loras_dir(app: &AppHandle) -> Result<String, String> {
+    let dir = user_dir(app)?;
+    crate::blueprints::open_dir_in_os(&dir)?;
+    Ok(crate::blueprints::path_for_asset_protocol(dir))
 }
 
 fn validate_id(id: &str) -> Result<(), String> {
@@ -237,6 +246,8 @@ fn read_pack(dir: &Path, source: &str, models_root: &Path) -> Option<LoraPack> {
         variant_count: variants.len() as u32,
         variants_ready: variants_ready as u32,
         variants,
+        thumbnail_path: crate::thumbnails::find_in_dir(dir)
+            .map(crate::blueprints::path_for_asset_protocol),
     })
 }
 
@@ -413,7 +424,7 @@ pub fn save_user_lora(app: &AppHandle, args: SaveUserLoraArgs) -> Result<LoraPac
                 "arch": v.arch,
                 "filename": v.filename,
                 "path": if v.path.trim().is_empty() { "loras" } else { v.path.trim() },
-                "url": v.url,
+                "url": crate::providers::sanitize_url_for_storage(&v.url),
             })
         })
         .collect();
@@ -446,6 +457,33 @@ pub fn delete_user_lora(app: &AppHandle, id: &str) -> Result<(), String> {
         return Err(format!("User LoRA not found: {id}"));
     }
     fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
+    let _ = app.emit("loras://updated", id);
+    Ok(())
+}
+
+pub fn set_user_lora_thumbnail(
+    app: &AppHandle,
+    id: &str,
+    bytes: Vec<u8>,
+    ext: &str,
+) -> Result<String, String> {
+    validate_id(id)?;
+    let dir = user_dir(app)?.join(id);
+    if !dir.join("manifest.json").is_file() {
+        return Err(format!("User LoRA not found: {id}"));
+    }
+    let path = crate::thumbnails::write_in_dir(&dir, &bytes, ext)?;
+    let _ = app.emit("loras://updated", id);
+    Ok(crate::blueprints::path_for_asset_protocol(path))
+}
+
+pub fn clear_user_lora_thumbnail(app: &AppHandle, id: &str) -> Result<(), String> {
+    validate_id(id)?;
+    let dir = user_dir(app)?.join(id);
+    if !dir.join("manifest.json").is_file() {
+        return Err(format!("User LoRA not found: {id}"));
+    }
+    crate::thumbnails::clear_in_dir(&dir)?;
     let _ = app.emit("loras://updated", id);
     Ok(())
 }

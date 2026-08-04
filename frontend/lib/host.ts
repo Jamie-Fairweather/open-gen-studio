@@ -121,6 +121,8 @@ export {
   saveUserBlueprint,
   deleteUserBlueprint,
   openUserBlueprintsDir,
+  setUserBlueprintThumbnail,
+  clearUserBlueprintThumbnail,
 } from "./host/blueprints"
 
 export {
@@ -129,7 +131,12 @@ export {
   installLoraVariant,
   saveUserLora,
   deleteUserLora,
+  openUserLorasDir,
+  setUserLoraThumbnail,
+  clearUserLoraThumbnail,
+  expandCivitaiLoraUrl,
 } from "./host/loras"
+export type { CivitaiLoraExpand } from "./host/loras"
 
 export {
   downloadUrl,

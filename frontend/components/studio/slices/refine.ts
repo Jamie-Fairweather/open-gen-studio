@@ -1,6 +1,10 @@
 import type { Dispatch, SetStateAction } from "react"
 import type { StateCreator } from "zustand"
-import { ensureDownload, listSettings, type LoraStackEntry } from "@/lib/host"
+import {
+  ensureDownload,
+  providerTokenStatus,
+  type LoraStackEntry,
+} from "@/lib/host"
 import type { RecipeArch } from "@/lib/arch"
 import { notifyError } from "@/lib/notify"
 import type { StudioStore } from "../studio-store-types"
@@ -81,8 +85,9 @@ export const createRefineSlice: StateCreator<
       const variant = pack?.variants.find((v) => v.arch === arch)
       const url = (variant?.url ?? "").toLowerCase()
       if (url.includes("civitai.com") || url.includes("civitai.red")) {
-        const settings = await listSettings()
-        if (!(settings.civitai_api_key ?? "").trim()) {
+        const status = await providerTokenStatus()
+        get().setHasCivitaiToken(status.civitai)
+        if (!status.civitai) {
           get().setPendingLoraInstall({ id, arch })
           get().setCivitaiTokenDialogOpen(true)
           return

@@ -71,16 +71,20 @@ type SettingsPanelProps = {
   onInstallComfy: () => void
   onStartComfy: () => void
   onStopComfy: () => void
+  hasHfToken: boolean
   hfToken: string
   onHfTokenChange: (value: string) => void
   hfTokenDirty: boolean
   hfTokenSaving: boolean
   onSaveHfToken: () => void
+  onClearHfToken: () => void
+  hasCivitaiToken: boolean
   civitaiToken: string
   onCivitaiTokenChange: (value: string) => void
   civitaiTokenDirty: boolean
   civitaiTokenSaving: boolean
   onSaveCivitaiToken: () => void
+  onClearCivitaiToken: () => void
   gpu: GpuInfo | null
   onGpuVendorChanged?: () => void
 }
@@ -94,16 +98,20 @@ export function SettingsPanel({
   onInstallComfy,
   onStartComfy,
   onStopComfy,
+  hasHfToken,
   hfToken,
   onHfTokenChange,
   hfTokenDirty,
   hfTokenSaving,
   onSaveHfToken,
+  onClearHfToken,
+  hasCivitaiToken,
   civitaiToken,
   onCivitaiTokenChange,
   civitaiTokenDirty,
   civitaiTokenSaving,
   onSaveCivitaiToken,
+  onClearCivitaiToken,
   gpu,
   onGpuVendorChanged,
 }: SettingsPanelProps) {
@@ -354,7 +362,17 @@ export function SettingsPanel({
             <p className="mt-1 text-xs text-muted-foreground">
               Access token for gated models (e.g. Black Forest Labs). Accept the
               model license on Hugging Face first, then paste a token with read
-              access.
+              access. Tokens are stored in the OS credential store, not in app
+              files.
+            </p>
+            <p className="mt-2 text-xs">
+              {hasHfToken ? (
+                <span className="text-foreground">
+                  Token saved on this device
+                </span>
+              ) : (
+                <span className="text-muted-foreground">Not set</span>
+              )}
             </p>
             <label className="mt-3 flex flex-col gap-1.5 text-xs">
               <span className="text-muted-foreground">Access token</span>
@@ -362,7 +380,9 @@ export function SettingsPanel({
                 type="password"
                 autoComplete="off"
                 spellCheck={false}
-                placeholder="hf_…"
+                placeholder={
+                  hasHfToken ? "Enter new token to replace…" : "hf_…"
+                }
                 value={hfToken}
                 onChange={(e) => onHfTokenChange(e.target.value)}
                 className="font-mono text-xs"
@@ -372,11 +392,22 @@ export function SettingsPanel({
               <Button
                 type="button"
                 size="sm"
-                disabled={hfTokenSaving || !hfTokenDirty}
+                disabled={hfTokenSaving || !hfTokenDirty || !hfToken.trim()}
                 onClick={onSaveHfToken}
               >
                 {hfTokenSaving ? "Saving…" : "Save token"}
               </Button>
+              {hasHfToken ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={hfTokenSaving}
+                  onClick={onClearHfToken}
+                >
+                  Clear
+                </Button>
+              ) : null}
               <button
                 type="button"
                 className="text-xs text-primary underline-offset-2 hover:underline"
@@ -401,7 +432,17 @@ export function SettingsPanel({
             <p className="mt-1 text-xs text-muted-foreground">
               API key for model downloads. On your account page, scroll to{" "}
               <span className="font-medium text-foreground">API Keys</span>,
-              create a key, then paste it here.
+              create a key, then paste it here. Keys are stored in the OS
+              credential store, not in app files.
+            </p>
+            <p className="mt-2 text-xs">
+              {hasCivitaiToken ? (
+                <span className="text-foreground">
+                  API key saved on this device
+                </span>
+              ) : (
+                <span className="text-muted-foreground">Not set</span>
+              )}
             </p>
             <label className="mt-3 flex flex-col gap-1.5 text-xs">
               <span className="text-muted-foreground">API key</span>
@@ -409,7 +450,11 @@ export function SettingsPanel({
                 type="password"
                 autoComplete="off"
                 spellCheck={false}
-                placeholder="Paste API key…"
+                placeholder={
+                  hasCivitaiToken
+                    ? "Enter new key to replace…"
+                    : "Paste API key…"
+                }
                 value={civitaiToken}
                 onChange={(e) => onCivitaiTokenChange(e.target.value)}
                 className="font-mono text-xs"
@@ -419,11 +464,26 @@ export function SettingsPanel({
               <Button
                 type="button"
                 size="sm"
-                disabled={civitaiTokenSaving || !civitaiTokenDirty}
+                disabled={
+                  civitaiTokenSaving ||
+                  !civitaiTokenDirty ||
+                  !civitaiToken.trim()
+                }
                 onClick={onSaveCivitaiToken}
               >
                 {civitaiTokenSaving ? "Saving…" : "Save key"}
               </Button>
+              {hasCivitaiToken ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={civitaiTokenSaving}
+                  onClick={onClearCivitaiToken}
+                >
+                  Clear
+                </Button>
+              ) : null}
               <button
                 type="button"
                 className="text-xs text-primary underline-offset-2 hover:underline"

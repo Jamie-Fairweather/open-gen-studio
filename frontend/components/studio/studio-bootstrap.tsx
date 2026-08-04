@@ -262,22 +262,21 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
     }
   }, [activeSelectedId, desktop])
 
-  // Settings page: load tokens when opened.
+  // Settings page: refresh token status when opened (secrets never leave Rust).
   useEffect(() => {
     if (studioTab !== "settings" || !isTauri()) return
     let cancelled = false
-    void listSettings()
-      .then((settings) => {
+    void useStudioStore
+      .getState()
+      .refreshProviderTokenStatus()
+      .then(() => {
         if (cancelled) return
         const store = useStudioStore.getState()
-        store.setHfToken(settings.huggingface_token ?? "")
+        store.setHfToken("")
         store.setHfTokenDirty(false)
-        store.setCivitaiToken(settings.civitai_api_key ?? "")
+        store.setCivitaiToken("")
         store.setCivitaiTokenDirty(false)
       })
-      .catch((e) =>
-        notifyError(e instanceof Error ? e.message : String(e), "Settings")
-      )
     return () => {
       cancelled = true
     }
@@ -388,16 +387,17 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
           }
         }
 
-        const settingsP = listSettings().then((settings) => {
+        const settingsP = listSettings().then(async (settings) => {
           const preferred = settings[SETTING_SELECTED_BLUEPRINT]?.trim() || null
           studioRefs.preferredBlueprintId = preferred
           session = parseStudioSession(settings[SETTING_STUDIO_SESSION])
           settingsReady = true
 
           const s = store()
-          s.setHfToken(settings.huggingface_token ?? "")
+          await s.refreshProviderTokenStatus()
+          s.setHfToken("")
           s.setHfTokenDirty(false)
-          s.setCivitaiToken(settings.civitai_api_key ?? "")
+          s.setCivitaiToken("")
           s.setCivitaiTokenDirty(false)
           if (settings[SETTING_GALLERY_OPEN] === "1") s.setGalleryOpen(true)
           if (settings[SETTING_ADVANCED_OPEN] === "1") s.setAdvancedOpen(true)

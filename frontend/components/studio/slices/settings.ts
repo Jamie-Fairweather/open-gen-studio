@@ -1,10 +1,11 @@
 import type { Dispatch, SetStateAction } from "react"
 import type { StateCreator } from "zustand"
 import {
+  clearProviderToken,
   ensureDownload,
   getBlueprint,
-  listSettings,
-  setSetting,
+  providerTokenStatus,
+  setProviderToken,
 } from "@/lib/host"
 import { hfRepoFromModelUrl, type GatedModelRepo } from "@/lib/hf"
 import { isRecipeArch, type RecipeArch } from "@/lib/arch"
@@ -13,6 +14,9 @@ import type { StudioStore } from "../studio-store-types"
 import { applySet } from "./helpers"
 
 export type SettingsSlice = {
+  /** True when a token is stored in the OS credential store. */
+  hasHfToken: boolean
+  /** Draft for settings input — never loaded from the backend. */
   hfToken: string
   hfTokenDirty: boolean
   hfTokenSaving: boolean
@@ -21,16 +25,19 @@ export type SettingsSlice = {
   gatedModelRepos: GatedModelRepo[]
   /** True after the user confirms the gated-terms dialog for this install. */
   gatedTermsAcked: boolean
+  hasCivitaiToken: boolean
   civitaiToken: string
   civitaiTokenDirty: boolean
   civitaiTokenSaving: boolean
   civitaiTokenDialogOpen: boolean
   pendingInstallId: string | null
   pendingLoraInstall: { id: string; arch: RecipeArch } | null
+  setHasHfToken: Dispatch<SetStateAction<boolean>>
   setHfToken: Dispatch<SetStateAction<string>>
   setHfTokenDirty: Dispatch<SetStateAction<boolean>>
   setHfTokenDialogOpen: Dispatch<SetStateAction<boolean>>
   setGatedModelDialogOpen: Dispatch<SetStateAction<boolean>>
+  setHasCivitaiToken: Dispatch<SetStateAction<boolean>>
   setCivitaiToken: Dispatch<SetStateAction<string>>
   setCivitaiTokenDirty: Dispatch<SetStateAction<boolean>>
   setCivitaiTokenDialogOpen: Dispatch<SetStateAction<boolean>>
@@ -38,8 +45,11 @@ export type SettingsSlice = {
   setPendingLoraInstall: Dispatch<
     SetStateAction<{ id: string; arch: RecipeArch } | null>
   >
+  refreshProviderTokenStatus: () => Promise<void>
   handleSaveHfToken: () => Promise<void>
+  handleClearHfToken: () => Promise<void>
   handleSaveCivitaiToken: () => Promise<void>
+  handleClearCivitaiToken: () => Promise<void>
   handleGatedModelDialogConfirm: () => Promise<void>
   handleHfTokenDialogConfirm: (token: string) => Promise<void>
   handleCivitaiTokenDialogConfirm: (token: string) => Promise<void>
@@ -68,30 +78,37 @@ export const createSettingsSlice: StateCreator<
     }
   }
 
+  async function refreshStatus() {
+    const status = await providerTokenStatus()
+    set({
+      hasHfToken: status.huggingface,
+      hasCivitaiToken: status.civitai,
+    })
+  }
+
   /** Blocks blueprint installs behind token / gated-terms dialogs when needed. */
   async function ensureInstallTokens(id: string): Promise<boolean> {
     const s = get()
     const bp = s.blueprints.find((b) => b.id === id)
     try {
-      const settings = await listSettings()
+      await refreshStatus()
+      const { hasHfToken, hasCivitaiToken, gatedTermsAcked } = get()
       // Token first — gated terms need a signed-in HF account + token.
       if (bp?.requiresHfToken) {
-        const token = (settings.huggingface_token ?? "").trim()
-        if (!token) {
+        if (!hasHfToken) {
           s.setPendingInstallId(id)
           s.setHfTokenDialogOpen(true)
           return false
         }
       }
       if (bp?.requiresCivitaiToken) {
-        const token = (settings.civitai_api_key ?? "").trim()
-        if (!token) {
+        if (!hasCivitaiToken) {
           s.setPendingInstallId(id)
           s.setCivitaiTokenDialogOpen(true)
           return false
         }
       }
-      if (bp?.requiresHfToken && !s.gatedTermsAcked) {
+      if (bp?.requiresHfToken && !gatedTermsAcked) {
         const repos = await collectGatedRepos(id)
         set({
           pendingInstallId: id,
@@ -108,6 +125,7 @@ export const createSettingsSlice: StateCreator<
   }
 
   return {
+    hasHfToken: false,
     hfToken: "",
     hfTokenDirty: false,
     hfTokenSaving: false,
@@ -115,6 +133,7 @@ export const createSettingsSlice: StateCreator<
     gatedModelDialogOpen: false,
     gatedModelRepos: [],
     gatedTermsAcked: false,
+    hasCivitaiToken: false,
     civitaiToken: "",
     civitaiTokenDirty: false,
     civitaiTokenSaving: false,
@@ -122,6 +141,8 @@ export const createSettingsSlice: StateCreator<
     pendingInstallId: null,
     pendingLoraInstall: null,
 
+    setHasHfToken: (next) =>
+      set((s) => ({ hasHfToken: applySet(s.hasHfToken, next) })),
     setHfToken: (next) => set((s) => ({ hfToken: applySet(s.hfToken, next) })),
     setHfTokenDirty: (next) =>
       set((s) => ({ hfTokenDirty: applySet(s.hfTokenDirty, next) })),
@@ -131,6 +152,8 @@ export const createSettingsSlice: StateCreator<
       set((s) => ({
         gatedModelDialogOpen: applySet(s.gatedModelDialogOpen, next),
       })),
+    setHasCivitaiToken: (next) =>
+      set((s) => ({ hasCivitaiToken: applySet(s.hasCivitaiToken, next) })),
     setCivitaiToken: (next) =>
       set((s) => ({ civitaiToken: applySet(s.civitaiToken, next) })),
     setCivitaiTokenDirty: (next) =>
@@ -146,18 +169,49 @@ export const createSettingsSlice: StateCreator<
         pendingLoraInstall: applySet(s.pendingLoraInstall, next),
       })),
 
+    refreshProviderTokenStatus: async () => {
+      try {
+        await refreshStatus()
+      } catch (e) {
+        notifyError(e instanceof Error ? e.message : String(e), "Settings")
+      }
+    },
+
     handleSaveHfToken: async () => {
       set({ hfTokenSaving: true })
       try {
-        const token = get().hfToken
-        await setSetting("huggingface_token", token.trim())
-        set({ hfTokenDirty: false })
+        const token = get().hfToken.trim()
+        if (!token) {
+          notifyError("Enter a token to save, or use Clear.", "Settings")
+          return
+        }
+        await setProviderToken("huggingFace", token)
+        set({
+          hfToken: "",
+          hfTokenDirty: false,
+          hasHfToken: true,
+        })
         notifySuccess(
           "Hugging Face token saved",
-          token.trim()
-            ? "Gated model downloads will use this token."
-            : "Token cleared."
+          "Stored securely on this device. Gated model downloads will use it."
         )
+      } catch (e) {
+        notifyError(e instanceof Error ? e.message : String(e), "Settings")
+      } finally {
+        set({ hfTokenSaving: false })
+      }
+    },
+
+    handleClearHfToken: async () => {
+      set({ hfTokenSaving: true })
+      try {
+        await clearProviderToken("huggingFace")
+        set({
+          hfToken: "",
+          hfTokenDirty: false,
+          hasHfToken: false,
+        })
+        notifySuccess("Hugging Face token cleared", "Token removed.")
       } catch (e) {
         notifyError(e instanceof Error ? e.message : String(e), "Settings")
       } finally {
@@ -168,15 +222,38 @@ export const createSettingsSlice: StateCreator<
     handleSaveCivitaiToken: async () => {
       set({ civitaiTokenSaving: true })
       try {
-        const token = get().civitaiToken
-        await setSetting("civitai_api_key", token.trim())
-        set({ civitaiTokenDirty: false })
+        const token = get().civitaiToken.trim()
+        if (!token) {
+          notifyError("Enter an API key to save, or use Clear.", "Settings")
+          return
+        }
+        await setProviderToken("civitAi", token)
+        set({
+          civitaiToken: "",
+          civitaiTokenDirty: false,
+          hasCivitaiToken: true,
+        })
         notifySuccess(
           "CivitAI API key saved",
-          token.trim()
-            ? "CivitAI model downloads will use this key."
-            : "API key cleared."
+          "Stored securely on this device. CivitAI downloads will use it."
         )
+      } catch (e) {
+        notifyError(e instanceof Error ? e.message : String(e), "Settings")
+      } finally {
+        set({ civitaiTokenSaving: false })
+      }
+    },
+
+    handleClearCivitaiToken: async () => {
+      set({ civitaiTokenSaving: true })
+      try {
+        await clearProviderToken("civitAi")
+        set({
+          civitaiToken: "",
+          civitaiTokenDirty: false,
+          hasCivitaiToken: false,
+        })
+        notifySuccess("CivitAI API key cleared", "API key removed.")
       } catch (e) {
         notifyError(e instanceof Error ? e.message : String(e), "Settings")
       } finally {
@@ -216,8 +293,13 @@ export const createSettingsSlice: StateCreator<
       const s = get()
       const id = s.pendingInstallId
       const lora = s.pendingLoraInstall
-      await setSetting("huggingface_token", token)
-      set({ hfToken: token, hfTokenDirty: false, hfTokenDialogOpen: false })
+      await setProviderToken("huggingFace", token)
+      set({
+        hfToken: "",
+        hfTokenDirty: false,
+        hfTokenDialogOpen: false,
+        hasHfToken: true,
+      })
       notifySuccess("Hugging Face token saved", "Continuing…")
       if (lora) {
         s.setPendingLoraInstall(null)
@@ -241,11 +323,12 @@ export const createSettingsSlice: StateCreator<
       const s = get()
       const id = s.pendingInstallId
       const lora = s.pendingLoraInstall
-      await setSetting("civitai_api_key", token)
+      await setProviderToken("civitAi", token)
       set({
-        civitaiToken: token,
+        civitaiToken: "",
         civitaiTokenDirty: false,
         civitaiTokenDialogOpen: false,
+        hasCivitaiToken: true,
       })
       notifySuccess("CivitAI API key saved", "Continuing model download…")
       if (lora) {

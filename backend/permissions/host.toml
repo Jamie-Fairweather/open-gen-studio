@@ -4,6 +4,9 @@ description = "Local store, GPU, download, ComfyUI runtime, and Creator commands
 commands.allow = [
   "list_settings",
   "set_setting",
+  "set_provider_token",
+  "clear_provider_token",
+  "provider_token_status",
   "list_jobs",
   "create_job",
   "update_job_status",

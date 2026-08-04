@@ -16,18 +16,22 @@ export default function SettingsStudioPage() {
       onInstallComfy: s.handleInstallComfy,
       onStartComfy: s.handleStartComfy,
       onStopComfy: s.handleStopComfy,
+      hasHfToken: s.hasHfToken,
       hfToken: s.hfToken,
       setHfToken: s.setHfToken,
       setHfTokenDirty: s.setHfTokenDirty,
       hfTokenDirty: s.hfTokenDirty,
       hfTokenSaving: s.hfTokenSaving,
       onSaveHfToken: s.handleSaveHfToken,
+      onClearHfToken: s.handleClearHfToken,
+      hasCivitaiToken: s.hasCivitaiToken,
       civitaiToken: s.civitaiToken,
       setCivitaiToken: s.setCivitaiToken,
       setCivitaiTokenDirty: s.setCivitaiTokenDirty,
       civitaiTokenDirty: s.civitaiTokenDirty,
       civitaiTokenSaving: s.civitaiTokenSaving,
       onSaveCivitaiToken: s.handleSaveCivitaiToken,
+      onClearCivitaiToken: s.handleClearCivitaiToken,
       gpu: s.gpu,
     }))
   )
@@ -43,6 +47,7 @@ export default function SettingsStudioPage() {
         onInstallComfy={() => void settings.onInstallComfy()}
         onStartComfy={() => void settings.onStartComfy()}
         onStopComfy={() => void settings.onStopComfy()}
+        hasHfToken={settings.hasHfToken}
         hfToken={settings.hfToken}
         onHfTokenChange={(value) => {
           settings.setHfToken(value)
@@ -51,6 +56,8 @@ export default function SettingsStudioPage() {
         hfTokenDirty={settings.hfTokenDirty}
         hfTokenSaving={settings.hfTokenSaving}
         onSaveHfToken={() => void settings.onSaveHfToken()}
+        onClearHfToken={() => void settings.onClearHfToken()}
+        hasCivitaiToken={settings.hasCivitaiToken}
         civitaiToken={settings.civitaiToken}
         onCivitaiTokenChange={(value) => {
           settings.setCivitaiToken(value)
@@ -59,6 +66,7 @@ export default function SettingsStudioPage() {
         civitaiTokenDirty={settings.civitaiTokenDirty}
         civitaiTokenSaving={settings.civitaiTokenSaving}
         onSaveCivitaiToken={() => void settings.onSaveCivitaiToken()}
+        onClearCivitaiToken={() => void settings.onClearCivitaiToken()}
         gpu={settings.gpu}
       />
     </div>

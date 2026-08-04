@@ -90,6 +90,9 @@ export {
   isTauri,
   listSettings,
   setSetting,
+  setProviderToken,
+  clearProviderToken,
+  providerTokenStatus,
   detectGpu,
   listRuntimes,
   installComfyui,
@@ -103,6 +106,7 @@ export {
   creatorCaptureWorkflow,
   creatorSuggestPackaging,
 } from "./host/runtime"
+export type { TokenProvider, ProviderTokenStatus } from "./host/runtime"
 
 export {
   listOfficialBlueprints,

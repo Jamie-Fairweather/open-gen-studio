@@ -18,6 +18,7 @@ mod process_cmd;
 mod prompt_tools;
 mod providers;
 mod recipe;
+mod secrets;
 mod spellcheck;
 mod upscale;
 
@@ -82,12 +83,7 @@ pub fn run() {
 
             let data_dir = app_paths::app_data_dir(app.handle())?;
             let db = Db::open(&data_dir)?;
-            if let Ok(token) = db.get_setting(download::SETTING_HF_TOKEN) {
-                download::set_stored_hf_token(token);
-            }
-            if let Ok(token) = db.get_setting(download::SETTING_CIVITAI_TOKEN) {
-                download::set_stored_civitai_token(token);
-            }
+            download::migrate_and_load_provider_tokens(&db);
             app.manage(AppState {
                 db: Mutex::new(db),
                 processes: Mutex::new(ProcessState::default()),

@@ -27,8 +27,8 @@ export default function DownloadsStudioPage() {
   const downloadSnapshot = useStudioStore((s) => s.downloadSnapshot)
   const downloadSpeedBps = useStudioStore((s) => s.downloadSpeedBps)
   const runtimeMessage = useStudioStore((s) => s.runtimeMessage)
-  const hfToken = useStudioStore((s) => s.hfToken)
-  const civitaiToken = useStudioStore((s) => s.civitaiToken)
+  const hasHfToken = useStudioStore((s) => s.hasHfToken)
+  const hasCivitaiToken = useStudioStore((s) => s.hasCivitaiToken)
   const pauseDownload = useStudioStore((s) => s.pauseDownload)
   const resumeDownload = useStudioStore((s) => s.resumeDownload)
   const cancelDownload = useStudioStore((s) => s.cancelDownload)
@@ -49,8 +49,8 @@ export default function DownloadsStudioPage() {
       ? runtimeMessage
       : null
 
-  const missingHf = !hfToken.trim()
-  const missingCivitai = !civitaiToken.trim()
+  const missingHf = !hasHfToken
+  const missingCivitai = !hasCivitaiToken
   const showKeyWarning = (missingHf || missingCivitai) && !keysWarningDismissed
 
   const dismissKeysWarning = () => {

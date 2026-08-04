@@ -103,7 +103,7 @@ pub(crate) fn run_step(
             }
 
             // Probe size up front so the UI can show "done / total" and %.
-            download::sync_provider_tokens_from_db(app);
+            download::sync_provider_tokens(app);
             let existing = dest.metadata().map(|m| m.len() as i64).unwrap_or(0);
             let total = download::remote_content_length(url)
                 .ok()

@@ -24,6 +24,27 @@ export async function setSetting(key: string, value: string): Promise<void> {
   await commands.setSetting(key, value)
 }
 
+export type TokenProvider = import("@/lib/generated/bindings").TokenProvider
+export type ProviderTokenStatus =
+  import("@/lib/generated/bindings").ProviderTokenStatus
+
+export async function setProviderToken(
+  provider: TokenProvider,
+  value: string
+): Promise<void> {
+  await commands.setProviderToken(provider, value)
+}
+
+export async function clearProviderToken(
+  provider: TokenProvider
+): Promise<void> {
+  await commands.clearProviderToken(provider)
+}
+
+export async function providerTokenStatus(): Promise<ProviderTokenStatus> {
+  return commands.providerTokenStatus()
+}
+
 export async function detectGpu(): Promise<GpuInfo> {
   return commands.detectGpu()
 }

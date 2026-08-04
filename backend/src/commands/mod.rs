@@ -28,6 +28,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .commands(tauri_specta::collect_commands![
             settings::list_settings,
             settings::set_setting,
+            settings::set_provider_token,
+            settings::clear_provider_token,
+            settings::provider_token_status,
             jobs::list_jobs,
             jobs::create_job,
             jobs::update_job_status,

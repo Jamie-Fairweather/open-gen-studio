@@ -8,6 +8,12 @@ export const commands = {
     __TAURI_INVOKE<{ [key in string]: string }>("list_settings"),
   setSetting: (key: string, value: string) =>
     __TAURI_INVOKE<null>("set_setting", { key, value }),
+  setProviderToken: (provider: TokenProvider, value: string) =>
+    __TAURI_INVOKE<null>("set_provider_token", { provider, value }),
+  clearProviderToken: (provider: TokenProvider) =>
+    __TAURI_INVOKE<null>("clear_provider_token", { provider }),
+  providerTokenStatus: () =>
+    __TAURI_INVOKE<ProviderTokenStatus>("provider_token_status"),
   listJobs: () => __TAURI_INVOKE<Job[]>("list_jobs"),
   createJob: (kind: string, paramsJson: string | null) =>
     __TAURI_INVOKE<Job>("create_job", { kind, paramsJson }),
@@ -535,6 +541,11 @@ export type ProviderKind =
   /**  Direct file URL (no special handling). */
   | "direct"
 
+export type ProviderTokenStatus = {
+  huggingface: boolean
+  civitai: boolean
+}
+
 /**
  *  Supported recipe graph families. Manifests still store `arch` as a string;
  *  parse into this enum at compile / UI boundaries.
@@ -656,6 +667,8 @@ export type SuggestedModel = {
   /**  True when the download URL is a gated Hugging Face repo (needs token). */
   gated?: boolean
 }
+
+export type TokenProvider = "huggingFace" | "civitAi"
 
 export type UpscaleKind = "sr" | "supir"
 

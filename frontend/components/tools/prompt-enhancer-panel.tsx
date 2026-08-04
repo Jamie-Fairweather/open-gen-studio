@@ -14,6 +14,7 @@ import {
   StudioPanelBody,
   StudioPanelHeader,
 } from "@/components/shell"
+import { applyPromptToStudio } from "@/components/tools/apply-prompt-to-studio"
 import { ToolModelGate } from "@/components/tools/tool-model-gate"
 import { ToolResultActions } from "@/components/tools/tool-result-actions"
 import { ToolRunBar } from "@/components/tools/tool-run-bar"
@@ -84,13 +85,14 @@ export function PromptEnhancerPanel() {
   }, [])
 
   const useInStudio = () => {
-    const prompt = (result || input).trim()
-    if (!prompt) return
-    setPrompt(prompt)
-    if (negative && hasNegativePrompt) {
-      setControlValues((prev) => ({ ...prev, negative }))
-    }
-    router.push("/image")
+    applyPromptToStudio({
+      prompt: result || input,
+      negative,
+      hasNegativePrompt,
+      setPrompt,
+      setControlValues,
+      router,
+    })
   }
 
   const hasResult = Boolean(result.trim())

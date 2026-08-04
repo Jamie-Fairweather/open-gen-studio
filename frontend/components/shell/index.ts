@@ -16,5 +16,4 @@ export {
   StudioPanelHeader,
 } from "./studio-panel"
 export { NativeChrome } from "./native-chrome"
-export { StartupOverlay } from "./startup-overlay"
 export { Titlebar } from "./titlebar"

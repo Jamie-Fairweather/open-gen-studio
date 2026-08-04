@@ -25,6 +25,7 @@ import {
   StudioPanelBody,
   StudioPanelHeader,
 } from "@/components/shell"
+import { applyPromptToStudio } from "@/components/tools/apply-prompt-to-studio"
 import { ToolModelGate } from "@/components/tools/tool-model-gate"
 import { ToolResultActions } from "@/components/tools/tool-result-actions"
 import { ToolRunBar } from "@/components/tools/tool-run-bar"
@@ -179,13 +180,14 @@ export function ImageToPromptPanel() {
   const hasResult = Boolean(result.trim() || (fields && showStructured))
 
   const useInStudio = () => {
-    const prompt = displayPrompt.trim()
-    if (!prompt) return
-    setPrompt(prompt)
-    if (negative && hasNegativePrompt) {
-      setControlValues((prev) => ({ ...prev, negative }))
-    }
-    router.push("/image")
+    applyPromptToStudio({
+      prompt: displayPrompt,
+      negative,
+      hasNegativePrompt,
+      setPrompt,
+      setControlValues,
+      router,
+    })
   }
 
   const pickGallery = (item: GalleryItem) => {

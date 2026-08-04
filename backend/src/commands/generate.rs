@@ -114,15 +114,26 @@ pub fn cancel_job_inner(app: &AppHandle, state: &AppState, id: &str) -> Result<J
         let mut cancelled = state.cancelled_jobs.lock().map_err(|e| e.to_string())?;
         cancelled.insert(id.to_string());
     }
+
+    // Comfy /interrupt is global — only hit it when cancelling the job that holds the GPU.
+    // Cancelling a waiting item must not kill the active sampler.
+    let was_running = comfy_queue::snapshot()
+        .items
+        .first()
+        .map(|i| i.job_id == id && i.status == "running")
+        .unwrap_or(false);
+
     comfy_queue::release(app, id);
 
-    let port = {
-        let db = state.db.lock().map_err(|e| e.to_string())?;
-        db.get_runtime_by_engine(comfy::ENGINE)?
-            .and_then(|r| r.port)
-            .unwrap_or(comfy::DEFAULT_PORT as i64) as u16
-    };
-    let _ = generate::interrupt(port);
+    if was_running {
+        let port = {
+            let db = state.db.lock().map_err(|e| e.to_string())?;
+            db.get_runtime_by_engine(comfy::ENGINE)?
+                .and_then(|r| r.port)
+                .unwrap_or(comfy::DEFAULT_PORT as i64) as u16
+        };
+        let _ = generate::interrupt(port);
+    }
 
     let job = {
         let db = state.db.lock().map_err(|e| e.to_string())?;

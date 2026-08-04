@@ -22,6 +22,7 @@ import {
   CopyIcon,
   ExpandIcon,
   GripVerticalIcon,
+  HistoryIcon,
   PauseIcon,
   PlayIcon,
   SlidersHorizontalIcon,
@@ -338,111 +339,127 @@ export function JobQueueRail() {
 
   return (
     <div
-      className="relative flex h-10 shrink-0 items-center gap-1.5 border-t border-border/60 bg-card/70 px-2.5"
+      className="relative flex h-10 shrink-0 items-center gap-1.5 border-t border-border bg-popover px-2.5"
       role="region"
       aria-label="Job queue"
     >
       {jobQueue.length === 0 ? (
-        <>
-          <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
-            Nothing queued
-          </p>
-          <div className="min-w-0 flex-1" aria-hidden />
-        </>
-      ) : (
-        <div
-          ref={stripRef}
-          className="flex min-w-0 flex-1 items-center gap-1.5"
-        >
-          <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={onDragEnd}
-            >
-              <SortableContext
-                items={waitingIds}
-                strategy={horizontalListSortingStrategy}
-              >
-                {visible.map((item) => (
-                  <SortableChip
-                    key={item.jobId}
-                    item={item}
-                    stepLabel={
-                      item.jobId === running?.jobId ? runningStep : null
-                    }
-                    chipWidth={chipWidth}
-                    statusCh={statusCh}
-                    labelCh={labelCh}
-                    fresh={item.jobId === lastQueuedJobId}
-                    onPause={() =>
-                      void pauseJob(item.jobId).catch((e) =>
-                        notifyError(e instanceof Error ? e.message : String(e))
-                      )
-                    }
-                    onResume={() =>
-                      void resumeJob(item.jobId).catch((e) =>
-                        notifyError(e instanceof Error ? e.message : String(e))
-                      )
-                    }
-                    onCancel={() =>
-                      void cancelJob(item.jobId).catch((e) =>
-                        notifyError(e instanceof Error ? e.message : String(e))
-                      )
-                    }
-                  />
-                ))}
-              </SortableContext>
-            </DndContext>
-          </div>
-          {overflow > 0 ? (
-            <button
+        <div className="absolute inset-0 flex items-center justify-center gap-1">
+          <p className="text-xs text-muted-foreground">Nothing queued</p>
+          <WithTooltip label="Job history">
+            <Button
               type="button"
+              size="icon-xs"
+              variant="ghost"
+              className="size-7 text-muted-foreground"
+              aria-label="Job history"
               onClick={() => setQueueExpandOpen(true)}
-              className="flex h-8 shrink-0 items-center rounded-lg border border-border/50 bg-white/[0.03] px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground"
             >
-              +{overflow}
-            </button>
-          ) : null}
+              <HistoryIcon className="size-3.5" />
+            </Button>
+          </WithTooltip>
         </div>
-      )}
+      ) : (
+        <>
+          <div
+            ref={stripRef}
+            className="flex min-w-0 flex-1 items-center gap-1.5"
+          >
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={onDragEnd}
+              >
+                <SortableContext
+                  items={waitingIds}
+                  strategy={horizontalListSortingStrategy}
+                >
+                  {visible.map((item) => (
+                    <SortableChip
+                      key={item.jobId}
+                      item={item}
+                      stepLabel={
+                        item.jobId === running?.jobId ? runningStep : null
+                      }
+                      chipWidth={chipWidth}
+                      statusCh={statusCh}
+                      labelCh={labelCh}
+                      fresh={item.jobId === lastQueuedJobId}
+                      onPause={() =>
+                        void pauseJob(item.jobId).catch((e) =>
+                          notifyError(
+                            e instanceof Error ? e.message : String(e)
+                          )
+                        )
+                      }
+                      onResume={() =>
+                        void resumeJob(item.jobId).catch((e) =>
+                          notifyError(
+                            e instanceof Error ? e.message : String(e)
+                          )
+                        )
+                      }
+                      onCancel={() =>
+                        void cancelJob(item.jobId).catch((e) =>
+                          notifyError(
+                            e instanceof Error ? e.message : String(e)
+                          )
+                        )
+                      }
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
+            </div>
+            {overflow > 0 ? (
+              <button
+                type="button"
+                onClick={() => setQueueExpandOpen(true)}
+                className="flex h-8 shrink-0 items-center rounded-lg border border-border/50 bg-white/[0.03] px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+              >
+                +{overflow}
+              </button>
+            ) : null}
+          </div>
 
-      <div className="relative z-10 flex shrink-0 items-center gap-0.5">
-        <WithTooltip label="Clear queue">
-          <Button
-            type="button"
-            size="icon-xs"
-            variant="ghost"
-            className="size-7"
-            disabled={jobQueue.length === 0}
-            aria-label="Clear queue"
-            onClick={() => {
-              setJobQueue([])
-              setGenerating(false)
-              setActiveJobId(null)
-              void clearJobQueue()
-                .then(() => notifySuccess("Queue cleared"))
-                .catch((e) =>
-                  notifyError(e instanceof Error ? e.message : String(e))
-                )
-            }}
-          >
-            <Trash2Icon className="size-3.5" />
-          </Button>
-        </WithTooltip>
-        <WithTooltip label="Open full queue">
-          <Button
-            type="button"
-            size="icon-xs"
-            variant="ghost"
-            className="size-7"
-            aria-label="Open full queue"
-            onClick={() => setQueueExpandOpen(true)}
-          >
-            <ExpandIcon className="size-3.5" />
-          </Button>
-        </WithTooltip>
-      </div>
+          <div className="relative z-10 flex shrink-0 items-center gap-0.5">
+            <WithTooltip label="Clear queue">
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="ghost"
+                className="size-7"
+                aria-label="Clear queue"
+                onClick={() => {
+                  setJobQueue([])
+                  setGenerating(false)
+                  setActiveJobId(null)
+                  void clearJobQueue()
+                    .then(() => notifySuccess("Queue cleared"))
+                    .catch((e) =>
+                      notifyError(e instanceof Error ? e.message : String(e))
+                    )
+                }}
+              >
+                <Trash2Icon className="size-3.5" />
+              </Button>
+            </WithTooltip>
+            <WithTooltip label="Open full queue">
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="ghost"
+                className="size-7"
+                aria-label="Open full queue"
+                onClick={() => setQueueExpandOpen(true)}
+              >
+                <ExpandIcon className="size-3.5" />
+              </Button>
+            </WithTooltip>
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -933,12 +950,21 @@ export function JobQueueExpandDialog() {
   const genStep = useStudioStore((s) => s.genStep)
   const [history, setHistory] = useState<JobHistoryItem[]>([])
   const [tab, setTab] = useState<"active" | "history">("active")
+  const [tabSyncedOpen, setTabSyncedOpen] = useState(open)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{
     id: string
     clearAll?: boolean
   } | null>(null)
   const historyRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Empty bar opens via the history icon — land on History. Otherwise Active.
+  if (open !== tabSyncedOpen) {
+    setTabSyncedOpen(open)
+    if (open) {
+      setTab(jobQueue.length === 0 ? "history" : "active")
+    }
+  }
 
   const refreshHistory = useEffectEvent(() => {
     void listJobHistory()

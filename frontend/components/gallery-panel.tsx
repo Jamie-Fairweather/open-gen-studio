@@ -1,6 +1,8 @@
 "use client"
 
 import {
+  ClipboardIcon,
+  FolderOpenIcon,
   ImageIcon,
   SlidersHorizontalIcon,
   Trash2Icon,
@@ -25,6 +27,8 @@ type GalleryPanelProps = {
   selectedId: string | null
   onSelect: (id: string | null) => void
   onDelete: (id: string) => Promise<void>
+  onCopy: (id: string) => void | Promise<void>
+  onReveal: () => void | Promise<void>
   onReusePrompt: (item: GalleryItem) => void
   onReuseSettings: (item: GalleryItem) => void
   onImageToPrompt?: (item: GalleryItem) => void
@@ -42,6 +46,7 @@ type GalleryTileProps = {
   canReuseSettings: boolean
   onSelect: (id: string | null) => void
   onDelete: (id: string) => void | Promise<void>
+  onCopy: (id: string) => void | Promise<void>
   onReusePrompt: (item: GalleryItem) => void
   onReuseSettings: (item: GalleryItem) => void
   onImageToPrompt?: (item: GalleryItem) => void
@@ -54,6 +59,7 @@ const GalleryTile = memo(function GalleryTile({
   canReuseSettings,
   onSelect,
   onDelete,
+  onCopy,
   onReusePrompt,
   onReuseSettings,
   onImageToPrompt,
@@ -92,52 +98,62 @@ const GalleryTile = memo(function GalleryTile({
           className="pointer-events-none absolute inset-0 z-10 rounded-lg border-2 border-primary shadow-[inset_0_0_0_1px_rgba(0,0,0,0.35)]"
         />
       ) : null}
-      {canReusePrompt || canReuseSettings || onImageToPrompt ? (
-        <div className="absolute start-1.5 bottom-1.5 z-20 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-          {onImageToPrompt ? (
-            <WithTooltip label="Image to Prompt">
-              <Button
-                type="button"
-                size="icon-xs"
-                variant="default"
-                className="rounded-md shadow-md"
-                onClick={() => onImageToPrompt(item)}
-                aria-label="Image to Prompt"
-              >
-                <ImageIcon />
-              </Button>
-            </WithTooltip>
-          ) : null}
-          {canReusePrompt ? (
-            <WithTooltip label="Reuse prompt">
-              <Button
-                type="button"
-                size="icon-xs"
-                variant="default"
-                className="rounded-md shadow-md"
-                onClick={() => onReusePrompt(item)}
-                aria-label="Reuse prompt"
-              >
-                <TypeIcon />
-              </Button>
-            </WithTooltip>
-          ) : null}
-          {canReuseSettings ? (
-            <WithTooltip label="Reuse all settings">
-              <Button
-                type="button"
-                size="icon-xs"
-                variant="default"
-                className="rounded-md shadow-md"
-                onClick={() => onReuseSettings(item)}
-                aria-label="Reuse all settings"
-              >
-                <SlidersHorizontalIcon />
-              </Button>
-            </WithTooltip>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="absolute start-1.5 bottom-1.5 z-20 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+        <WithTooltip label="Copy to clipboard">
+          <Button
+            type="button"
+            size="icon-xs"
+            variant="default"
+            className="rounded-md shadow-md"
+            onClick={() => void onCopy(item.id)}
+            aria-label="Copy to clipboard"
+          >
+            <ClipboardIcon />
+          </Button>
+        </WithTooltip>
+        {onImageToPrompt ? (
+          <WithTooltip label="Image to Prompt">
+            <Button
+              type="button"
+              size="icon-xs"
+              variant="default"
+              className="rounded-md shadow-md"
+              onClick={() => onImageToPrompt(item)}
+              aria-label="Image to Prompt"
+            >
+              <ImageIcon />
+            </Button>
+          </WithTooltip>
+        ) : null}
+        {canReusePrompt ? (
+          <WithTooltip label="Reuse prompt">
+            <Button
+              type="button"
+              size="icon-xs"
+              variant="default"
+              className="rounded-md shadow-md"
+              onClick={() => onReusePrompt(item)}
+              aria-label="Reuse prompt"
+            >
+              <TypeIcon />
+            </Button>
+          </WithTooltip>
+        ) : null}
+        {canReuseSettings ? (
+          <WithTooltip label="Reuse all settings">
+            <Button
+              type="button"
+              size="icon-xs"
+              variant="default"
+              className="rounded-md shadow-md"
+              onClick={() => onReuseSettings(item)}
+              aria-label="Reuse all settings"
+            >
+              <SlidersHorizontalIcon />
+            </Button>
+          </WithTooltip>
+        ) : null}
+      </div>
       <WithTooltip label="Delete">
         <Button
           type="button"
@@ -153,6 +169,32 @@ const GalleryTile = memo(function GalleryTile({
     </div>
   )
 })
+
+function RevealInExplorerButton({
+  onReveal,
+  className,
+}: {
+  onReveal: () => void | Promise<void>
+  className?: string
+}) {
+  return (
+    <WithTooltip label="Reveal in Explorer">
+      <Button
+        type="button"
+        variant="outline"
+        size="icon-sm"
+        className={cn(
+          "bg-popover shadow-md before:hidden dark:bg-popover",
+          className
+        )}
+        onClick={() => void onReveal()}
+        aria-label="Reveal in Explorer"
+      >
+        <FolderOpenIcon />
+      </Button>
+    </WithTooltip>
+  )
+}
 
 const LiveGalleryTile = memo(function LiveGalleryTile({
   previewSrc,
@@ -217,6 +259,8 @@ export function GalleryPanel({
   selectedId,
   onSelect,
   onDelete,
+  onCopy,
+  onReveal,
   onReusePrompt,
   onReuseSettings,
   onImageToPrompt,
@@ -242,7 +286,11 @@ export function GalleryPanel({
 
   return (
     <SideRail open={open} side="right" width={SIDE_RAIL_WIDTH}>
-      <SideRailHeader title={title} count={items.length} />
+      <SideRailHeader
+        title={title}
+        count={items.length}
+        action={<RevealInExplorerButton onReveal={onReveal} />}
+      />
       <SideRailBody>
         {empty ? (
           <p className="px-1 py-16 text-center text-sm text-muted-foreground">
@@ -266,6 +314,7 @@ export function GalleryPanel({
                 canReuseSettings={canReuseSettings}
                 onSelect={onSelect}
                 onDelete={onDelete}
+                onCopy={onCopy}
                 onReusePrompt={onReusePrompt}
                 onReuseSettings={onReuseSettings}
                 onImageToPrompt={onImageToPrompt}

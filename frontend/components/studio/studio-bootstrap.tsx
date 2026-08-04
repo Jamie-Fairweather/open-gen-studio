@@ -1,6 +1,11 @@
 "use client"
 
-import { useEffect, useSyncExternalStore, type ReactNode } from "react"
+import {
+  useEffect,
+  useLayoutEffect,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react"
 import { usePathname, useRouter } from "next/navigation"
 import {
   comfyuiStatus,
@@ -68,14 +73,12 @@ import {
   filterSessionLoras,
   flushPersistSession,
   isKnownToolsPath,
+  overlayControlValues,
   overlaySessionControls,
   parseStudioSession,
   resolveSessionUpscaleModelId,
 } from "@/components/studio/slices/session-persist"
-import {
-  selectActiveSelectedId,
-  selectTabGallery,
-} from "@/components/studio/selectors"
+import { selectActiveSelectedId } from "@/components/studio/selectors"
 import { useStudioSelector, useStudioStore } from "@/components/studio/store"
 import { studioRefs } from "@/components/studio/studio-refs"
 import { tabFromPath } from "@/components/studio/studio-tabs"
@@ -106,7 +109,8 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
     useStudioStore.getState().setDesktop(desktop)
   }, [desktop])
 
-  useEffect(() => {
+  // Sync before paint so tab-scoped selectors don't lag a frame behind the route.
+  useLayoutEffect(() => {
     useStudioStore.getState().setStudioTab(studioTab)
   }, [studioTab])
 
@@ -126,29 +130,19 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
     }
   }, [router])
 
-  // Drop gallery selection that is not on the current media tab.
-  // Skip tools/downloads/creator/settings — those tabs have no gallery filter
-  // and must not wipe a restored (or in-progress) selection.
+  // Drop selection only when the item is gone entirely. Keep it across
+  // image/video/audio (and tools/settings) so returning to a tab restores it;
+  // tab-scoped UI already ignores off-tab ids.
   const selectedGalleryId = useStudioStore((s) => s.selectedGalleryId)
   const gallery = useStudioStore((s) => s.gallery)
+  const galleryLoaded = useStudioStore((s) => s.galleryLoaded)
   useEffect(() => {
-    if (
-      studioTab === "tools" ||
-      studioTab === "downloads" ||
-      studioTab === "creator" ||
-      studioTab === "settings"
-    ) {
-      return
-    }
-    const tabGallery = selectTabGallery(useStudioStore.getState())
-    if (
-      selectedGalleryId != null &&
-      !tabGallery.some((item) => item.id === selectedGalleryId)
-    ) {
+    if (!galleryLoaded || selectedGalleryId == null) return
+    if (!gallery.some((item) => item.id === selectedGalleryId)) {
       useStudioStore.getState().setSelectedGalleryId(null)
       flushPersistSession()
     }
-  }, [selectedGalleryId, gallery, studioTab])
+  }, [selectedGalleryId, gallery, galleryLoaded])
 
   // Load blueprint detail when selection changes.
   const activeSelectedId = useStudioSelector(selectActiveSelectedId)
@@ -168,6 +162,14 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
       .then((d) => {
         if (cancelled) return
         const store = useStudioStore.getState()
+        const prevDetailId = store.detail?.id ?? null
+        const prevControlValues = store.controlValues
+        // Snapshot leaving blueprint so image↔video/audio round-trips keep seed/etc.
+        if (prevDetailId && prevDetailId !== d.id) {
+          studioRefs.controlValuesByBlueprintId[prevDetailId] = {
+            ...prevControlValues,
+          }
+        }
         store.setDetail(d)
         const recipe = studioRefs.pendingRecipe
         studioRefs.pendingRecipe = null
@@ -176,6 +178,7 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
         if (recipe || session) {
           studioRefs.pendingSession = null
         }
+        const controlIds = d.controls.map((c) => c.id)
         const next: Record<string, unknown> = {}
         for (const c of d.controls) {
           if (c.default !== undefined) {
@@ -183,6 +186,7 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
           }
         }
         let values = recipe ? applyReuseAllSettings(next, recipe) : next
+        let restoredControls = false
         if (recipe) {
           store.setLoraStack(lorasFromRecipe(recipe, studioRefs.loraPacks))
           const up = upscaleFromRecipe(recipe, d.arch)
@@ -193,15 +197,22 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
           store.setUsduSteps(up.usduSteps)
           store.setUsduDenoise(up.usduDenoise)
         } else if (session) {
-          values = overlaySessionControls(
-            next,
-            session,
-            d.controls.map((c) => c.id)
-          )
+          values = overlaySessionControls(next, session, controlIds)
           studioRefs.aspectId = session.aspectId
           studioRefs.sideLength = session.sideLength
           store.setAspectId(session.aspectId)
           store.setSideLength(session.sideLength)
+          restoredControls = true
+        } else if (prevDetailId === d.id) {
+          // Same blueprint re-load (e.g. effect re-run) — keep live values.
+          values = overlayControlValues(next, prevControlValues, controlIds)
+          restoredControls = true
+        } else {
+          const stashed = studioRefs.controlValuesByBlueprintId[d.id]
+          if (stashed) {
+            values = overlayControlValues(next, stashed, controlIds)
+            restoredControls = true
+          }
         }
         const hasW = d.controls.some((c) => c.id === "width")
         const hasH = d.controls.some((c) => c.id === "height")
@@ -214,23 +225,28 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
               store.setAspectId(synced.aspectId)
               store.setSideLength(synced.sideLength)
             }
-          } else if (session) {
+          } else if (restoredControls) {
             const width = Number(values.width)
             const height = Number(values.height)
             if (Number.isFinite(width) && Number.isFinite(height)) {
-              // Prefer restored control width/height; keep aspect refs in sync.
               const synced = syncSizeControls(width, height)
               studioRefs.aspectId = synced.aspectId
               studioRefs.sideLength = synced.sideLength
               store.setAspectId(synced.aspectId)
               store.setSideLength(synced.sideLength)
               values = { ...values, width, height }
-            } else {
+            } else if (session) {
               const sized = sizeFromAspectAndSide(
                 session.aspectId,
                 session.sideLength || SIDE_LENGTH_DEFAULT
               )
               values = { ...values, ...sized }
+            } else {
+              const { width: w, height: h } = sizeFromAspectAndSide(
+                studioRefs.aspectId,
+                studioRefs.sideLength || SIDE_LENGTH_DEFAULT
+              )
+              values = { ...values, width: w, height: h }
             }
           } else {
             const { width, height } = sizeFromAspectAndSide(

@@ -115,6 +115,8 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
       selectedId: s.selectedGalleryId,
       selectItem: s.selectGalleryItem,
       onDelete: s.handleDeleteGalleryItem,
+      onCopy: s.handleCopyGalleryImage,
+      onReveal: s.handleRevealGalleryItem,
       onReusePrompt: s.handleReuseGalleryPrompt,
       onReuseSettings: s.handleReuseGallerySettings,
       openImageToPrompt: s.openImageToPrompt,
@@ -294,6 +296,8 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
             selectedId={gallery.selectedId}
             onSelect={gallery.selectItem}
             onDelete={gallery.onDelete}
+            onCopy={gallery.onCopy}
+            onReveal={gallery.onReveal}
             onReusePrompt={gallery.onReusePrompt}
             onReuseSettings={gallery.onReuseSettings}
             onImageToPrompt={(item) =>

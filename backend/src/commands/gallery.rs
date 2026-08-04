@@ -1,10 +1,31 @@
 use super::state::AppState;
+use crate::blueprints::{open_path_in_os, path_for_asset_protocol};
 use crate::db::GalleryItem;
 use crate::generate;
 use std::collections::HashSet;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager, State};
+
+fn gallery_root(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = generate::gallery_dir(app)?;
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+/// Ensure `path` resolves inside the gallery directory (not arbitrary FS).
+fn ensure_under_gallery(app: &AppHandle, path: &Path) -> Result<PathBuf, String> {
+    let root = gallery_root(app)?
+        .canonicalize()
+        .map_err(|e| format!("gallery dir: {e}"))?;
+    let resolved = path
+        .canonicalize()
+        .map_err(|e| format!("gallery path missing: {e}"))?;
+    if !resolved.starts_with(&root) {
+        return Err("path is outside the gallery folder".into());
+    }
+    Ok(resolved)
+}
 
 #[tauri::command]
 #[specta::specta]
@@ -122,5 +143,65 @@ pub fn delete_gallery_item(
         let _ = app.emit("gallery://deleted", &id);
         std::thread::spawn(move || remove_gallery_files(&item));
     }
+    Ok(())
+}
+
+/// Reveal a gallery file in the OS file manager, or open the gallery folder.
+#[tauri::command]
+#[specta::specta]
+pub fn reveal_gallery_item(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: Option<String>,
+) -> Result<String, String> {
+    if let Some(id) = id.as_deref().filter(|s| !s.is_empty()) {
+        let item = {
+            let db = state.db.lock().map_err(|e| e.to_string())?;
+            db.get_gallery_item(id)?
+                .ok_or_else(|| format!("gallery item not found: {id}"))?
+        };
+        let path = ensure_under_gallery(&app, Path::new(&item.path))?;
+        if !path.is_file() {
+            return Err(format!("gallery image missing: {}", path.display()));
+        }
+        open_path_in_os(&path)?;
+        return Ok(path_for_asset_protocol(path));
+    }
+
+    let dir = gallery_root(&app)?;
+    open_path_in_os(&dir)?;
+    Ok(path_for_asset_protocol(dir))
+}
+
+/// Copy a gallery image (full resolution) to the system clipboard.
+#[tauri::command]
+#[specta::specta]
+pub fn copy_gallery_image_to_clipboard(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    let item = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        db.get_gallery_item(&id)?
+            .ok_or_else(|| format!("gallery item not found: {id}"))?
+    };
+    let path = ensure_under_gallery(&app, Path::new(&item.path))?;
+    if !path.is_file() {
+        return Err(format!("gallery image missing: {}", path.display()));
+    }
+
+    let img = image::open(&path).map_err(|e| format!("open gallery image: {e}"))?;
+    let rgba = img.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    let mut clipboard =
+        arboard::Clipboard::new().map_err(|e| format!("clipboard unavailable: {e}"))?;
+    clipboard
+        .set_image(arboard::ImageData {
+            width: width as usize,
+            height: height as usize,
+            bytes: rgba.into_raw().into(),
+        })
+        .map_err(|e| format!("copy image failed: {e}"))?;
     Ok(())
 }

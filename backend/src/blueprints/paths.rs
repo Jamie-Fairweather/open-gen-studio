@@ -79,24 +79,50 @@ pub fn open_user_blueprints_dir(app: &AppHandle) -> Result<String, String> {
 }
 
 pub(crate) fn open_dir_in_os(dir: &Path) -> Result<(), String> {
+    open_path_in_os(dir)
+}
+
+/// Open a directory, or reveal a file in the OS file manager.
+pub(crate) fn open_path_in_os(path: &Path) -> Result<(), String> {
     #[cfg(windows)]
     {
-        crate::process_cmd::new("explorer")
-            .arg(dir)
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        if path.is_file() {
+            // `/select,` highlights the file; path must not be quoted separately.
+            let arg = format!("/select,{}", path.display());
+            crate::process_cmd::new("explorer")
+                .arg(arg)
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        } else {
+            crate::process_cmd::new("explorer")
+                .arg(path)
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
     }
     #[cfg(target_os = "macos")]
     {
-        crate::process_cmd::new("open")
-            .arg(dir)
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        if path.is_file() {
+            crate::process_cmd::new("open")
+                .args(["-R", &path.display().to_string()])
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        } else {
+            crate::process_cmd::new("open")
+                .arg(path)
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
     }
     #[cfg(target_os = "linux")]
     {
+        let target = if path.is_file() {
+            path.parent().unwrap_or(path)
+        } else {
+            path
+        };
         crate::process_cmd::new("xdg-open")
-            .arg(dir)
+            .arg(target)
             .spawn()
             .map_err(|e| e.to_string())?;
     }

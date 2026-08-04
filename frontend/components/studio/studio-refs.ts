@@ -14,6 +14,12 @@ export const studioRefs = {
   /** Restored session waiting for blueprint detail merge (cleared after apply). */
   pendingSession: null as StudioSessionV1 | null,
   /**
+   * Per-blueprint control values kept across media-tab switches. When the
+   * active blueprint falls back to another tab's model, defaults would
+   * otherwise wipe seed/etc; returning restores from here.
+   */
+  controlValuesByBlueprintId: {} as Record<string, Record<string, unknown>>,
+  /**
    * Prefetch of blueprint detail started during bootstrap before selectedId
    * is set — reused by the detail-load effect to avoid a second round-trip.
    */

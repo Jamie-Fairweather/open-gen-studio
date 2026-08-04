@@ -93,3 +93,12 @@ export async function addGalleryItem(input: {
 export async function deleteGalleryItem(id: string): Promise<void> {
   await commands.deleteGalleryItem(id)
 }
+
+/** Reveal a gallery file, or open the gallery folder when `id` is null/undefined. */
+export async function revealGalleryItem(id?: string | null): Promise<string> {
+  return commands.revealGalleryItem(id ?? null)
+}
+
+export async function copyGalleryImageToClipboard(id: string): Promise<void> {
+  await commands.copyGalleryImageToClipboard(id)
+}

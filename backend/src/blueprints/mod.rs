@@ -24,7 +24,7 @@ pub use list::{enqueue_size_probe, list_blueprints};
 pub use models_fs::{list_model_files, open_models_dir};
 #[allow(unused_imports)]
 pub use paths::{official_dir, open_user_blueprints_dir, user_dir};
-pub(crate) use paths::{open_dir_in_os, path_for_asset_protocol};
+pub(crate) use paths::{open_dir_in_os, open_path_in_os, path_for_asset_protocol};
 pub(crate) use types::ManifestFile;
 #[allow(unused_imports)]
 pub use types::{

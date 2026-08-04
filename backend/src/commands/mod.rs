@@ -44,6 +44,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             gallery::list_gallery,
             gallery::add_gallery_item,
             gallery::delete_gallery_item,
+            gallery::reveal_gallery_item,
+            gallery::copy_gallery_image_to_clipboard,
             util::detect_gpu,
             util::spellcheck_suggestions,
             downloads::download_url,

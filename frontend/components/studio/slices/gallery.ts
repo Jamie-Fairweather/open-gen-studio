@@ -1,8 +1,10 @@
 import type { Dispatch, SetStateAction } from "react"
 import type { StateCreator } from "zustand"
 import {
+  copyGalleryImageToClipboard,
   deleteGalleryItem,
   parseGalleryRecipe,
+  revealGalleryItem,
   type GalleryItem,
 } from "@/lib/host"
 import {
@@ -37,6 +39,8 @@ export type GallerySlice = {
   /** Patch an existing row (e.g. async thumb backfill) without touching live preview. */
   patchGalleryItem: (item: GalleryItem) => void
   handleDeleteGalleryItem: (id: string) => Promise<void>
+  handleRevealGalleryItem: () => Promise<void>
+  handleCopyGalleryImage: (id: string) => Promise<void>
   handleReuseGalleryPrompt: (item: GalleryItem) => void
   handleReuseGallerySettings: (item: GalleryItem) => void
 }
@@ -110,6 +114,27 @@ export const createGallerySlice: StateCreator<
       if (selectedWas === id) flushPersistSession()
       notifyError(e instanceof Error ? e.message : String(e), "Delete failed")
       throw e
+    }
+  },
+
+  handleRevealGalleryItem: async () => {
+    const id =
+      !get().followLive && get().selectedGalleryId
+        ? get().selectedGalleryId
+        : null
+    try {
+      await revealGalleryItem(id)
+    } catch (e) {
+      notifyError(e instanceof Error ? e.message : String(e))
+    }
+  },
+
+  handleCopyGalleryImage: async (id) => {
+    try {
+      await copyGalleryImageToClipboard(id)
+      notifySuccess("Copied to clipboard")
+    } catch (e) {
+      notifyError(e instanceof Error ? e.message : String(e), "Copy failed")
     }
   },
 

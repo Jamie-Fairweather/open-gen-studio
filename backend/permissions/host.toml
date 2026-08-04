@@ -20,6 +20,8 @@ commands.allow = [
   "list_gallery",
   "add_gallery_item",
   "delete_gallery_item",
+  "reveal_gallery_item",
+  "copy_gallery_image_to_clipboard",
   "detect_gpu",
   "spellcheck_suggestions",
   "download_url",

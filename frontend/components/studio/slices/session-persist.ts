@@ -285,17 +285,25 @@ export function parseStudioSession(
 }
 
 /** Overlay saved control values onto blueprint defaults; only known control ids. */
+export function overlayControlValues(
+  defaults: Record<string, unknown>,
+  saved: Record<string, unknown>,
+  controlIds: Iterable<string>
+): Record<string, unknown> {
+  const allowed = new Set(controlIds)
+  const next = { ...defaults }
+  for (const [key, value] of Object.entries(saved)) {
+    if (allowed.has(key)) next[key] = value
+  }
+  return next
+}
+
 export function overlaySessionControls(
   defaults: Record<string, unknown>,
   session: StudioSessionV1,
   controlIds: Iterable<string>
 ): Record<string, unknown> {
-  const allowed = new Set(controlIds)
-  const next = { ...defaults }
-  for (const [key, value] of Object.entries(session.controlValues)) {
-    if (allowed.has(key)) next[key] = value
-  }
-  return next
+  return overlayControlValues(defaults, session.controlValues, controlIds)
 }
 
 export function filterSessionLoras(

@@ -44,6 +44,7 @@ keyring = { version = "3", features = [
 sevenz-rust2 = "0.21"
 tungstenite = { version = "0.26", default-features = false, features = ["handshake"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+arboard = "3"
 # IPC: Specta 2.0.0-rc.25 (last RC before stable) + tauri-specta typed commands.
 # See docs/contributing/coding-standards.md and docs/contributing/dev-notes-specta-v2.md
 specta = { version = "=2.0.0-rc.25", features = ["derive", "function", "serde_json"] }

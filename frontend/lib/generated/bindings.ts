@@ -45,6 +45,12 @@ export const commands = {
     }),
   deleteGalleryItem: (id: string) =>
     __TAURI_INVOKE<null>("delete_gallery_item", { id }),
+  /**  Reveal a gallery file in the OS file manager, or open the gallery folder. */
+  revealGalleryItem: (id: string | null) =>
+    __TAURI_INVOKE<string>("reveal_gallery_item", { id }),
+  /**  Copy a gallery image (full resolution) to the system clipboard. */
+  copyGalleryImageToClipboard: (id: string) =>
+    __TAURI_INVOKE<null>("copy_gallery_image_to_clipboard", { id }),
   detectGpu: () => __TAURI_INVOKE<GpuInfo>("detect_gpu"),
   /**  OS spell suggestions for the custom editable context menu (empty if correct / unavailable). */
   spellcheckSuggestions: (word: string) =>
@@ -283,7 +289,7 @@ export type CapturedWorkflow = {
 /**  One downloadable file suggested for a RecipeArch (latest published version). */
 export type CivitaiExpandedVariant = {
   arch: RecipeArch
-  /**  CivitAI download URL (token appended when available). */
+  /**  CivitAI download URL (no API token — auth is applied at download time). */
   url: string
   filename: string | null
   baseModel: string

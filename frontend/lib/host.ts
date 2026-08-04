@@ -62,6 +62,8 @@ export {
   listGallery,
   addGalleryItem,
   deleteGalleryItem,
+  revealGalleryItem,
+  copyGalleryImageToClipboard,
 } from "./host/gallery"
 
 export {

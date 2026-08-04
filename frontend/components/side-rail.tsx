@@ -49,16 +49,31 @@ export function SideRail({
 export function SideRailHeader({
   title,
   count,
+  action,
 }: {
   title: string
   count?: number
+  /** Optional control anchored to the header trailing edge (e.g. reveal). */
+  action?: ReactNode
 }) {
   const label = count != null ? `${title} • ${count}` : title
   return (
     <div className="relative shrink-0 px-4 pt-4 pb-3">
-      <p className="text-center text-sm font-medium tracking-tight text-foreground">
-        {label}
-      </p>
+      <div className="relative flex min-h-7 items-center justify-center">
+        <p
+          className={cn(
+            "text-center text-sm font-medium tracking-tight text-foreground",
+            action && "px-9"
+          )}
+        >
+          {label}
+        </p>
+        {action ? (
+          <div className="absolute end-0 top-1/2 -translate-y-1/2">
+            {action}
+          </div>
+        ) : null}
+      </div>
       <div
         aria-hidden
         className="mt-3 h-px bg-gradient-to-r from-transparent via-border to-transparent"

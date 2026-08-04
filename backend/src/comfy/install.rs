@@ -1,3 +1,8 @@
+#[path = "install_archive.rs"]
+mod install_archive;
+#[path = "install_fs.rs"]
+mod install_fs;
+
 use crate::commands::AppState;
 use crate::db::RuntimeInstall;
 use crate::download;
@@ -9,13 +14,15 @@ use crate::pins::{
     self, COMFY_AMD_PORTABLE_URL, COMFY_INTEL_PORTABLE_URL, COMFY_NVIDIA_CU126_PORTABLE_URL,
     COMFY_NVIDIA_PORTABLE_URL, COMFY_PINNED_VERSION,
 };
-use crate::process_cmd;
-use sevenz_rust2::{ArchiveReader, Password};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
-use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
+
+use install_archive::{archive_looks_complete, extract_7z};
+use install_fs::{
+    backup_custom_nodes, custom_nodes_backup_path, purge_managed_custom_nodes_in_backup,
+    remove_dir_retries, restore_custom_nodes,
+};
 
 pub fn pinned_version() -> &'static str {
     COMFY_PINNED_VERSION
@@ -70,287 +77,6 @@ mod portable_url_tests {
     }
 }
 
-/// Copy `custom_nodes` to `backup_parent` (must be **outside** the extract tree -
-/// nested portable roots used to put the backup under `portable/`, which we then delete).
-pub(crate) fn backup_custom_nodes(
-    root: &Path,
-    backup_parent: &Path,
-) -> Result<Option<PathBuf>, String> {
-    let src = root.join("ComfyUI").join("custom_nodes");
-    if !src.is_dir() {
-        return Ok(None);
-    }
-    fs::create_dir_all(backup_parent).map_err(|e| e.to_string())?;
-    let dest = backup_parent.join(format!(
-        ".oga_custom_nodes_backup_{}",
-        super::paths::now_secs()
-    ));
-    if dest.exists() {
-        fs::remove_dir_all(&dest).map_err(|e| e.to_string())?;
-    }
-    copy_dir_recursive(&src, &dest)?;
-    Ok(Some(dest))
-}
-
-pub(crate) fn restore_custom_nodes(root: &Path, backup: &Path) -> Result<(), String> {
-    if !backup.is_dir() {
-        return Err(format!(
-            "custom nodes backup missing at {} - managed nodes will be re-pinned",
-            backup.display()
-        ));
-    }
-    let dest = root.join("ComfyUI").join("custom_nodes");
-    if dest.exists() {
-        fs::remove_dir_all(&dest).map_err(|e| e.to_string())?;
-    }
-    copy_dir_recursive(backup, &dest)?;
-    let _ = fs::remove_dir_all(backup);
-    // Never carry over managed packs - they are re-pinned fresh (avoids restoring a
-    // broken QwenVL/SUPIR tree that already matched HEAD and skipped re-clone).
-    purge_managed_custom_nodes(root);
-    Ok(())
-}
-
-/// Delete app-managed custom node folders so `ensure_managed_nodes` re-clones them.
-pub(crate) fn purge_managed_custom_nodes(root: &Path) {
-    let custom = root.join("ComfyUI").join("custom_nodes");
-    purge_managed_folders(&custom);
-}
-
-/// Backup layout is the custom_nodes tree itself (no ComfyUI/ prefix).
-fn purge_managed_custom_nodes_in_backup(backup: &Path) {
-    purge_managed_folders(backup);
-}
-
-fn purge_managed_folders(custom_nodes_dir: &Path) {
-    if !custom_nodes_dir.is_dir() {
-        return;
-    }
-    for pin in pins::MANAGED_NODES {
-        let _ = fs::remove_dir_all(custom_nodes_dir.join(pin.folder));
-    }
-}
-
-/// Retry delete - Windows often holds locks for a few seconds after process kill.
-fn remove_dir_retries(path: &Path, attempts: u32) -> Result<(), String> {
-    for i in 0..attempts {
-        if !path.exists() {
-            return Ok(());
-        }
-        match fs::remove_dir_all(path) {
-            Ok(()) => return Ok(()),
-            Err(e) if i + 1 >= attempts => {
-                return Err(format!(
-                    "Could not delete ComfyUI folder (a file is still in use): {e}. \
-                     Close anything using that folder, reboot if needed, then retry Reinstall."
-                ));
-            }
-            Err(_) => {
-                std::thread::sleep(Duration::from_secs(2));
-            }
-        }
-    }
-    Ok(())
-}
-
-pub(crate) fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<(), String> {
-    fs::create_dir_all(dest).map_err(|e| e.to_string())?;
-    for entry in fs::read_dir(src).map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let from = entry.path();
-        let to = dest.join(entry.file_name());
-        if from.is_dir() {
-            copy_dir_recursive(&from, &to)?;
-        } else {
-            fs::copy(&from, &to).map_err(|e| e.to_string())?;
-        }
-    }
-    Ok(())
-}
-
-pub(crate) fn find_7z_exe() -> Option<PathBuf> {
-    const CANDIDATES: &[&str] = &[
-        r"C:\Program Files\7-Zip\7z.exe",
-        r"C:\Program Files (x86)\7-Zip\7z.exe",
-    ];
-    for candidate in CANDIDATES {
-        let path = PathBuf::from(candidate);
-        if path.is_file() {
-            return Some(path);
-        }
-    }
-    None
-}
-
-pub(crate) fn extract_with_sevenz_cli(
-    app: &AppHandle,
-    archive: &Path,
-    dest: &Path,
-) -> Result<(), String> {
-    use std::io::Read;
-
-    let seven = find_7z_exe().ok_or_else(|| "7-Zip not found".to_string())?;
-    super::paths::emit_progress(
-        app,
-        "extract",
-        &format!("Extracting with {}…", seven.display()),
-    );
-    let mut child = process_cmd::new(&seven)
-        .args([
-            "x",
-            archive
-                .to_str()
-                .ok_or_else(|| "invalid archive path".to_string())?,
-            &format!("-o{}", dest.display()),
-            "-y",
-            "-bsp1",
-            "-bso1",
-            "-bse1",
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("failed to run 7z: {e}"))?;
-
-    let stderr_thread = child.stderr.take().map(|mut s| {
-        std::thread::spawn(move || {
-            let mut buf = String::new();
-            let _ = s.read_to_string(&mut buf);
-            buf
-        })
-    });
-
-    let mut last_emit = Instant::now()
-        .checked_sub(Duration::from_secs(1))
-        .unwrap_or_else(Instant::now);
-    if let Some(mut out) = child.stdout.take() {
-        let mut buf = [0u8; 256];
-        let mut acc = String::new();
-        loop {
-            let n = out.read(&mut buf).map_err(|e| format!("7z stdout: {e}"))?;
-            if n == 0 {
-                break;
-            }
-            for &b in &buf[..n] {
-                if b == b'\r' || b == b'\n' {
-                    if let Some(msg) = parse_7z_progress_line(&acc) {
-                        if last_emit.elapsed() >= Duration::from_millis(400) {
-                            super::paths::emit_progress(app, "extract", &msg);
-                            last_emit = Instant::now();
-                        }
-                    }
-                    acc.clear();
-                } else if b.is_ascii() {
-                    acc.push(b as char);
-                }
-            }
-        }
-        if let Some(msg) = parse_7z_progress_line(&acc) {
-            super::paths::emit_progress(app, "extract", &msg);
-        }
-    }
-
-    let status = child.wait().map_err(|e| format!("7z wait failed: {e}"))?;
-    let stderr = stderr_thread
-        .and_then(|t| t.join().ok())
-        .unwrap_or_default();
-    if !status.success() {
-        return Err(format!("7z extract failed: {stderr}"));
-    }
-    super::paths::emit_progress(app, "extract", "Extract complete");
-    Ok(())
-}
-
-/// Parse 7-Zip `-bsp1` progress lines like `"  45%"` or `"  45% 1234"`.
-fn parse_7z_progress_line(line: &str) -> Option<String> {
-    let t = line.trim();
-    if t.is_empty() {
-        return None;
-    }
-    let pct_token = t
-        .split_whitespace()
-        .find(|p| p.ends_with('%'))?
-        .trim_end_matches('%');
-    let pct: u32 = pct_token.parse().ok()?;
-    if pct > 100 {
-        return None;
-    }
-    Some(format!("Extracting… {pct}%"))
-}
-
-/// Pure-Rust extract via sevenz-rust2 (no system 7-Zip required).
-pub(crate) fn extract_with_rust(
-    app: &AppHandle,
-    archive: &Path,
-    dest: &Path,
-) -> Result<(), String> {
-    super::paths::emit_progress(
-        app,
-        "extract",
-        "Extracting with built-in Rust 7z (sevenz-rust2)…",
-    );
-
-    let mut reader = ArchiveReader::open(archive, Password::empty()).map_err(|e| e.to_string())?;
-    if let Ok(n) = std::thread::available_parallelism() {
-        reader.set_thread_count(n.get() as u32);
-    }
-
-    let mut extracted = 0u64;
-    let mut last_emit = Instant::now()
-        .checked_sub(Duration::from_secs(1))
-        .unwrap_or_else(Instant::now);
-
-    reader
-        .for_each_entries(|entry, reader| {
-            let out = dest.join(entry.name());
-            sevenz_rust2::default_entry_extract_fn(entry, reader, &out)?;
-            if !entry.is_directory() {
-                extracted += 1;
-                if last_emit.elapsed() >= Duration::from_secs(1) {
-                    super::paths::emit_progress(
-                        app,
-                        "extract",
-                        &format!("Extracting… {extracted} files written"),
-                    );
-                    last_emit = Instant::now();
-                }
-            }
-            Ok(true)
-        })
-        .map_err(|e| e.to_string())?;
-
-    super::paths::emit_progress(
-        app,
-        "extract",
-        &format!("Extract complete ({extracted} files)"),
-    );
-    Ok(())
-}
-
-pub(crate) fn extract_7z(app: &AppHandle, archive: &Path, dest: &Path) -> Result<(), String> {
-    fs::create_dir_all(dest).map_err(|e| e.to_string())?;
-
-    // Optional boost when 7-Zip is installed; otherwise pure Rust always works.
-    if find_7z_exe().is_some() {
-        match extract_with_sevenz_cli(app, archive, dest) {
-            Ok(()) => return Ok(()),
-            Err(err) => {
-                super::paths::emit_progress(
-                    app,
-                    "extract",
-                    &format!("System 7-Zip failed ({err}) - falling back to Rust extractor…"),
-                );
-                if dest.exists() {
-                    let _ = fs::remove_dir_all(dest);
-                    fs::create_dir_all(dest).map_err(|e| e.to_string())?;
-                }
-            }
-        }
-    }
-
-    extract_with_rust(app, archive, dest)
-}
-
 pub fn portable_archive_path(app: &AppHandle, kind: PortableKind) -> Result<PathBuf, String> {
     Ok(crate::app_paths::app_data_dir(app)?
         .join("downloads")
@@ -358,13 +84,6 @@ pub fn portable_archive_path(app: &AppHandle, kind: PortableKind) -> Result<Path
             "ComfyUI_windows_portable_{}_{COMFY_PINNED_VERSION}.7z",
             kind.as_str()
         )))
-}
-
-pub fn archive_looks_complete(archive: &Path) -> bool {
-    archive.is_file()
-        && fs::metadata(archive)
-            .map(|m| m.len() > 1_500_000_000)
-            .unwrap_or(false)
 }
 
 /// Download the pinned portable archive when missing/incomplete.
@@ -417,11 +136,6 @@ fn ready_runtime(id: String, created_at: i64, root: &Path) -> RuntimeInstall {
         created_at,
         updated_at: super::paths::now_secs(),
     }
-}
-
-/// Stable backup dir for custom nodes across extract → configure download steps.
-fn custom_nodes_backup_path(base: &Path) -> PathBuf {
-    base.join(".oga_custom_nodes_backup")
 }
 
 /// Extract pinned portable (assumes archive already downloaded). No configure.

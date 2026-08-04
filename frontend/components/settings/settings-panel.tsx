@@ -5,12 +5,12 @@ import { useEffect, useState } from "react"
 import {
   GpuVendorDialog,
   vendorOptionsFromAdapters,
-} from "@/components/gpu-vendor-dialog"
+} from "@/components/dialogs"
 import {
   StudioPanel,
   StudioPanelBody,
   StudioPanelHeader,
-} from "@/components/studio-panel"
+} from "@/components/shell"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {

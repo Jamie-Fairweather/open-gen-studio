@@ -1,11 +1,6 @@
 "use client"
 
-import {
-  ArrowLeftIcon,
-  CopyIcon,
-  Loader2Icon,
-  SparklesIcon,
-} from "lucide-react"
+import { ArrowLeftIcon } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
@@ -18,8 +13,10 @@ import {
   StudioPanel,
   StudioPanelBody,
   StudioPanelHeader,
-} from "@/components/studio-panel"
+} from "@/components/shell"
 import { ToolModelGate } from "@/components/tools/tool-model-gate"
+import { ToolResultActions } from "@/components/tools/tool-result-actions"
+import { ToolRunBar } from "@/components/tools/tool-run-bar"
 import {
   ToolChipRow,
   ToolFieldLabel,
@@ -28,7 +25,6 @@ import {
 } from "@/components/tools/tool-shell"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { notifySuccess } from "@/lib/notify"
 import {
   ENHANCE_MODES,
   PROMPT_TARGETS,
@@ -159,39 +155,16 @@ export function PromptEnhancerPanel() {
                 disabled={busy}
               />
 
-              <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-                <Button
-                  type="button"
-                  className="min-h-9 min-w-[9rem] gap-1.5"
-                  disabled={busy || !input.trim()}
-                  onClick={() => void run()}
-                >
-                  {busy ? (
-                    <Loader2Icon className="size-4 animate-spin" />
-                  ) : (
-                    <SparklesIcon className="size-4" />
-                  )}
-                  Enhance
-                </Button>
-                {busy && jobId ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="min-h-9"
-                    onClick={() => void cancel()}
-                  >
-                    Cancel
-                  </Button>
-                ) : null}
-                {status ? (
-                  <p className="text-xs text-muted-foreground">{status}</p>
-                ) : null}
-              </div>
-              {error ? (
-                <p className="text-sm text-destructive" role="alert">
-                  {error}
-                </p>
-              ) : null}
+              <ToolRunBar
+                label="Enhance"
+                busy={busy}
+                disabled={!input.trim()}
+                jobId={jobId}
+                status={status}
+                error={error}
+                onRun={() => void run()}
+                onCancel={() => void cancel()}
+              />
             </div>
           </ToolSurface>
 
@@ -199,31 +172,12 @@ export function PromptEnhancerPanel() {
             <ToolSurfaceHeader
               title="Enhanced prompt"
               actions={
-                <>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="min-h-9 gap-1.5"
-                    disabled={!result.trim()}
-                    onClick={() => {
-                      void navigator.clipboard.writeText(result)
-                      notifySuccess("Copied")
-                    }}
-                  >
-                    <CopyIcon className="size-3.5" />
-                    Copy
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="min-h-9"
-                    disabled={!result.trim() && !input.trim()}
-                    onClick={useInStudio}
-                  >
-                    Use in Studio
-                  </Button>
-                </>
+                <ToolResultActions
+                  copyText={result}
+                  copyDisabled={!result.trim()}
+                  useInStudioDisabled={!result.trim() && !input.trim()}
+                  onUseInStudio={useInStudio}
+                />
               }
             />
             <div className="p-4">

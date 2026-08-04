@@ -5,7 +5,7 @@ import {
   STUDIO_PANEL_GUTTER,
   StudioPanelColumn,
   StudioPanelFooter,
-} from "@/components/studio-panel"
+} from "@/components/shell"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -26,7 +26,7 @@ import { WithTooltip } from "@/components/ui/tooltip"
 import {
   CreatorThumbnailField,
   type PendingThumbnail,
-} from "@/components/creator-thumbnail-field"
+} from "./creator-thumbnail-field"
 import {
   COMFY_SAMPLER_ITEMS,
   COMFY_SCHEDULER_ITEMS,

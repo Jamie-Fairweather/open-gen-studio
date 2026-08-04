@@ -6,9 +6,9 @@ import { notifyError, notifyInfo } from "@/lib/notify"
 import { isInstalled } from "@/lib/blueprint-helpers"
 import type { StudioStore } from "../studio-store-types"
 import { studioRefs } from "../studio-refs"
+import { buildGenerateValues } from "./generate-values"
 import {
   applySet,
-  DEFAULT_UPSCALE_MODEL_ID,
   computeActiveSelectedId,
   computeActiveDetail,
   computeTabBlueprints,
@@ -171,58 +171,22 @@ export const createGenerationSlice: StateCreator<
         state.clearLivePreview()
       }
       try {
-        const values: Record<string, unknown> = {
-          ...state.controlValues,
-          prompt: state.prompt.trim(),
-        }
-
         const activeDetail = computeActiveDetail(state.detail, activeSelectedId)
-        const cfgValue = Number(
-          state.controlValues.cfg ??
-            activeDetail?.controls?.find((c) => c.id === "cfg")?.default ??
-            1
-        )
-        const hasNegativePrompt = Boolean(
-          activeDetail?.capabilities?.negative && cfgValue > 1
-        )
-        if (hasNegativePrompt) {
-          values.negative = String(state.controlValues.negative ?? "").trim()
-        } else {
-          delete values.negative
-        }
-
-        const supportsLoras = Boolean(activeDetail?.capabilities?.loras)
-        const activeArch = activeDetail?.arch ?? null
-        const activeLoraStack = activeArch
-          ? state.loraStack.filter((entry) =>
-              state.loraPacks.some(
-                (p) =>
-                  p.id === entry.id &&
-                  p.variants.some((v) => v.arch === activeArch)
-              )
-            )
-          : []
-        if (supportsLoras && activeLoraStack.length > 0) {
-          values.loras = activeLoraStack
-        } else {
-          delete values.loras
-        }
-
-        if (state.studioTab === "image" && state.upscaleEnabled) {
-          values.upscale = {
-            modelId: state.upscaleModelId || DEFAULT_UPSCALE_MODEL_ID,
-            usdu: state.usduEnabled,
-            ...(state.usduEnabled
-              ? {
-                  usduScale: state.usduScale,
-                  usduSteps: state.usduSteps,
-                  usduDenoise: state.usduDenoise,
-                }
-              : {}),
-          }
-        } else {
-          delete values.upscale
-        }
+        const values = buildGenerateValues({
+          prompt: state.prompt,
+          controlValues: state.controlValues,
+          activeDetail,
+          activeArch: activeDetail?.arch ?? null,
+          loraStack: state.loraStack,
+          loraPacks: state.loraPacks,
+          studioTab: state.studioTab,
+          upscaleEnabled: state.upscaleEnabled,
+          upscaleModelId: state.upscaleModelId,
+          usduEnabled: state.usduEnabled,
+          usduScale: state.usduScale,
+          usduSteps: state.usduSteps,
+          usduDenoise: state.usduDenoise,
+        })
 
         const job = await generateImage(selected.id, values)
         // Cancel / step UI track the GPU lane holder, not the newest enqueue.

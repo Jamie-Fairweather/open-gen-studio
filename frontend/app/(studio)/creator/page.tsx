@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { CreatorPanel } from "@/components/creator-panel"
+import { CreatorPanel } from "@/components/creator"
 import { useStudioStore } from "@/components/studio/store"
 
 function CreatorStudioBody() {

@@ -7,7 +7,7 @@ import {
   type LoraStackEntry,
   type StudioTab,
 } from "@/lib/host"
-import { SIDE_RAIL_WIDTH } from "@/components/side-rail"
+import { SIDE_RAIL_WIDTH } from "@/components/shell"
 import { STUDIO_TABS } from "@/components/studio/studio-tabs"
 import { sizeFromAspectAndSide } from "@/lib/image-size"
 import type { StudioStore } from "./studio-store-types"

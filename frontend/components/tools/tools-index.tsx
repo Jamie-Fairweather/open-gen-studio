@@ -6,7 +6,7 @@ import {
   StudioPanel,
   StudioPanelBody,
   StudioPanelHeader,
-} from "@/components/studio-panel"
+} from "@/components/shell"
 import { cn } from "@/lib/utils"
 
 const TOOLS = [

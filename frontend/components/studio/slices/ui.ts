@@ -7,7 +7,7 @@ import {
   type StudioTab,
   type ToolsHandoff,
 } from "@/lib/host"
-import { SIDE_RAIL_WIDTH } from "@/components/side-rail"
+import { SIDE_RAIL_WIDTH } from "@/components/shell"
 import type { StudioStore } from "../studio-store-types"
 import { studioRefs } from "../studio-refs"
 import {

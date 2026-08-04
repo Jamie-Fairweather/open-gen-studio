@@ -1,7 +1,7 @@
 "use client"
 
 import { useShallow } from "zustand/react/shallow"
-import { SettingsPanel } from "@/components/settings-panel"
+import { SettingsPanel } from "@/components/settings"
 import { selectComfy } from "@/components/studio/selectors"
 import { useStudioSelector, useStudioStore } from "@/components/studio/store"
 

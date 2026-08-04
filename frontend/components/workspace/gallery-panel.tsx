@@ -14,7 +14,7 @@ import {
   SideRailBody,
   SideRailHeader,
   SIDE_RAIL_WIDTH,
-} from "@/components/side-rail"
+} from "@/components/shell"
 import { Button } from "@/components/ui/button"
 import { WithTooltip } from "@/components/ui/tooltip"
 import { gallerySrc, parseGalleryRecipe, type GalleryItem } from "@/lib/host"

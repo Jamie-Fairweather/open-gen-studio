@@ -7,7 +7,7 @@ import {
   StudioPanel,
   StudioPanelBody,
   StudioPanelHeader,
-} from "@/components/studio-panel"
+} from "@/components/shell"
 import { Button } from "@/components/ui/button"
 import {
   Progress,

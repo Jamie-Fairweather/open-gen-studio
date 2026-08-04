@@ -8,14 +8,14 @@ import {
   PlusIcon,
 } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
-import { CreatorLoraForm } from "@/components/creator-lora-form"
-import { RecipeBlueprintForm } from "@/components/recipe-blueprint-form"
+import { CreatorLoraForm } from "./creator-lora-form"
+import { RecipeBlueprintForm } from "./recipe-blueprint-form"
 import { useStudioStore } from "@/components/studio/store"
 import {
   STUDIO_PANEL_GUTTER,
   StudioPanel,
   StudioPanelHeader,
-} from "@/components/studio-panel"
+} from "@/components/shell"
 import {
   AlertDialog,
   AlertDialogClose,

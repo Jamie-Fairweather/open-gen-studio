@@ -6,7 +6,7 @@ import {
   SideRailBody,
   SideRailHeader,
   SIDE_RAIL_WIDTH,
-} from "@/components/side-rail"
+} from "@/components/shell"
 
 type AdvancedPanelProps = {
   open: boolean

@@ -3,8 +3,8 @@
 import type { RecipeArch } from "@/lib/arch"
 import { DicesIcon, HistoryIcon } from "lucide-react"
 import type { Dispatch, SetStateAction } from "react"
-import { LoraStack } from "@/components/lora-stack"
-import { RefineControls } from "@/components/refine-controls"
+import { LoraStack } from "@/components/libraries"
+import { RefineControls } from "./refine-controls"
 import { Button } from "@/components/ui/button"
 import {
   Frame,

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { TriangleAlertIcon } from "lucide-react"
-import { DownloadsPanel } from "@/components/downloads-panel"
+import { DownloadsPanel } from "@/components/libraries"
 import { useStudioStore } from "@/components/studio/store"
 import {
   Alert,

@@ -3,11 +3,8 @@
 import {
   ArrowLeftIcon,
   ClipboardPasteIcon,
-  CopyIcon,
   ImageIcon,
   ImagesIcon,
-  Loader2Icon,
-  SparklesIcon,
   UploadIcon,
   XIcon,
 } from "lucide-react"
@@ -27,8 +24,10 @@ import {
   StudioPanel,
   StudioPanelBody,
   StudioPanelHeader,
-} from "@/components/studio-panel"
+} from "@/components/shell"
 import { ToolModelGate } from "@/components/tools/tool-model-gate"
+import { ToolResultActions } from "@/components/tools/tool-result-actions"
+import { ToolRunBar } from "@/components/tools/tool-run-bar"
 import {
   ToolChipRow,
   ToolFieldLabel,
@@ -352,39 +351,16 @@ export function ImageToPromptPanel() {
                 disabled={busy}
               />
 
-              <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-                <Button
-                  type="button"
-                  className="min-h-9 min-w-[9rem] gap-1.5"
-                  disabled={busy || !imagePath}
-                  onClick={() => void run()}
-                >
-                  {busy ? (
-                    <Loader2Icon className="size-4 animate-spin" />
-                  ) : (
-                    <SparklesIcon className="size-4" />
-                  )}
-                  Generate
-                </Button>
-                {busy && jobId ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="min-h-9"
-                    onClick={() => void cancel()}
-                  >
-                    Cancel
-                  </Button>
-                ) : null}
-                {status ? (
-                  <p className="text-xs text-muted-foreground">{status}</p>
-                ) : null}
-              </div>
-              {error ? (
-                <p className="text-sm text-destructive" role="alert">
-                  {error}
-                </p>
-              ) : null}
+              <ToolRunBar
+                label="Generate"
+                busy={busy}
+                disabled={!imagePath}
+                jobId={jobId}
+                status={status}
+                error={error}
+                onRun={() => void run()}
+                onCancel={() => void cancel()}
+              />
             </div>
           </ToolSurface>
 
@@ -392,31 +368,12 @@ export function ImageToPromptPanel() {
             <ToolSurfaceHeader
               title="Prompt"
               actions={
-                <>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="min-h-9 gap-1.5"
-                    disabled={!displayPrompt.trim()}
-                    onClick={() => {
-                      void navigator.clipboard.writeText(displayPrompt)
-                      notifySuccess("Copied")
-                    }}
-                  >
-                    <CopyIcon className="size-3.5" />
-                    Copy
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="min-h-9"
-                    disabled={!displayPrompt.trim()}
-                    onClick={useInStudio}
-                  >
-                    Use in Studio
-                  </Button>
-                </>
+                <ToolResultActions
+                  copyText={displayPrompt}
+                  copyDisabled={!displayPrompt.trim()}
+                  useInStudioDisabled={!displayPrompt.trim()}
+                  onUseInStudio={useInStudio}
+                />
               }
             />
             <div className="p-4">

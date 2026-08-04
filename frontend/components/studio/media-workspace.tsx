@@ -3,19 +3,20 @@
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
-  ImageIcon,
   ImagesIcon,
   SlidersHorizontalIcon,
 } from "lucide-react"
 import { useState } from "react"
 import { useShallow } from "zustand/react/shallow"
-import { AdvancedControls } from "@/components/advanced-controls"
-import { AdvancedPanel } from "@/components/advanced-panel"
-import { GalleryPanel } from "@/components/gallery-panel"
-import { ImageLightbox } from "@/components/image-lightbox"
-import { StudioPromptBar } from "@/components/prompt-bar"
-import { SideRailHandle } from "@/components/side-rail"
-import { StageImage } from "@/components/stage-image"
+import {
+  AdvancedControls,
+  AdvancedPanel,
+  GalleryPanel,
+  ImageLightbox,
+  StudioPromptBar,
+} from "@/components/workspace"
+import { SideRailHandle } from "@/components/shell"
+import { MediaStage } from "@/components/studio/media-stage"
 import {
   selectActiveArch,
   selectActiveLoraStack,
@@ -145,46 +146,17 @@ export function MediaWorkspace({ category }: MediaWorkspaceProps) {
         }}
       >
         <main className="relative flex min-h-0 flex-1 items-center justify-center px-5 py-4 md:px-10">
-          {showLiveStage ? (
-            <div className="[container-type:size] relative flex h-full min-h-0 w-full items-center justify-center">
-              {livePreviewSrc ? (
-                <StageImage
-                  src={livePreviewSrc}
-                  width={stageDims.width}
-                  height={stageDims.height}
-                  onOpen={() => setLightboxOpen(true)}
-                />
-              ) : null}
-              {pendingPreviewSrc ? (
-                <StageImage
-                  key={pendingPreviewSrc}
-                  src={pendingPreviewSrc}
-                  width={stageDims.width}
-                  height={stageDims.height}
-                  overlay
-                  onLoad={() => promotePendingPreview(pendingPreviewSrc)}
-                />
-              ) : null}
-            </div>
-          ) : previewItem ? (
-            <div className="[container-type:size] relative flex h-full min-h-0 w-full items-center justify-center">
-              <StageImage
-                src={gallerySrc(previewItem.path)}
-                width={stageDims.width}
-                height={stageDims.height}
-                onOpen={() => setLightboxOpen(true)}
-              />
-            </div>
-          ) : (
-            <div className="flex flex-col items-center text-center">
-              <div className="relative mb-6 flex size-20 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 shadow-[0_0_48px_-8px] shadow-primary/40">
-                <ImageIcon className="size-9 text-primary" />
-              </div>
-              <h1 className="font-heading text-4xl font-semibold tracking-tight uppercase md:text-5xl">
-                {studioLabel} Studio
-              </h1>
-            </div>
-          )}
+          <MediaStage
+            showLiveStage={showLiveStage}
+            livePreviewSrc={livePreviewSrc}
+            pendingPreviewSrc={pendingPreviewSrc}
+            previewSrc={previewItem ? gallerySrc(previewItem.path) : null}
+            stageWidth={stageDims.width}
+            stageHeight={stageDims.height}
+            studioLabel={studioLabel}
+            onOpenLightbox={() => setLightboxOpen(true)}
+            onPromotePending={promotePendingPreview}
+          />
         </main>
 
         <StudioPromptBar />

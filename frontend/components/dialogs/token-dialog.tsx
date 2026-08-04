@@ -1,7 +1,7 @@
 "use client"
 
 import { ExternalLinkIcon, KeyRoundIcon } from "lucide-react"
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -17,23 +17,31 @@ import { Input } from "@/components/ui/input"
 import { openExternalUrl } from "@/lib/host"
 import { notifyError } from "@/lib/notify"
 
-/** Account page - user scrolls to API Keys (CivitAI has no deep link). */
-const CIVITAI_ACCOUNT_URL = "https://civitai.com/user/account"
-
-type CivitaiTokenDialogProps = {
+export type TokenDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** Blueprint name for context, if known. */
-  blueprintName?: string | null
   onConfirm: (token: string) => Promise<void>
+  title: string
+  description: ReactNode
+  externalUrl: string
+  externalLabel: string
+  tokenLabel: string
+  tokenPlaceholder: string
+  footerHint: ReactNode
 }
 
-export function CivitaiTokenDialog({
+export function TokenDialog({
   open,
   onOpenChange,
-  blueprintName,
   onConfirm,
-}: CivitaiTokenDialogProps) {
+  title,
+  description,
+  externalUrl,
+  externalLabel,
+  tokenLabel,
+  tokenPlaceholder,
+  footerHint,
+}: TokenDialogProps) {
   const [token, setToken] = useState("")
   const [busy, setBusy] = useState(false)
 
@@ -54,16 +62,9 @@ export function CivitaiTokenDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <KeyRoundIcon className="size-5 text-amber-500" />
-            CivitAI API key required
+            {title}
           </DialogTitle>
-          <DialogDescription>
-            {blueprintName
-              ? `${blueprintName} downloads models from CivitAI.`
-              : "This blueprint downloads models from CivitAI."}{" "}
-            Create an API key on your account page (scroll to{" "}
-            <span className="font-medium text-foreground">API Keys</span>), then
-            paste it here to continue.
-          </DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <DialogPanel className="flex flex-col gap-3">
           <Button
@@ -72,7 +73,7 @@ export function CivitaiTokenDialog({
             size="sm"
             className="w-full justify-between"
             onClick={() => {
-              void openExternalUrl(CIVITAI_ACCOUNT_URL).catch((e) =>
+              void openExternalUrl(externalUrl).catch((e) =>
                 notifyError(
                   e instanceof Error ? e.message : String(e),
                   "Could not open browser"
@@ -80,16 +81,16 @@ export function CivitaiTokenDialog({
               )
             }}
           >
-            Open CivitAI account settings
+            {externalLabel}
             <ExternalLinkIcon className="size-3.5 opacity-70" />
           </Button>
           <label className="flex flex-col gap-1.5 text-xs">
-            <span className="text-muted-foreground">API key</span>
+            <span className="text-muted-foreground">{tokenLabel}</span>
             <Input
               type="password"
               autoComplete="off"
               spellCheck={false}
-              placeholder="Paste API key…"
+              placeholder={tokenPlaceholder}
               value={token}
               onChange={(e) => setToken(e.target.value)}
               onKeyDown={(e) => {
@@ -99,10 +100,7 @@ export function CivitaiTokenDialog({
               disabled={busy}
             />
           </label>
-          <p className="text-[11px] text-muted-foreground">
-            Saved to Settings for future downloads. CivitAI requires a key for
-            all model downloads.
-          </p>
+          <p className="text-[11px] text-muted-foreground">{footerHint}</p>
         </DialogPanel>
         <DialogFooter>
           <DialogClose render={<Button type="button" variant="outline" />}>

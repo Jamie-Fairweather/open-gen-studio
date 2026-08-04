@@ -1,8 +1,7 @@
 import { Geist_Mono, Outfit } from "next/font/google"
 
 import "./globals.css"
-import { NativeChrome } from "@/components/native-chrome"
-import { StartupOverlay } from "@/components/startup-overlay"
+import { NativeChrome, StartupOverlay } from "@/components/shell"
 import { AnchoredToastProvider, ToastProvider } from "@/components/ui/toast"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"

@@ -60,8 +60,8 @@ export function HfTokenDialog({
             {blueprintName
               ? `${blueprintName} downloads gated models from Hugging Face.`
               : "This blueprint downloads gated models from Hugging Face."}{" "}
-            Accept the model license on Hugging Face, create an access token,
-            then paste it here to continue.
+            Create an access token with read access, then paste it here to
+            continue.
           </DialogDescription>
         </DialogHeader>
         <DialogPanel className="flex flex-col gap-3">

@@ -37,14 +37,23 @@ pub fn get_detail(app: &AppHandle, blueprint_id: &str) -> Result<BlueprintDetail
     let models: Vec<BlueprintModelInfo> = manifest
         .models
         .iter()
-        .map(|m| BlueprintModelInfo {
-            filename: m.filename.clone(),
-            path: m.path.clone(),
-            url: m.url.clone(),
-            sha256: m.sha256.clone(),
-            gated: m.gated,
-            role: m.role.clone(),
-            ready: model_is_ready(m, &models_root),
+        .map(|m| {
+            let gated = if m.gated {
+                true
+            } else if !m.url.trim().is_empty() {
+                download::url_is_gated(&m.url)
+            } else {
+                false
+            };
+            BlueprintModelInfo {
+                filename: m.filename.clone(),
+                path: m.path.clone(),
+                url: m.url.clone(),
+                sha256: m.sha256.clone(),
+                gated,
+                role: m.role.clone(),
+                ready: model_is_ready(m, &models_root),
+            }
         })
         .collect();
 

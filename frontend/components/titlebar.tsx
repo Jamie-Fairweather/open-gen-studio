@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react"
 import { createPortal, flushSync } from "react-dom"
+import { isTauri } from "@/lib/host"
 import { notifyError } from "@/lib/notify"
 import { cn } from "@/lib/utils"
 
@@ -74,6 +75,9 @@ export function Titlebar({ leading, children, trailing }: TitlebarProps) {
   const wasMaximizedRef = useRef(false)
 
   useEffect(() => {
+    // Store/SSR assume desktop during hydrate; skip until Tauri IPC exists.
+    if (!isTauri()) return
+
     const win = getCurrentWindow()
     let unlisten: (() => void) | undefined
 
@@ -163,13 +167,19 @@ export function Titlebar({ leading, children, trailing }: TitlebarProps) {
         {leading ? (
           <div className="flex shrink-0 items-center pr-2 pl-3">{leading}</div>
         ) : null}
-        <div data-tauri-drag-region className="min-w-0 flex-1" />
+        <div
+          {...(!fullscreen ? { "data-tauri-drag-region": true } : {})}
+          className="min-w-0 flex-1"
+        />
       </div>
 
       <div className="flex min-w-0 items-center px-1">{children}</div>
 
       <div className="flex min-w-0">
-        <div data-tauri-drag-region className="min-w-0 flex-1" />
+        <div
+          {...(!fullscreen ? { "data-tauri-drag-region": true } : {})}
+          className="min-w-0 flex-1"
+        />
         {trailing ? (
           <div className="flex shrink-0 items-center pr-1">{trailing}</div>
         ) : null}

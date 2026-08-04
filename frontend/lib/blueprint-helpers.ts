@@ -7,7 +7,7 @@ import type {
 } from "@/lib/host"
 import { defaultUsduDenoise, defaultUsduSteps } from "@/lib/host"
 
-const DEFAULT_UPSCALE_MODEL_ID = "4x-ultrasharp"
+const DEFAULT_UPSCALE_MODEL_ID = "4x-nomos2-hq-dat2"
 
 export function isInstalled(bp: Blueprint): boolean {
   return bp.modelCount === 0 || bp.modelsReady >= bp.modelCount

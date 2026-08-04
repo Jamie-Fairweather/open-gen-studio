@@ -1,40 +1,64 @@
 "use client"
 
 import { LayersIcon } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { useStudioStore } from "@/components/studio/store"
 import { useMediaQuery } from "@/hooks/use-media-query"
 import { cn } from "@/lib/utils"
 
-const DURATION_MS = 5000
+const MIN_MS = 500
+/** Safety only — normally dismisses when session/catalog hydrate finishes. */
+const SAFETY_MS = 20_000
 const EXIT_MS = 350
 
 type Phase = "enter" | "run" | "exit" | "gone"
 
 export function StartupOverlay() {
   const [phase, setPhase] = useState<Phase>("enter")
-  const [fill, setFill] = useState(false)
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)")
+  const startupHydrated = useStudioStore((s) => s.startupHydrated)
+  const dismissRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     const skipExit = window.matchMedia(
       "(prefers-reduced-motion: reduce)"
     ).matches
+    const startedAt = performance.now()
+    let dismissed = false
+    let exitAt = 0
+    let goneAt = 0
+
     const start = requestAnimationFrame(() => {
       setPhase("run")
-      setFill(true)
     })
-    const exitAt = window.setTimeout(() => setPhase("exit"), DURATION_MS)
-    const goneAt = window.setTimeout(
-      () => setPhase("gone"),
-      DURATION_MS + (skipExit ? 0 : EXIT_MS)
-    )
+
+    const dismiss = () => {
+      if (dismissed) return
+      dismissed = true
+      const elapsed = performance.now() - startedAt
+      const wait = Math.max(0, MIN_MS - elapsed)
+      exitAt = window.setTimeout(() => setPhase("exit"), wait)
+      goneAt = window.setTimeout(
+        () => setPhase("gone"),
+        wait + (skipExit ? 0 : EXIT_MS)
+      )
+    }
+    dismissRef.current = dismiss
+
+    const safetyAt = window.setTimeout(dismiss, SAFETY_MS)
 
     return () => {
+      dismissRef.current = null
       cancelAnimationFrame(start)
+      window.clearTimeout(safetyAt)
       window.clearTimeout(exitAt)
       window.clearTimeout(goneAt)
     }
   }, [])
+
+  useEffect(() => {
+    if (startupHydrated) dismissRef.current?.()
+  }, [startupHydrated])
 
   if (phase === "gone") return null
 
@@ -75,18 +99,6 @@ export function StartupOverlay() {
         <p className="mt-3 text-[0.6875rem] font-medium tracking-[0.08em] text-muted-foreground uppercase">
           Starting
         </p>
-
-        <div className="mt-8 h-1 w-64 overflow-hidden rounded-full bg-white/10 sm:w-72">
-          <div
-            className="h-full origin-left bg-primary"
-            style={{
-              width: fill ? "100%" : "0%",
-              transition: reducedMotion
-                ? undefined
-                : `width ${DURATION_MS}ms linear`,
-            }}
-          />
-        </div>
       </div>
     </div>
   )

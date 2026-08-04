@@ -3,7 +3,7 @@ use specta::Type;
 
 pub const USDU_NODE_NAME: &str = "ComfyUI_UltimateSDUpscale";
 pub const SUPIR_NODE_NAME: &str = "ComfyUI-SUPIR";
-pub const DEFAULT_UPSCALE_ID: &str = "4x-ultrasharp";
+pub const DEFAULT_UPSCALE_ID: &str = "4x-nomos2-hq-dat2";
 
 /// SDXL checkpoint SUPIR merges with (shared companion, not blueprint-owned).
 pub const SUPIR_SDXL_FILENAME: &str = "sd_xl_base_1.0.safetensors";

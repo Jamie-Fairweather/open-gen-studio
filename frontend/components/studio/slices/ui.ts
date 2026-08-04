@@ -34,6 +34,11 @@ export type UiSlice = {
   galleryOpen: boolean
   advancedOpen: boolean
   queueExpandOpen: boolean
+  /**
+   * True once bootstrap has restored settings/session (and catalog) so the
+   * startup overlay can dismiss without flashing empty defaults.
+   */
+  startupHydrated: boolean
   /** Bumps on successful enqueue — prompt bar expose feedback. */
   queuePulseToken: number
   /** Job id that just landed on the lane (chip entrance). */
@@ -53,6 +58,7 @@ export type UiSlice = {
   setGalleryOpen: Dispatch<SetStateAction<boolean>>
   setAdvancedOpen: Dispatch<SetStateAction<boolean>>
   setQueueExpandOpen: Dispatch<SetStateAction<boolean>>
+  setStartupHydrated: Dispatch<SetStateAction<boolean>>
   setToolsHandoff: Dispatch<SetStateAction<ToolsHandoff | null>>
   setJobQueue: Dispatch<SetStateAction<JobQueueItem[]>>
   /** Read and clear handoff (call once on tool page mount). */
@@ -79,6 +85,7 @@ export const createUiSlice: StateCreator<StudioStore, [], [], UiSlice> = (
   galleryOpen: false,
   advancedOpen: false,
   queueExpandOpen: false,
+  startupHydrated: false,
   queuePulseToken: 0,
   lastQueuedJobId: null,
   toolsHandoff: null,
@@ -129,6 +136,9 @@ export const createUiSlice: StateCreator<StudioStore, [], [], UiSlice> = (
     }),
   setQueueExpandOpen: (next) =>
     set((s) => ({ queueExpandOpen: applySet(s.queueExpandOpen, next) })),
+
+  setStartupHydrated: (next) =>
+    set((s) => ({ startupHydrated: applySet(s.startupHydrated, next) })),
 
   setToolsHandoff: (next) =>
     set((s) => {

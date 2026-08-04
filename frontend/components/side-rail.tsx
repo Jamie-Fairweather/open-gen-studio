@@ -76,7 +76,7 @@ export function SideRailBody({
 }) {
   return (
     <div className={cn("relative min-h-0 flex-1", className)}>
-      <ScrollArea className="h-full" scrollbarGutter>
+      <ScrollArea className="h-full">
         <div className="flex flex-col gap-4 px-3.5 pb-5">{children}</div>
       </ScrollArea>
     </div>

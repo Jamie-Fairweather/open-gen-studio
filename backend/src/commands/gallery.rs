@@ -1,9 +1,10 @@
 use super::state::AppState;
 use crate::db::GalleryItem;
 use crate::generate;
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
 #[specta::specta]
@@ -15,14 +16,29 @@ pub fn list_gallery(
         let db = state.db.lock().map_err(|e| e.to_string())?;
         db.list_gallery()?
     };
-    // Backfill / migrate thumbs without holding the DB lock (decode can be slow once).
-    let (items, updates) = generate::ensure_gallery_thumbnails(&app, items);
-    if !updates.is_empty() {
-        let db = state.db.lock().map_err(|e| e.to_string())?;
-        for (id, path) in updates {
-            let _ = db.set_gallery_thumbnail(&id, &path);
+    // Return DB rows immediately; decode/migrate thumbs off the critical path.
+    let app_bg = app.clone();
+    let items_bg = items.clone();
+    std::thread::spawn(move || {
+        let (updated_items, updates) = generate::ensure_gallery_thumbnails(&app_bg, items_bg);
+        if updates.is_empty() {
+            return;
         }
-    }
+        let updated_ids: HashSet<String> = updates.iter().map(|(id, _)| id.clone()).collect();
+        {
+            let state = app_bg.state::<AppState>();
+            if let Ok(db) = state.db.lock() {
+                for (id, path) in updates {
+                    let _ = db.set_gallery_thumbnail(&id, &path);
+                }
+            };
+        }
+        for item in updated_items {
+            if updated_ids.contains(&item.id) {
+                let _ = app_bg.emit("gallery://updated", &item);
+            }
+        }
+    });
     Ok(items)
 }
 

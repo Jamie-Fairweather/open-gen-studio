@@ -13,6 +13,7 @@ import {
   computeActiveDetail,
   computeTabBlueprints,
 } from "./helpers"
+import { flushPersistSession, schedulePersistSession } from "./session-persist"
 
 export type GenerationSlice = {
   prompt: string
@@ -77,6 +78,7 @@ export const createGenerationSlice: StateCreator<
         sideLength: nextSideLength,
         controlValues: { ...s.controlValues, width, height },
       }))
+      flushPersistSession()
     },
 
     clearLivePreview: () => {
@@ -108,7 +110,10 @@ export const createGenerationSlice: StateCreator<
       }
     },
 
-    enterFollowLive: () => set({ followLive: true }),
+    enterFollowLive: () => {
+      set({ followLive: true })
+      flushPersistSession()
+    },
 
     handleGenerate: async () => {
       const state = get()
@@ -246,10 +251,15 @@ export const createGenerationSlice: StateCreator<
       }
     },
 
-    setPrompt: (next) => set((s) => ({ prompt: applySet(s.prompt, next) })),
+    setPrompt: (next) => {
+      set((s) => ({ prompt: applySet(s.prompt, next) }))
+      schedulePersistSession()
+    },
 
-    setControlValues: (next) =>
-      set((s) => ({ controlValues: applySet(s.controlValues, next) })),
+    setControlValues: (next) => {
+      set((s) => ({ controlValues: applySet(s.controlValues, next) }))
+      schedulePersistSession()
+    },
 
     setGenerating: (next) =>
       set((s) => ({ generating: applySet(s.generating, next) })),
@@ -259,18 +269,22 @@ export const createGenerationSlice: StateCreator<
 
     setGenStep: (next) => set((s) => ({ genStep: applySet(s.genStep, next) })),
 
-    setAspectId: (next) =>
+    setAspectId: (next) => {
       set((s) => {
         const aspectId = applySet(s.aspectId, next)
         studioRefs.aspectId = aspectId
         return { aspectId }
-      }),
+      })
+      schedulePersistSession()
+    },
 
-    setSideLength: (next) =>
+    setSideLength: (next) => {
       set((s) => {
         const sideLength = applySet(s.sideLength, next)
         studioRefs.sideLength = sideLength
         return { sideLength }
-      }),
+      })
+      schedulePersistSession()
+    },
   }
 }

@@ -25,6 +25,7 @@ import {
   computeActiveSelectedId,
   computeTabBlueprints,
 } from "./helpers"
+import { flushPersistSession, schedulePersistSession } from "./session-persist"
 
 export type ImageToPromptToolState = {
   imagePath: string | null
@@ -144,16 +145,24 @@ export const createToolsSlice: StateCreator<StudioStore, [], [], ToolsSlice> = (
   imageToPrompt: initialImageToPrompt(),
   promptEnhance: initialPromptEnhance(),
 
-  patchImageToPrompt: (patch) =>
-    set((s) => ({ imageToPrompt: { ...s.imageToPrompt, ...patch } })),
+  patchImageToPrompt: (patch) => {
+    set((s) => ({ imageToPrompt: { ...s.imageToPrompt, ...patch } }))
+    schedulePersistSession()
+  },
 
-  patchPromptEnhance: (patch) =>
-    set((s) => ({ promptEnhance: { ...s.promptEnhance, ...patch } })),
+  patchPromptEnhance: (patch) => {
+    set((s) => ({ promptEnhance: { ...s.promptEnhance, ...patch } }))
+    schedulePersistSession()
+  },
 
-  setImageToPrompt: (next) =>
-    set((s) => ({ imageToPrompt: applySet(s.imageToPrompt, next) })),
-  setPromptEnhance: (next) =>
-    set((s) => ({ promptEnhance: applySet(s.promptEnhance, next) })),
+  setImageToPrompt: (next) => {
+    set((s) => ({ imageToPrompt: applySet(s.imageToPrompt, next) }))
+    schedulePersistSession()
+  },
+  setPromptEnhance: (next) => {
+    set((s) => ({ promptEnhance: applySet(s.promptEnhance, next) }))
+    schedulePersistSession()
+  },
 
   seedPromptEnhance: (prompt) => {
     const cur = get().promptEnhance
@@ -169,6 +178,7 @@ export const createToolsSlice: StateCreator<StudioStore, [], [], ToolsSlice> = (
         target: arch ? targetFromArch(arch) : "auto",
       },
     })
+    flushPersistSession()
   },
 
   handlePromptToolsStatus: (message) => {
@@ -216,6 +226,7 @@ export const createToolsSlice: StateCreator<StudioStore, [], [], ToolsSlice> = (
             error: null,
           },
         })
+        flushPersistSession()
         notifySuccess("Prompt ready")
       } else if (p.stage === "error") {
         const msg = p.message || "Prompt tool failed"
@@ -273,6 +284,7 @@ export const createToolsSlice: StateCreator<StudioStore, [], [], ToolsSlice> = (
             error: null,
           },
         })
+        flushPersistSession()
         notifySuccess("Enhanced prompt ready")
       } else if (p.stage === "error") {
         const msg = p.message || "Enhance failed"

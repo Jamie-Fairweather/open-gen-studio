@@ -7,6 +7,7 @@ import type { ReactNode } from "react"
 import { useShallow } from "zustand/react/shallow"
 import { BlueprintPickerDialog } from "@/components/blueprint-picker-dialog"
 import { CivitaiTokenDialog } from "@/components/civitai-token-dialog"
+import { GatedModelDialog } from "@/components/gated-model-dialog"
 import {
   GpuVendorDialog,
   vendorOptionsFromAdapters,
@@ -87,6 +88,10 @@ export function StudioChrome({ children }: { children: ReactNode }) {
 
   const tokens = useStudioStore(
     useShallow((s) => ({
+      gatedOpen: s.gatedModelDialogOpen,
+      setGatedOpen: s.setGatedModelDialogOpen,
+      gatedRepos: s.gatedModelRepos,
+      handleGatedConfirm: s.handleGatedModelDialogConfirm,
       hfOpen: s.hfTokenDialogOpen,
       setHfOpen: s.setHfTokenDialogOpen,
       civitaiOpen: s.civitaiTokenDialogOpen,
@@ -267,6 +272,31 @@ export function StudioChrome({ children }: { children: ReactNode }) {
         onInstallUpscaler={(id) => {
           void beginUpscaleInstall(id)
         }}
+      />
+
+      <GatedModelDialog
+        key={
+          tokens.gatedOpen
+            ? (tokens.pendingInstallId ?? "gated-model")
+            : "gated-model-closed"
+        }
+        open={tokens.gatedOpen}
+        onOpenChange={(open) => {
+          tokens.setGatedOpen(open)
+          // Cancel only — confirm keeps pendingInstallId / gatedTermsAcked.
+          if (!open && !tokens.hfOpen && !tokens.civitaiOpen) {
+            const acked = useStudioStore.getState().gatedTermsAcked
+            if (!acked) tokens.setPendingInstallId(null)
+          }
+        }}
+        blueprintName={
+          tokens.pendingInstallId
+            ? (tokens.blueprints.find((b) => b.id === tokens.pendingInstallId)
+                ?.name ?? null)
+            : null
+        }
+        repos={tokens.gatedRepos}
+        onConfirm={tokens.handleGatedConfirm}
       />
 
       <HfTokenDialog

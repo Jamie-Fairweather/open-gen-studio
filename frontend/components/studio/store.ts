@@ -11,6 +11,7 @@ import { createRefineSlice } from "./slices/refine"
 import { createSettingsSlice } from "./slices/settings"
 import { createToolsSlice } from "./slices/tools"
 import { createUiSlice } from "./slices/ui"
+import { bindSessionPersist } from "./slices/session-persist"
 import type { StudioStore } from "./studio-store-types"
 
 export type { StudioStore } from "./studio-store-types"
@@ -26,6 +27,8 @@ export const useStudioStore = create<StudioStore>()((...a) => ({
   ...createToolsSlice(...a),
   ...createUiSlice(...a),
 }))
+
+bindSessionPersist(() => useStudioStore.getState())
 
 /**
  * Subscribe with shallow equality. Required for selectors that return

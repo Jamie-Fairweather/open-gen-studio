@@ -1,6 +1,12 @@
 import type { Dispatch, SetStateAction } from "react"
 import type { StateCreator } from "zustand"
-import { ensureDownload, listSettings, setSetting } from "@/lib/host"
+import {
+  ensureDownload,
+  getBlueprint,
+  listSettings,
+  setSetting,
+} from "@/lib/host"
+import { hfRepoFromModelUrl, type GatedModelRepo } from "@/lib/hf"
 import { isRecipeArch, type RecipeArch } from "@/lib/arch"
 import { notifyError, notifySuccess } from "@/lib/notify"
 import type { StudioStore } from "../studio-store-types"
@@ -11,6 +17,10 @@ export type SettingsSlice = {
   hfTokenDirty: boolean
   hfTokenSaving: boolean
   hfTokenDialogOpen: boolean
+  gatedModelDialogOpen: boolean
+  gatedModelRepos: GatedModelRepo[]
+  /** True after the user confirms the gated-terms dialog for this install. */
+  gatedTermsAcked: boolean
   civitaiToken: string
   civitaiTokenDirty: boolean
   civitaiTokenSaving: boolean
@@ -20,6 +30,7 @@ export type SettingsSlice = {
   setHfToken: Dispatch<SetStateAction<string>>
   setHfTokenDirty: Dispatch<SetStateAction<boolean>>
   setHfTokenDialogOpen: Dispatch<SetStateAction<boolean>>
+  setGatedModelDialogOpen: Dispatch<SetStateAction<boolean>>
   setCivitaiToken: Dispatch<SetStateAction<string>>
   setCivitaiTokenDirty: Dispatch<SetStateAction<boolean>>
   setCivitaiTokenDialogOpen: Dispatch<SetStateAction<boolean>>
@@ -29,6 +40,7 @@ export type SettingsSlice = {
   >
   handleSaveHfToken: () => Promise<void>
   handleSaveCivitaiToken: () => Promise<void>
+  handleGatedModelDialogConfirm: () => Promise<void>
   handleHfTokenDialogConfirm: (token: string) => Promise<void>
   handleCivitaiTokenDialogConfirm: (token: string) => Promise<void>
   requestBlueprintInstall: (id: string) => Promise<void>
@@ -41,12 +53,28 @@ export const createSettingsSlice: StateCreator<
   [],
   SettingsSlice
 > = (set, get) => {
-  /** Blocks blueprint installs behind a token dialog when the source requires one. */
+  async function collectGatedRepos(id: string): Promise<GatedModelRepo[]> {
+    try {
+      const detail = await getBlueprint(id)
+      const byId = new Map<string, GatedModelRepo>()
+      for (const model of detail.models ?? []) {
+        if (!model.gated) continue
+        const repo = hfRepoFromModelUrl(model.url ?? "")
+        if (repo) byId.set(repo.id, repo)
+      }
+      return [...byId.values()]
+    } catch {
+      return []
+    }
+  }
+
+  /** Blocks blueprint installs behind token / gated-terms dialogs when needed. */
   async function ensureInstallTokens(id: string): Promise<boolean> {
     const s = get()
     const bp = s.blueprints.find((b) => b.id === id)
     try {
       const settings = await listSettings()
+      // Token first — gated terms need a signed-in HF account + token.
       if (bp?.requiresHfToken) {
         const token = (settings.huggingface_token ?? "").trim()
         if (!token) {
@@ -63,6 +91,15 @@ export const createSettingsSlice: StateCreator<
           return false
         }
       }
+      if (bp?.requiresHfToken && !s.gatedTermsAcked) {
+        const repos = await collectGatedRepos(id)
+        set({
+          pendingInstallId: id,
+          gatedModelRepos: repos,
+          gatedModelDialogOpen: true,
+        })
+        return false
+      }
       return true
     } catch (e) {
       notifyError(e instanceof Error ? e.message : String(e), "Settings")
@@ -75,6 +112,9 @@ export const createSettingsSlice: StateCreator<
     hfTokenDirty: false,
     hfTokenSaving: false,
     hfTokenDialogOpen: false,
+    gatedModelDialogOpen: false,
+    gatedModelRepos: [],
+    gatedTermsAcked: false,
     civitaiToken: "",
     civitaiTokenDirty: false,
     civitaiTokenSaving: false,
@@ -87,6 +127,10 @@ export const createSettingsSlice: StateCreator<
       set((s) => ({ hfTokenDirty: applySet(s.hfTokenDirty, next) })),
     setHfTokenDialogOpen: (next) =>
       set((s) => ({ hfTokenDialogOpen: applySet(s.hfTokenDialogOpen, next) })),
+    setGatedModelDialogOpen: (next) =>
+      set((s) => ({
+        gatedModelDialogOpen: applySet(s.gatedModelDialogOpen, next),
+      })),
     setCivitaiToken: (next) =>
       set((s) => ({ civitaiToken: applySet(s.civitaiToken, next) })),
     setCivitaiTokenDirty: (next) =>
@@ -152,8 +196,20 @@ export const createSettingsSlice: StateCreator<
     },
 
     handleInstallBlueprint: async (id) => {
+      set({ gatedTermsAcked: false })
       if (!(await ensureInstallTokens(id))) return
+      set({ gatedTermsAcked: false, pendingInstallId: null })
       await get().requestBlueprintInstall(id)
+    },
+
+    handleGatedModelDialogConfirm: async () => {
+      const s = get()
+      const id = s.pendingInstallId
+      set({ gatedModelDialogOpen: false, gatedTermsAcked: true })
+      if (!id) return
+      if (!(await ensureInstallTokens(id))) return
+      set({ gatedTermsAcked: false, pendingInstallId: null })
+      await s.requestBlueprintInstall(id)
     },
 
     handleHfTokenDialogConfirm: async (token) => {
@@ -174,10 +230,10 @@ export const createSettingsSlice: StateCreator<
       }
       if (id) {
         if (!(await ensureInstallTokens(id))) return
-        s.setPendingInstallId(null)
+        set({ gatedTermsAcked: false, pendingInstallId: null })
         await s.requestBlueprintInstall(id)
       } else {
-        s.setPendingInstallId(null)
+        set({ gatedTermsAcked: false, pendingInstallId: null })
       }
     },
 
@@ -201,7 +257,7 @@ export const createSettingsSlice: StateCreator<
         await s.beginLoraInstall(lora.id, lora.arch)
         return
       }
-      s.setPendingInstallId(null)
+      set({ gatedTermsAcked: false, pendingInstallId: null })
       if (id) await s.requestBlueprintInstall(id)
     },
   }

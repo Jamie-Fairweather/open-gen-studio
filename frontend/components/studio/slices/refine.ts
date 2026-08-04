@@ -5,6 +5,7 @@ import type { RecipeArch } from "@/lib/arch"
 import { notifyError } from "@/lib/notify"
 import type { StudioStore } from "../studio-store-types"
 import { applySet, DEFAULT_UPSCALE_MODEL_ID } from "./helpers"
+import { flushPersistSession } from "./session-persist"
 
 export type RefineSlice = {
   loraStack: LoraStackEntry[]
@@ -44,20 +45,34 @@ export const createRefineSlice: StateCreator<
   usduDenoise: 0.15,
   pendingUpscaleIds: [],
 
-  setLoraStack: (next) =>
-    set((s) => ({ loraStack: applySet(s.loraStack, next) })),
-  setUpscaleEnabled: (next) =>
-    set((s) => ({ upscaleEnabled: applySet(s.upscaleEnabled, next) })),
-  setUpscaleModelId: (next) =>
-    set((s) => ({ upscaleModelId: applySet(s.upscaleModelId, next) })),
-  setUsduEnabled: (next) =>
-    set((s) => ({ usduEnabled: applySet(s.usduEnabled, next) })),
-  setUsduScale: (next) =>
-    set((s) => ({ usduScale: applySet(s.usduScale, next) })),
-  setUsduSteps: (next) =>
-    set((s) => ({ usduSteps: applySet(s.usduSteps, next) })),
-  setUsduDenoise: (next) =>
-    set((s) => ({ usduDenoise: applySet(s.usduDenoise, next) })),
+  setLoraStack: (next) => {
+    set((s) => ({ loraStack: applySet(s.loraStack, next) }))
+    flushPersistSession()
+  },
+  setUpscaleEnabled: (next) => {
+    set((s) => ({ upscaleEnabled: applySet(s.upscaleEnabled, next) }))
+    flushPersistSession()
+  },
+  setUpscaleModelId: (next) => {
+    set((s) => ({ upscaleModelId: applySet(s.upscaleModelId, next) }))
+    flushPersistSession()
+  },
+  setUsduEnabled: (next) => {
+    set((s) => ({ usduEnabled: applySet(s.usduEnabled, next) }))
+    flushPersistSession()
+  },
+  setUsduScale: (next) => {
+    set((s) => ({ usduScale: applySet(s.usduScale, next) }))
+    flushPersistSession()
+  },
+  setUsduSteps: (next) => {
+    set((s) => ({ usduSteps: applySet(s.usduSteps, next) }))
+    flushPersistSession()
+  },
+  setUsduDenoise: (next) => {
+    set((s) => ({ usduDenoise: applySet(s.usduDenoise, next) }))
+    flushPersistSession()
+  },
 
   beginLoraInstall: async (id, arch) => {
     try {

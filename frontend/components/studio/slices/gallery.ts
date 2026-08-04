@@ -20,16 +20,22 @@ import {
   computeActiveSelectedId,
   computeTabBlueprints,
 } from "./helpers"
+import { flushPersistSession } from "./session-persist"
 
 export type GallerySlice = {
   gallery: GalleryItem[]
+  /** True after the initial host gallery list has been applied (may be empty). */
+  galleryLoaded: boolean
   selectedGalleryId: string | null
   setGallery: Dispatch<SetStateAction<GalleryItem[]>>
+  setGalleryLoaded: Dispatch<SetStateAction<boolean>>
   setSelectedGalleryId: Dispatch<SetStateAction<string | null>>
   /** Select a real gallery item and leave follow-live stage mode. */
   selectGalleryItem: (id: string | null) => void
   /** Insert result and drop live preview in one update so Live never overlaps it. */
   ingestGalleryItem: (item: GalleryItem) => void
+  /** Patch an existing row (e.g. async thumb backfill) without touching live preview. */
+  patchGalleryItem: (item: GalleryItem) => void
   handleDeleteGalleryItem: (id: string) => Promise<void>
   handleReuseGalleryPrompt: (item: GalleryItem) => void
   handleReuseGallerySettings: (item: GalleryItem) => void
@@ -42,14 +48,21 @@ export const createGallerySlice: StateCreator<
   GallerySlice
 > = (set, get) => ({
   gallery: [],
+  galleryLoaded: false,
   selectedGalleryId: null,
 
   setGallery: (next) => set((s) => ({ gallery: applySet(s.gallery, next) })),
 
+  setGalleryLoaded: (next) =>
+    set((s) => ({ galleryLoaded: applySet(s.galleryLoaded, next) })),
+
   setSelectedGalleryId: (next) =>
     set((s) => ({ selectedGalleryId: applySet(s.selectedGalleryId, next) })),
 
-  selectGalleryItem: (id) => set({ selectedGalleryId: id, followLive: false }),
+  selectGalleryItem: (id) => {
+    set({ selectedGalleryId: id, followLive: false })
+    flushPersistSession()
+  },
 
   ingestGalleryItem: (item) => {
     studioRefs.livePreviewSrc = null
@@ -66,6 +79,15 @@ export const createGallerySlice: StateCreator<
         genStep: null,
       }
     })
+    if (get().followLive) flushPersistSession()
+  },
+
+  patchGalleryItem: (item) => {
+    set((s) => ({
+      gallery: s.gallery.some((x) => x.id === item.id)
+        ? s.gallery.map((x) => (x.id === item.id ? item : x))
+        : [item, ...s.gallery],
+    }))
   },
 
   handleDeleteGalleryItem: async (id) => {
@@ -76,6 +98,7 @@ export const createGallerySlice: StateCreator<
       gallery: prev.filter((item) => item.id !== id),
       selectedGalleryId: selectedWas === id ? null : selectedWas,
     })
+    if (selectedWas === id) flushPersistSession()
     try {
       await deleteGalleryItem(id)
       notifySuccess("Image deleted")
@@ -84,6 +107,7 @@ export const createGallerySlice: StateCreator<
         gallery: prev,
         selectedGalleryId: selectedWas,
       })
+      if (selectedWas === id) flushPersistSession()
       notifyError(e instanceof Error ? e.message : String(e), "Delete failed")
       throw e
     }

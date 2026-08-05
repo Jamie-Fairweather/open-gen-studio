@@ -144,3 +144,24 @@ export function onRuntimeProgress(
     handler(e.payload)
   )
 }
+
+export type DataDirProgress = {
+  stage: string
+  message: string
+  current: number
+  total: number
+}
+
+export function onDataDirProgress(
+  handler: (progress: DataDirProgress) => void
+): Promise<UnlistenFn> {
+  return listen<DataDirProgress>("data-dir://progress", (e) =>
+    handler(e.payload)
+  )
+}
+
+export function onDataDirCloseBlocked(
+  handler: (message: string) => void
+): Promise<UnlistenFn> {
+  return listen<string>("data-dir://close-blocked", (e) => handler(e.payload))
+}

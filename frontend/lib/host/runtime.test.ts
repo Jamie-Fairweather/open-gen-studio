@@ -35,6 +35,21 @@ const commands = vi.hoisted(() => ({
   creatorOpenComfy: vi.fn(async () => "http://127.0.0.1"),
   creatorCaptureWorkflow: vi.fn(async () => ({ workflow: {} })),
   creatorSuggestPackaging: vi.fn(async () => ({ models: [], controls: [] })),
+  getDataDirInfo: vi.fn(async () => ({
+    path: "C:/data",
+    isCustom: false,
+    locatorPath: "C:/data",
+    storageChosen: true,
+  })),
+  pickDataDir: vi.fn(async () => "D:/data"),
+  isDataDirMoving: vi.fn(async () => false),
+  setDataDir: vi.fn(async () => ({
+    path: "D:/data",
+    needsRestart: true,
+    migrated: false,
+  })),
+  openDataDir: vi.fn(async () => "C:/data"),
+  relaunchApp: vi.fn(async () => {}),
 }))
 
 vi.mock("@/lib/generated/bindings", () => ({ commands }))
@@ -47,13 +62,19 @@ import {
   creatorOpenComfy,
   creatorSuggestPackaging,
   detectGpu,
+  getDataDirInfo,
   installComfyui,
+  isDataDirMoving,
   isTauri,
   listRuntimes,
   listSettings,
+  openDataDir,
   openExternalUrl,
+  pickDataDir,
   providerTokenStatus,
+  relaunchApp,
   runtimePinsStatus,
+  setDataDir,
   setProviderToken,
   setSetting,
   startComfyui,
@@ -115,6 +136,28 @@ describe("runtime command wrappers", () => {
       { nodes: [] },
       [{ path: "m.safetensors" }]
     )
+  })
+
+  it("delegates data directory commands", async () => {
+    await expect(getDataDirInfo()).resolves.toEqual({
+      path: "C:/data",
+      isCustom: false,
+      locatorPath: "C:/data",
+      storageChosen: true,
+    })
+    await expect(pickDataDir()).resolves.toBe("D:/data")
+    await expect(isDataDirMoving()).resolves.toBe(false)
+    expect(commands.isDataDirMoving).toHaveBeenCalled()
+    await expect(setDataDir("D:/data")).resolves.toEqual({
+      path: "D:/data",
+      needsRestart: true,
+      migrated: false,
+    })
+    expect(commands.setDataDir).toHaveBeenCalledWith("D:/data")
+    await openDataDir()
+    expect(commands.openDataDir).toHaveBeenCalled()
+    await relaunchApp()
+    expect(commands.relaunchApp).toHaveBeenCalled()
   })
 
   it("opens external urls via window or Tauri command", async () => {

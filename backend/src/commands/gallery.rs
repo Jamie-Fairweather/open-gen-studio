@@ -27,16 +27,51 @@ fn ensure_under_gallery(app: &AppHandle, path: &Path) -> Result<PathBuf, String>
     Ok(resolved)
 }
 
+fn repair_stale_gallery_paths(app: &AppHandle, items: &mut [GalleryItem]) -> Result<(), String> {
+    let root = gallery_root(app)?;
+    let mut updates: Vec<(String, String, Option<String>)> = Vec::new();
+    for item in items.iter_mut() {
+        let mut changed = false;
+        if let Some(next) = crate::db::remap_gallery_file(&item.path, &root) {
+            item.path = next.to_string_lossy().into_owned();
+            changed = true;
+        }
+        if let Some(thumb) = item.thumbnail_path.clone() {
+            if let Some(next) = crate::db::remap_gallery_file(&thumb, &root) {
+                item.thumbnail_path = Some(next.to_string_lossy().into_owned());
+                changed = true;
+            }
+        }
+        if changed {
+            updates.push((
+                item.id.clone(),
+                item.path.clone(),
+                item.thumbnail_path.clone(),
+            ));
+        }
+    }
+    if updates.is_empty() {
+        return Ok(());
+    }
+    let state = app.state::<AppState>();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    for (id, path, thumb) in updates {
+        db.set_gallery_paths(&id, &path, thumb.as_deref())?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn list_gallery(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<GalleryItem>, String> {
-    let items = {
+    let mut items = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         db.list_gallery()?
     };
+    let _ = repair_stale_gallery_paths(&app, &mut items);
     // Return DB rows immediately; decode/migrate thumbs off the critical path.
     let app_bg = app.clone();
     let items_bg = items.clone();

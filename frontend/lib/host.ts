@@ -6,6 +6,7 @@ export type {
   BlueprintProgress,
   CapturedWorkflow,
   ComfyStatus,
+  DataDirInfo,
   DownloadJobView,
   DownloadProgress,
   DownloadSnapshot,
@@ -38,6 +39,7 @@ export type {
   RuntimeInstall,
   RuntimePinsStatus,
   RuntimeProgress,
+  SetDataDirResult,
   SuggestedControl,
   SuggestedModel,
   UpscaleKind,
@@ -86,7 +88,10 @@ export {
   onBlueprintProbe,
   onRuntimesUpdated,
   onRuntimeProgress,
+  onDataDirProgress,
+  onDataDirCloseBlocked,
 } from "./host/events"
+export type { DataDirProgress } from "./host/events"
 
 export {
   isTauri,
@@ -107,6 +112,12 @@ export {
   creatorOpenComfy,
   creatorCaptureWorkflow,
   creatorSuggestPackaging,
+  getDataDirInfo,
+  pickDataDir,
+  isDataDirMoving,
+  setDataDir,
+  openDataDir,
+  relaunchApp,
 } from "./host/runtime"
 export type { TokenProvider, ProviderTokenStatus } from "./host/runtime"
 

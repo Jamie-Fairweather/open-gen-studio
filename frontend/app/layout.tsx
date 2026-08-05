@@ -2,6 +2,7 @@ import { Geist_Mono, Outfit } from "next/font/google"
 
 import "./globals.css"
 import { NativeChrome } from "@/components/shell"
+import { DataDirMoveOverlay } from "@/components/shell/data-dir-move-overlay"
 import { OnboardingOverlay } from "@/components/shell/onboarding-overlay"
 import { StartupOverlay } from "@/components/shell/startup-overlay"
 import { AnchoredToastProvider, ToastProvider } from "@/components/ui/toast"
@@ -36,6 +37,7 @@ export default function RootLayout({
         </TooltipProvider>
         <StartupOverlay />
         <OnboardingOverlay />
+        <DataDirMoveOverlay />
       </body>
     </html>
   )

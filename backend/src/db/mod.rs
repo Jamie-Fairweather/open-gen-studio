@@ -2,9 +2,12 @@ mod downloads;
 mod gallery;
 mod jobs;
 mod migrate;
+mod path_rewrite;
 mod runtimes;
 mod settings;
 mod types;
+
+pub use path_rewrite::{remap_gallery_file, rewrite_data_root_paths_at};
 
 use rusqlite::Connection;
 use std::fs;
@@ -34,5 +37,15 @@ impl Db {
         let db = Self { conn };
         db.migrate()?;
         Ok(db)
+    }
+
+    /// Release the on-disk SQLite handle (e.g. before relocating the data dir).
+    /// Replaces the connection with an empty in-memory DB so callers can still
+    /// hold `AppState` until process exit / relaunch.
+    pub fn close_disk(&mut self) -> Result<(), String> {
+        let _ = self.conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+        let mem = Connection::open_in_memory().map_err(|e| e.to_string())?;
+        self.conn = mem;
+        Ok(())
     }
 }

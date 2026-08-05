@@ -8,8 +8,10 @@ import {
   officialBlueprintsForOnboarding,
   parseOnboardingState,
   partitionRecommended,
+  recommendedBlurb,
   resolveOnboardingStep,
   serializeOnboardingState,
+  stepAfterStorage,
 } from "./onboarding"
 
 function bp(partial: Partial<Blueprint> & { id: string }): Blueprint {
@@ -57,6 +59,11 @@ describe("onboarding helpers", () => {
     expect(parseOnboardingState(serializeOnboardingState(state))).toEqual(state)
     expect(parseOnboardingState("nope")).toBeNull()
     expect(parseOnboardingState(JSON.stringify({ step: "nope" }))).toBeNull()
+    expect(
+      parseOnboardingState(
+        JSON.stringify({ step: "storage", blueprintId: null, hfSkipped: false })
+      )
+    ).toEqual({ step: "storage", blueprintId: null, hfSkipped: false })
   })
 
   it("detects Comfy ready vs not", () => {
@@ -76,6 +83,8 @@ describe("onboarding helpers", () => {
       false
     )
     expect(hasInstalledOfficialBlueprint([installed])).toBe(true)
+    expect(hasInstalledOfficialBlueprint(null)).toBe(false)
+    expect(hasInstalledOfficialBlueprint(undefined)).toBe(false)
   })
 
   it("always hides gated Official blueprints during onboarding", () => {
@@ -108,7 +117,7 @@ describe("onboarding helpers", () => {
     expect(rest.map((b) => b.id)).toEqual(["other"])
   })
 
-  it("resolves step from GPU need and persisted progress", () => {
+  it("resolves step from storage, GPU need, and persisted progress", () => {
     const gpu = {
       available: true,
       name: null,
@@ -125,6 +134,23 @@ describe("onboarding helpers", () => {
         persisted: null,
         gpu,
         savedVendor: "",
+        storageChosen: false,
+      })
+    ).toBe("storage")
+    expect(
+      resolveOnboardingStep({
+        persisted: { step: "storage", blueprintId: null, hfSkipped: false },
+        gpu,
+        savedVendor: "",
+        storageChosen: true,
+      })
+    ).toBe("gpu")
+    expect(
+      resolveOnboardingStep({
+        persisted: null,
+        gpu,
+        savedVendor: "",
+        storageChosen: true,
       })
     ).toBe("gpu")
     expect(
@@ -132,6 +158,7 @@ describe("onboarding helpers", () => {
         persisted: null,
         gpu: { ...gpu, needsVendorChoice: false },
         savedVendor: "",
+        storageChosen: true,
       })
     ).toBe("blueprint")
     expect(
@@ -139,6 +166,7 @@ describe("onboarding helpers", () => {
         persisted: { step: "blueprint", blueprintId: null, hfSkipped: true },
         gpu,
         savedVendor: "nvidia",
+        storageChosen: true,
       })
     ).toBe("blueprint")
     expect(
@@ -146,13 +174,31 @@ describe("onboarding helpers", () => {
         persisted: { step: "hf", blueprintId: "krea2-turbo", hfSkipped: false },
         gpu,
         savedVendor: "nvidia",
+        storageChosen: true,
       })
     ).toBe("hf")
+    expect(
+      resolveOnboardingStep({
+        persisted: { step: "hf", blueprintId: "krea2-turbo", hfSkipped: false },
+        gpu,
+        savedVendor: "",
+        storageChosen: true,
+      })
+    ).toBe("gpu")
+    expect(
+      resolveOnboardingStep({
+        persisted: { step: "blueprint", blueprintId: null, hfSkipped: false },
+        gpu,
+        savedVendor: "",
+        storageChosen: true,
+      })
+    ).toBe("gpu")
     expect(
       resolveOnboardingStep({
         persisted: { step: "hf", blueprintId: null, hfSkipped: false },
         gpu,
         savedVendor: "nvidia",
+        storageChosen: true,
       })
     ).toBe("blueprint")
     expect(
@@ -164,6 +210,7 @@ describe("onboarding helpers", () => {
         },
         gpu,
         savedVendor: "",
+        storageChosen: true,
       })
     ).toBe("install")
     expect(
@@ -171,10 +218,15 @@ describe("onboarding helpers", () => {
         persisted: { step: "gpu", blueprintId: null, hfSkipped: false },
         gpu: { ...gpu, needsVendorChoice: false },
         savedVendor: "nvidia",
+        storageChosen: true,
       })
     ).toBe("blueprint")
     expect(needsGpuStep(gpu, "")).toBe(true)
     expect(needsGpuStep(gpu, "nvidia")).toBe(false)
+    expect(stepAfterStorage(gpu, "")).toBe("gpu")
+    expect(stepAfterStorage({ ...gpu, needsVendorChoice: false }, "")).toBe(
+      "blueprint"
+    )
   })
 
   it("sorts non-recommended blueprints by name", () => {
@@ -183,5 +235,10 @@ describe("onboarding helpers", () => {
       bp({ id: "alpha", name: "Alpha" }),
     ])
     expect(rest.map((b) => b.id)).toEqual(["alpha", "zeta"])
+  })
+
+  it("returns recommended blurbs only for known ids", () => {
+    expect(recommendedBlurb("krea2-turbo")).toEqual(expect.any(String))
+    expect(recommendedBlurb("not-a-real-id")).toBeNull()
   })
 })

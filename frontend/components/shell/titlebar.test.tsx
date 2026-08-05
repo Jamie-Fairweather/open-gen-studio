@@ -45,11 +45,13 @@ vi.mock("@/lib/notify", () => ({
   notifyDismiss: vi.fn(),
 }))
 
+import { beginDataDirMove, endDataDirMove } from "@/lib/data-dir-move"
 import { resetTitlebarFullscreenForTests, Titlebar } from "./titlebar"
 
 describe("Titlebar", () => {
   beforeEach(() => {
     resetTitlebarFullscreenForTests()
+    endDataDirMove()
     isTauri.mockReset().mockReturnValue(false)
     notifyError.mockReset()
     win.isMaximized.mockReset().mockResolvedValue(false)
@@ -85,6 +87,19 @@ describe("Titlebar", () => {
     expect(win.toggleMaximize).toHaveBeenCalled()
     await user.click(screen.getByRole("button", { name: "Close" }))
     expect(win.close).toHaveBeenCalled()
+  })
+
+  it("blocks close while a data folder move is in progress", async () => {
+    const user = userEvent.setup()
+    beginDataDirMove("Moving…")
+    render(<Titlebar />)
+    await user.click(screen.getByRole("button", { name: "Close" }))
+    expect(win.close).not.toHaveBeenCalled()
+    expect(notifyError).toHaveBeenCalledWith(
+      "Wait for the data folder move to finish before closing.",
+      "Can't close yet"
+    )
+    endDataDirMove()
   })
 
   it("tracks maximize via Tauri and toggles fullscreen paths", async () => {

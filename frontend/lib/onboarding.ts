@@ -3,7 +3,7 @@ import type { Blueprint, GpuInfo, RuntimeInstall } from "@/lib/host"
 
 export const SETTING_ONBOARDING = "ui_onboarding_v1"
 
-export type OnboardingStep = "gpu" | "hf" | "blueprint" | "install"
+export type OnboardingStep = "storage" | "gpu" | "hf" | "blueprint" | "install"
 
 export type OnboardingState = {
   step: OnboardingStep
@@ -36,6 +36,7 @@ export function parseOnboardingState(
   try {
     const parsed = JSON.parse(raw) as Partial<OnboardingState>
     if (
+      parsed.step !== "storage" &&
       parsed.step !== "gpu" &&
       parsed.step !== "hf" &&
       parsed.step !== "blueprint" &&
@@ -103,16 +104,28 @@ export function needsGpuStep(
   return !savedVendor?.trim()
 }
 
+export function stepAfterStorage(
+  gpu: GpuInfo | null,
+  savedVendor: string | null | undefined
+): OnboardingStep {
+  return needsGpuStep(gpu, savedVendor) ? "gpu" : "blueprint"
+}
+
 /**
- * First-run order: GPU (if needed) → Blueprint → HF token → Install.
+ * First-run order: Storage → GPU (if needed) → Blueprint → HF token → Install.
  * Gated blueprints stay out of the picker; HF is optional after they've seen one.
  */
 export function resolveOnboardingStep(opts: {
   persisted: OnboardingState | null
   gpu: GpuInfo | null
   savedVendor: string | null | undefined
+  storageChosen: boolean
 }): OnboardingStep {
-  const { persisted, gpu, savedVendor } = opts
+  const { persisted, gpu, savedVendor, storageChosen } = opts
+  if (!storageChosen) return "storage"
+  if (persisted?.step === "storage") {
+    return stepAfterStorage(gpu, savedVendor)
+  }
   if (persisted?.step === "install" && persisted.blueprintId) {
     return "install"
   }
@@ -129,7 +142,7 @@ export function resolveOnboardingStep(opts: {
   if (persisted?.step === "gpu") {
     return needsGpuStep(gpu, savedVendor) ? "gpu" : "blueprint"
   }
-  return needsGpuStep(gpu, savedVendor) ? "gpu" : "blueprint"
+  return stepAfterStorage(gpu, savedVendor)
 }
 
 /** Official image blueprints for first-run — gated (HF) packs are always hidden. */

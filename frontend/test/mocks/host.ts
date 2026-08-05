@@ -68,6 +68,23 @@ export function createHostMock(overrides: Record<string, unknown> = {}) {
     clearJobHistory: vi.fn(async () => {}),
     listModelFiles: vi.fn(async () => []),
     openModelsDir: vi.fn(async () => "/models"),
+    getDataDirInfo: vi.fn(async () => ({
+      path: "C:/data",
+      isCustom: false,
+      locatorPath: "C:/data",
+      storageChosen: true,
+    })),
+    pickDataDir: vi.fn(async () => null),
+    isDataDirMoving: vi.fn(async () => false),
+    setDataDir: vi.fn(async () => ({
+      path: "C:/data",
+      needsRestart: false,
+      migrated: false,
+    })),
+    openDataDir: vi.fn(async () => "C:/data"),
+    relaunchApp: vi.fn(async () => {}),
+    onDataDirProgress: vi.fn(async () => () => {}),
+    onDataDirCloseBlocked: vi.fn(async () => () => {}),
     listPromptToolWeights: vi.fn(async () => []),
     ensurePromptToolsProvider: vi.fn(async () => ({
       status: "queued",

@@ -30,7 +30,7 @@ use commands::AppState;
 use db::Db;
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{Manager, RunEvent};
+use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 
 fn shutdown_comfy(app: &tauri::AppHandle) {
     let Some(state) = app.try_state::<AppState>() else {
@@ -133,9 +133,17 @@ pub fn run() {
 
             // Auto-install ComfyUI portable in the background - most Blueprints need it.
             // Skips when mixed GPU vendors and no gpu_vendor setting yet (user must pick).
+            // Also waits until the user has confirmed a data folder (or legacy data exists).
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 std::thread::sleep(Duration::from_millis(800));
+                let locator = match app_paths::locator_dir(&handle) {
+                    Ok(p) => p,
+                    Err(_) => return,
+                };
+                if !app_paths::storage_chosen(&locator) {
+                    return;
+                }
                 let state = handle.state::<AppState>();
                 let needs = commands::comfy_needs_install(&handle, &state).unwrap_or(true);
                 if needs {
@@ -144,6 +152,17 @@ pub fn run() {
             });
 
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                if app_paths::is_move_in_progress() {
+                    api.prevent_close();
+                    let _ = window.app_handle().emit(
+                        "data-dir://close-blocked",
+                        "Wait for the data folder move to finish before closing.",
+                    );
+                }
+            }
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

@@ -29,6 +29,8 @@ import {
   onRuntimesUpdated,
   onUpscaleProgress,
   onUpscalersUpdated,
+  onDataDirProgress,
+  onDataDirCloseBlocked,
 } from "./events"
 
 beforeEach(() => {
@@ -103,6 +105,16 @@ describe("host event listeners", () => {
       {
         fn: onRuntimeProgress,
         event: "runtimes://progress",
+        withPayload: true,
+      },
+      {
+        fn: onDataDirProgress,
+        event: "data-dir://progress",
+        withPayload: true,
+      },
+      {
+        fn: onDataDirCloseBlocked,
+        event: "data-dir://close-blocked",
         withPayload: true,
       },
     ]

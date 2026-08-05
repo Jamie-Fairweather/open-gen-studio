@@ -2,6 +2,7 @@
 
 mod blueprints;
 mod creator;
+mod data_dir;
 mod downloads;
 mod gallery;
 mod generate;
@@ -31,6 +32,12 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             settings::set_provider_token,
             settings::clear_provider_token,
             settings::provider_token_status,
+            data_dir::get_data_dir_info,
+            data_dir::pick_data_dir,
+            data_dir::is_data_dir_moving,
+            data_dir::set_data_dir,
+            data_dir::open_data_dir,
+            data_dir::relaunch_app,
             jobs::list_jobs,
             jobs::create_job,
             jobs::update_job_status,
@@ -121,4 +128,5 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<crate::upscale::UpscaleProgress>()
         .typ::<crate::download::DownloadProgress>()
         .typ::<crate::comfy::RuntimeProgress>()
+        .typ::<crate::app_paths::DataDirProgress>()
 }

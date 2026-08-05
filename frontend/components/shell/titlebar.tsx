@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react"
 import { createPortal, flushSync } from "react-dom"
+import { getDataDirMoveActive, subscribeDataDirMove } from "@/lib/data-dir-move"
 import { isTauri } from "@/lib/host"
 import { notifyError } from "@/lib/notify"
 import { cn } from "@/lib/utils"
@@ -185,6 +186,22 @@ export function Titlebar({ leading, children, trailing }: TitlebarProps) {
   }, [])
 
   const win = () => getCurrentWindow()
+  const dataDirMoving = useSyncExternalStore(
+    subscribeDataDirMove,
+    getDataDirMoveActive,
+    () => false
+  )
+
+  function requestClose() {
+    if (dataDirMoving || getDataDirMoveActive()) {
+      notifyError(
+        "Wait for the data folder move to finish before closing.",
+        "Can't close yet"
+      )
+      return
+    }
+    void win().close()
+  }
 
   return (
     <div className="relative z-50 grid h-10 shrink-0 grid-cols-[1fr_auto_1fr] items-stretch border-b border-border bg-popover">
@@ -291,7 +308,7 @@ export function Titlebar({ leading, children, trailing }: TitlebarProps) {
           <CaptionButton
             label="Close"
             className="hover:bg-[#e81123] hover:text-white"
-            onClick={() => void win().close()}
+            onClick={requestClose}
           >
             <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
               <path

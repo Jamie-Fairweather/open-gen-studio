@@ -73,6 +73,19 @@ const host = vi.hoisted(() => ({
   setSetting: vi.fn(async () => {}),
   setProviderToken: vi.fn(async () => {}),
   openExternalUrl: vi.fn(async () => {}),
+  getDataDirInfo: vi.fn(async () => ({
+    path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+    isCustom: false,
+    locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+    storageChosen: true,
+  })),
+  pickDataDir: vi.fn(async () => null),
+  setDataDir: vi.fn(async () => ({
+    path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+    needsRestart: false,
+    migrated: false,
+  })),
+  relaunchApp: vi.fn(async () => {}),
 }))
 
 vi.mock("@/components/studio/store", () => {
@@ -87,7 +100,16 @@ vi.mock("@/lib/host", () => ({
   setSetting: (...a: unknown[]) => host.setSetting(...a),
   setProviderToken: (...a: unknown[]) => host.setProviderToken(...a),
   openExternalUrl: (...a: unknown[]) => host.openExternalUrl(...a),
+  getDataDirInfo: (...a: unknown[]) => host.getDataDirInfo(...a),
+  pickDataDir: (...a: unknown[]) => host.pickDataDir(...a),
+  setDataDir: (...a: unknown[]) => host.setDataDir(...a),
+  relaunchApp: (...a: unknown[]) => host.relaunchApp(...a),
   gallerySrc: (p: string) => p,
+}))
+
+vi.mock("@/lib/notify", () => ({
+  notifyError: vi.fn(),
+  notifySuccess: vi.fn(),
 }))
 
 vi.mock("@/components/shell/titlebar", () => ({
@@ -188,6 +210,196 @@ describe("OnboardingOverlay", () => {
     await waitFor(() => {
       expect(container.firstChild).toBeNull()
     })
+  })
+
+  it("shows storage first when not chosen yet", async () => {
+    const user = userEvent.setup()
+    host.getDataDirInfo.mockResolvedValueOnce({
+      path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      isCustom: false,
+      locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      storageChosen: false,
+    })
+    render(<OnboardingOverlay />)
+    expect(await screen.findByText("Choose data folder")).toBeInTheDocument()
+    expect(screen.getByText("Setup · Storage")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Use default" }))
+    await waitFor(() => {
+      expect(host.setDataDir).toHaveBeenCalledWith(null)
+    })
+    expect(
+      await screen.findByText("Pick your first Blueprint")
+    ).toBeInTheDocument()
+  })
+
+  it("returns from blueprint to storage when GPU is not required", async () => {
+    const user = userEvent.setup()
+    render(<OnboardingOverlay />)
+    expect(
+      await screen.findByText("Pick your first Blueprint")
+    ).toBeInTheDocument()
+    await waitForEnabled("Back")
+    await user.click(screen.getByRole("button", { name: "Back" }))
+    expect(await screen.findByText("Choose data folder")).toBeInTheDocument()
+  })
+
+  it("returns from GPU to storage, then relocates with overlay + relaunch", async () => {
+    const user = userEvent.setup()
+    store.gpu = {
+      needsVendorChoice: true,
+      adapters: [{ vendor: "nvidia", name: "RTX", memoryTotal: "12 GB" }],
+    }
+    host.getDataDirInfo.mockResolvedValue({
+      path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      isCustom: false,
+      locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      storageChosen: true,
+    })
+    host.listSettings.mockResolvedValue({
+      ui_onboarding_v1: JSON.stringify({
+        step: "gpu",
+        blueprintId: null,
+        hfSkipped: false,
+      }),
+    })
+    host.pickDataDir.mockResolvedValueOnce("D:/Open Gen Studio")
+    host.setDataDir.mockResolvedValueOnce({
+      path: "D:/Open Gen Studio",
+      needsRestart: true,
+      migrated: true,
+    })
+    render(<OnboardingOverlay />)
+    expect(await screen.findByText("Choose your GPU")).toBeInTheDocument()
+    await waitForEnabled("Back")
+    await user.click(screen.getByRole("button", { name: "Back" }))
+    expect(await screen.findByText("Choose data folder")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Choose folder…" }))
+    await waitFor(() => {
+      expect(host.setDataDir).toHaveBeenCalledWith("D:/Open Gen Studio")
+      expect(host.relaunchApp).toHaveBeenCalled()
+    })
+  })
+
+  it("handles choose-folder cancel, pick errors, and move failures", async () => {
+    const user = userEvent.setup()
+    const { notifyError } = await import("@/lib/notify")
+    host.getDataDirInfo.mockResolvedValue({
+      path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      isCustom: false,
+      locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      storageChosen: false,
+    })
+    render(<OnboardingOverlay />)
+    expect(await screen.findByText("Choose data folder")).toBeInTheDocument()
+
+    host.pickDataDir.mockResolvedValueOnce(null)
+    await user.click(screen.getByRole("button", { name: "Choose folder…" }))
+    await waitFor(() => expect(host.pickDataDir).toHaveBeenCalled())
+    expect(host.setDataDir).not.toHaveBeenCalled()
+
+    host.pickDataDir.mockRejectedValueOnce(new Error("picker blew up"))
+    await user.click(screen.getByRole("button", { name: "Choose folder…" }))
+    await waitFor(() => {
+      expect(notifyError).toHaveBeenCalledWith(
+        "picker blew up",
+        "Could not choose folder"
+      )
+    })
+
+    host.pickDataDir.mockResolvedValueOnce("D:/Open Gen Studio")
+    host.setDataDir.mockRejectedValueOnce("disk full")
+    await user.click(screen.getByRole("button", { name: "Choose folder…" }))
+    await waitFor(() => {
+      expect(notifyError).toHaveBeenCalledWith(
+        "disk full",
+        "Could not set data folder"
+      )
+    })
+  })
+
+  it("ends a relocate overlay when move succeeds without restart", async () => {
+    const user = userEvent.setup()
+    const { getDataDirMoveActive, endDataDirMove } =
+      await import("@/lib/data-dir-move")
+    endDataDirMove()
+    store.gpu = {
+      needsVendorChoice: true,
+      adapters: [{ vendor: "nvidia", name: "RTX", memoryTotal: null }],
+    }
+    host.getDataDirInfo
+      .mockResolvedValueOnce({
+        path: "C:/Old",
+        isCustom: true,
+        locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+        storageChosen: true,
+      })
+      .mockResolvedValueOnce({
+        path: "D:/New",
+        isCustom: true,
+        locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+        storageChosen: true,
+      })
+    host.listSettings.mockResolvedValue({
+      ui_onboarding_v1: JSON.stringify({
+        step: "gpu",
+        blueprintId: null,
+        hfSkipped: false,
+      }),
+    })
+    host.pickDataDir.mockResolvedValueOnce("D:/New")
+    host.setDataDir.mockResolvedValueOnce({
+      path: "D:/New",
+      needsRestart: false,
+      migrated: true,
+    })
+    render(<OnboardingOverlay />)
+    expect(await screen.findByText("Choose your GPU")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Back" }))
+    expect(await screen.findByText("Choose data folder")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Choose folder…" }))
+    await waitFor(() => {
+      expect(host.setDataDir).toHaveBeenCalledWith("D:/New")
+    })
+    expect(getDataDirMoveActive()).toBe(false)
+  })
+
+  it("ends the relocate overlay when a move fails", async () => {
+    const user = userEvent.setup()
+    const { getDataDirMoveActive, endDataDirMove } =
+      await import("@/lib/data-dir-move")
+    const { notifyError } = await import("@/lib/notify")
+    endDataDirMove()
+    store.gpu = {
+      needsVendorChoice: true,
+      adapters: [{ vendor: "nvidia", name: "RTX", memoryTotal: null }],
+    }
+    host.getDataDirInfo.mockResolvedValue({
+      path: "C:/Old",
+      isCustom: true,
+      locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      storageChosen: true,
+    })
+    host.listSettings.mockResolvedValue({
+      ui_onboarding_v1: JSON.stringify({
+        step: "gpu",
+        blueprintId: null,
+        hfSkipped: false,
+      }),
+    })
+    host.pickDataDir.mockResolvedValueOnce("D:/New")
+    host.setDataDir.mockRejectedValueOnce(new Error("copy failed"))
+    render(<OnboardingOverlay />)
+    expect(await screen.findByText("Choose your GPU")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Back" }))
+    expect(await screen.findByText("Choose data folder")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Choose folder…" }))
+    await waitFor(() => {
+      expect(notifyError).toHaveBeenCalledWith(
+        "copy failed",
+        "Could not set data folder"
+      )
+    })
+    expect(getDataDirMoveActive()).toBe(false)
   })
 
   it("shows blueprint first, then HF, then install after skip", async () => {
@@ -570,6 +782,14 @@ describe("OnboardingOverlay", () => {
 
   it("handles listSettings failure during bootstrap", async () => {
     host.listSettings.mockRejectedValueOnce(new Error("settings"))
+    render(<OnboardingOverlay />)
+    expect(
+      await screen.findByText("Pick your first Blueprint")
+    ).toBeInTheDocument()
+  })
+
+  it("handles getDataDirInfo failure during bootstrap", async () => {
+    host.getDataDirInfo.mockRejectedValueOnce(new Error("data dir"))
     render(<OnboardingOverlay />)
     expect(
       await screen.findByText("Pick your first Blueprint")

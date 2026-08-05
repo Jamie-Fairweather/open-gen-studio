@@ -1,6 +1,6 @@
 "use client"
 
-import { ImageIcon, LayersIcon } from "lucide-react"
+import { HardDriveIcon, ImageIcon, LayersIcon } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import {
   vendorOptionsFromAdapters,
@@ -16,16 +16,23 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useMediaQuery } from "@/hooks/use-media-query"
 import { isInstalled } from "@/lib/blueprint-helpers"
+import { beginDataDirMove, endDataDirMove } from "@/lib/data-dir-move"
 import {
   gallerySrc,
+  getDataDirInfo,
   isTauri,
   listSettings,
   openExternalUrl,
+  pickDataDir,
+  relaunchApp,
+  setDataDir,
   setProviderToken,
   setSetting,
   type Blueprint,
+  type DataDirInfo,
   type GpuVendor,
 } from "@/lib/host"
+import { notifyError } from "@/lib/notify"
 import {
   isComfyInstalling,
   isComfyReady,
@@ -37,6 +44,7 @@ import {
   resolveOnboardingStep,
   serializeOnboardingState,
   SETTING_ONBOARDING,
+  stepAfterStorage,
   type OnboardingState,
   type OnboardingStep,
 } from "@/lib/onboarding"
@@ -50,6 +58,7 @@ const EXIT_MS = 350
 const STAGE_FADE_MS = 100
 
 const STEP_LABEL: Record<OnboardingStep, string> = {
+  storage: "Storage",
   gpu: "GPU",
   hf: "Hugging Face",
   blueprint: "Blueprint",
@@ -92,6 +101,9 @@ export function OnboardingOverlay() {
   const [gpuBusy, setGpuBusy] = useState(false)
   const [hfToken, setHfToken] = useState("")
   const [hfBusy, setHfBusy] = useState(false)
+  const [storageInfo, setStorageInfo] = useState<DataDirInfo | null>(null)
+  const [storageBusy, setStorageBusy] = useState(false)
+  const [storageError, setStorageError] = useState<string | null>(null)
   const [installError, setInstallError] = useState<string | null>(null)
   const [installKick, setInstallKick] = useState(0)
   const installStartedRef = useRef({ comfy: false, blueprint: false })
@@ -110,16 +122,19 @@ export function OnboardingOverlay() {
     }
     let cancelled = false
     void (async () => {
-      const settings = await listSettings().catch(
-        () => ({}) as Record<string, string>
-      )
+      const [settings, dataDir] = await Promise.all([
+        listSettings().catch(() => ({}) as Record<string, string>),
+        getDataDirInfo().catch(() => null),
+      ])
       if (cancelled) return
+      if (dataDir) setStorageInfo(dataDir)
       const vendor = settings[SETTING_GPU_VENDOR]?.trim() || ""
       const persisted = parseOnboardingState(settings[SETTING_ONBOARDING])
       const nextStep = resolveOnboardingStep({
         persisted,
         gpu: useStudioStore.getState().gpu,
         savedVendor: vendor,
+        storageChosen: dataDir?.storageChosen ?? true,
       })
       await refreshProviderTokenStatus()
       if (cancelled) return
@@ -285,6 +300,59 @@ export function OnboardingOverlay() {
     }
   }
 
+  async function confirmStorage(path: string | null) {
+    setStorageBusy(true)
+    setStorageError(null)
+    let moving = false
+    try {
+      // Only show the blocking overlay when relocating an existing library.
+      const prior = storageInfo
+      const willMove =
+        prior?.storageChosen &&
+        path != null &&
+        path.trim() !== "" &&
+        path !== prior.path
+      if (willMove) {
+        beginDataDirMove("Pausing queue and preparing move…")
+        moving = true
+      }
+      const result = await setDataDir(path)
+      const info = await getDataDirInfo().catch(() => null)
+      if (info) setStorageInfo(info)
+      if (result.needsRestart) {
+        await relaunchApp()
+        return
+      }
+      if (moving) {
+        endDataDirMove()
+        moving = false
+      }
+      await advance({
+        step: stepAfterStorage(gpu, undefined),
+      })
+    } catch (e) {
+      if (moving) endDataDirMove()
+      const message = e instanceof Error ? e.message : String(e)
+      setStorageError(message)
+      notifyError(message, "Could not set data folder")
+    } finally {
+      setStorageBusy(false)
+    }
+  }
+
+  async function chooseStorageFolder() {
+    setStorageError(null)
+    try {
+      const picked = await pickDataDir()
+      if (!picked) return
+      await confirmStorage(picked)
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      setStorageError(message)
+      notifyError(message, "Could not choose folder")
+    }
+  }
+
   async function saveHfAndContinue() {
     const token = hfToken.trim()
     if (!token) return
@@ -432,20 +500,37 @@ export function OnboardingOverlay() {
       : "Finishing setup"
 
   const stageTitle =
-    stageStep === "gpu"
-      ? "Choose your GPU"
-      : stageStep === "hf"
-        ? "Hugging Face token"
-        : stageStep === "blueprint"
-          ? "Pick your first Blueprint"
-          : installPhaseLabel
+    stageStep === "storage"
+      ? "Choose data folder"
+      : stageStep === "gpu"
+        ? "Choose your GPU"
+        : stageStep === "hf"
+          ? "Hugging Face token"
+          : stageStep === "blueprint"
+            ? "Pick your first Blueprint"
+            : installPhaseLabel
 
   const stageBusy = stageAnim === "exit" || stageAnim === "enter"
   // Footer tracks the visible stage so chrome doesn't jump mid-handoff.
   const footerStep = stageStep
 
   const footerBack =
-    footerStep === "blueprint" && showGpuBack ? (
+    footerStep === "gpu" ? (
+      <Button
+        type="button"
+        variant="ghost"
+        disabled={gpuBusy || stageBusy}
+        onClick={() =>
+          void advance({
+            step: "storage",
+            blueprintId,
+            hfSkipped,
+          })
+        }
+      >
+        Back
+      </Button>
+    ) : footerStep === "blueprint" && showGpuBack ? (
       <Button
         type="button"
         variant="ghost"
@@ -453,6 +538,21 @@ export function OnboardingOverlay() {
         onClick={() =>
           void advance({
             step: "gpu",
+            blueprintId,
+            hfSkipped,
+          })
+        }
+      >
+        Back
+      </Button>
+    ) : footerStep === "blueprint" && !showGpuBack ? (
+      <Button
+        type="button"
+        variant="ghost"
+        disabled={stageBusy}
+        onClick={() =>
+          void advance({
+            step: "storage",
             blueprintId,
             hfSkipped,
           })
@@ -480,7 +580,25 @@ export function OnboardingOverlay() {
     )
 
   const footerPrimary =
-    footerStep === "gpu" ? (
+    footerStep === "storage" ? (
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={storageBusy || stageBusy}
+          onClick={() => void chooseStorageFolder()}
+        >
+          Choose folder…
+        </Button>
+        <Button
+          type="button"
+          disabled={storageBusy || stageBusy}
+          onClick={() => void confirmStorage(null)}
+        >
+          {storageBusy ? "Saving…" : "Use default"}
+        </Button>
+      </div>
+    ) : footerStep === "gpu" ? (
       <Button
         type="button"
         disabled={!gpuChoice || gpuBusy || stageBusy}
@@ -586,6 +704,36 @@ export function OnboardingOverlay() {
               <h1 className="mb-3 shrink-0 text-center font-heading text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
                 {stageTitle}
               </h1>
+
+              {stageStep === "storage" ? (
+                <div className="flex flex-col gap-3">
+                  <p className="text-center text-sm text-muted-foreground">
+                    Models and ComfyUI can use tens of gigabytes. Pick a drive
+                    with enough free space — you can change this later in
+                    Settings.
+                  </p>
+                  <div className="rounded-lg border px-3 py-2.5 text-sm">
+                    <p className="flex items-center gap-2 font-medium">
+                      <HardDriveIcon className="size-4 text-primary" />
+                      Default location
+                    </p>
+                    <p className="mt-1 font-mono text-xs break-all text-muted-foreground">
+                      {storageInfo?.locatorPath ?? storageInfo?.path ?? "…"}
+                    </p>
+                  </div>
+                  {storageInfo?.isCustom ? (
+                    <p className="text-center text-xs break-all text-muted-foreground">
+                      Current:{" "}
+                      <span className="font-mono">{storageInfo.path}</span>
+                    </p>
+                  ) : null}
+                  {storageError ? (
+                    <p className="text-center text-sm text-destructive">
+                      {storageError}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
 
               {stageStep === "gpu" ? (
                 <div className="flex flex-col gap-3">

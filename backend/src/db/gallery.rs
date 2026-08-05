@@ -165,4 +165,19 @@ impl Db {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
+
+    pub fn set_gallery_paths(
+        &self,
+        id: &str,
+        path: &str,
+        thumbnail_path: Option<&str>,
+    ) -> Result<(), String> {
+        self.conn
+            .execute(
+                "UPDATE gallery_items SET path = ?1, thumbnail_path = ?2 WHERE id = ?3",
+                params![path, thumbnail_path, id],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
 }

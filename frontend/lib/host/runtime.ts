@@ -101,3 +101,33 @@ export async function creatorSuggestPackaging(
 ): Promise<PackagingSuggestions> {
   return commands.creatorSuggestPackaging(workflow, embeddedModels ?? null)
 }
+
+export type DataDirInfo = import("@/lib/generated/bindings").DataDirInfo
+export type SetDataDirResult =
+  import("@/lib/generated/bindings").SetDataDirResult
+
+export async function getDataDirInfo(): Promise<DataDirInfo> {
+  return commands.getDataDirInfo()
+}
+
+export async function pickDataDir(): Promise<string | null> {
+  return commands.pickDataDir()
+}
+
+export async function isDataDirMoving(): Promise<boolean> {
+  return commands.isDataDirMoving()
+}
+
+export async function setDataDir(
+  path: string | null
+): Promise<SetDataDirResult> {
+  return commands.setDataDir(path)
+}
+
+export async function openDataDir(): Promise<string> {
+  return commands.openDataDir()
+}
+
+export async function relaunchApp(): Promise<void> {
+  await commands.relaunchApp()
+}

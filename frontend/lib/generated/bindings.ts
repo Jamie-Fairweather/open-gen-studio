@@ -14,6 +14,13 @@ export const commands = {
     __TAURI_INVOKE<null>("clear_provider_token", { provider }),
   providerTokenStatus: () =>
     __TAURI_INVOKE<ProviderTokenStatus>("provider_token_status"),
+  getDataDirInfo: () => __TAURI_INVOKE<DataDirInfo>("get_data_dir_info"),
+  pickDataDir: () => __TAURI_INVOKE<string | null>("pick_data_dir"),
+  isDataDirMoving: () => __TAURI_INVOKE<boolean>("is_data_dir_moving"),
+  setDataDir: (path: string | null) =>
+    __TAURI_INVOKE<SetDataDirResult>("set_data_dir", { path }),
+  openDataDir: () => __TAURI_INVOKE<string>("open_data_dir"),
+  relaunchApp: () => __TAURI_INVOKE<null>("relaunch_app"),
   listJobs: () => __TAURI_INVOKE<Job[]>("list_jobs"),
   createJob: (kind: string, paramsJson: string | null) =>
     __TAURI_INVOKE<Job>("create_job", { kind, paramsJson }),
@@ -320,6 +327,21 @@ export type ComfyStatus = {
   healthy: boolean
   port: number
   runtime: RuntimeInstall | null
+}
+
+export type DataDirInfo = {
+  path: string
+  isCustom: boolean
+  locatorPath: string
+  storageChosen: boolean
+}
+
+/**  `data-dir://progress` payload while relocating the library. */
+export type DataDirProgress = {
+  stage: string
+  message: string
+  current: number
+  total: number
 }
 
 export type DownloadJobView = {
@@ -694,6 +716,12 @@ export type SaveUserLoraArgs = {
   strengthMin?: number | null
   strengthMax?: number | null
   variants: LoraVariant[]
+}
+
+export type SetDataDirResult = {
+  path: string
+  needsRestart: boolean
+  migrated: boolean
 }
 
 export type SuggestedControl = {

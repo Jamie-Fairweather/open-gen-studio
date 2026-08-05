@@ -33,7 +33,8 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
+    "publisher": "Jamie Fairweather",
     "resources": {
       "../content/blueprints/": "blueprints/",
       "../content/loras/": "loras/"

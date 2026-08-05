@@ -38,3 +38,10 @@ pnpm-debug.log*
 **/next-env.d.ts
 
 graphify-out/
+
+# MSIX packaging (Partner Center secrets + build outputs)
+/packaging/msix/identity.json
+/packaging/msix/staging/
+/packaging/msix/out/
+/packaging/msix/devcert.pfx
+/packaging/msix/*.cer

@@ -98,24 +98,26 @@ bun run test             # frontend Vitest (pure helpers)
 bun run check:full       # check + recipe Rust tests + Vitest (Rust skipped on Windows; see contributing)
 bun run ipc:types        # regenerate Specta bindings
 bun run ipc:check        # fail if frontend/lib/generated/ drifts
-bun run desktop:build    # production desktop build
+bun run desktop:build    # production desktop build (NSIS .exe)
+bun run desktop:pack:msix # unsigned MSIX for Microsoft Store (see packaging/msix)
 ```
 
 ---
 
 # Docs
 
-| Doc                                                                            | Purpose                         |
-| ------------------------------------------------------------------------------ | ------------------------------- |
-| [Contributing](docs/contributing/README.md)                                    | How-tos + local quality gates   |
-| [Desktop development](docs/contributing/desktop-dev.md)                        | Run/debug Tauri + Next locally  |
-| [Release version bumps](docs/contributing/release-version.md)                  | Sync app version across files   |
-| [Coding standards](docs/contributing/coding-standards.md)                      | IPC: Rust → Specta → TypeScript |
-| [Adding a model architecture](docs/contributing/adding-model-architectures.md) | New `RecipeArch` end-to-end     |
-| [Product plan](docs/PLAN.md)                                                   | Vision, architecture, roadmap   |
-| [GPU support plan](docs/gpu-support-plan.md)                                   | NVIDIA / AMD / Intel roadmap    |
-| [Official Blueprints](content/blueprints/README.md)                            | Recipe manifest layout          |
-| [Official LoRAs](content/loras/README.md)                                      | Multi-arch LoRA packs           |
+| Doc                                                                            | Purpose                           |
+| ------------------------------------------------------------------------------ | --------------------------------- |
+| [Contributing](docs/contributing/README.md)                                    | How-tos + local quality gates     |
+| [Desktop development](docs/contributing/desktop-dev.md)                        | Run/debug Tauri + Next locally    |
+| [MSIX / Microsoft Store](packaging/msix/README.md)                             | Unsigned Store package via winapp |
+| [Release version bumps](docs/contributing/release-version.md)                  | Sync app version across files     |
+| [Coding standards](docs/contributing/coding-standards.md)                      | IPC: Rust → Specta → TypeScript   |
+| [Adding a model architecture](docs/contributing/adding-model-architectures.md) | New `RecipeArch` end-to-end       |
+| [Product plan](docs/PLAN.md)                                                   | Vision, architecture, roadmap     |
+| [GPU support plan](docs/gpu-support-plan.md)                                   | NVIDIA / AMD / Intel roadmap      |
+| [Official Blueprints](content/blueprints/README.md)                            | Recipe manifest layout            |
+| [Official LoRAs](content/loras/README.md)                                      | Multi-arch LoRA packs             |
 
 ---
 

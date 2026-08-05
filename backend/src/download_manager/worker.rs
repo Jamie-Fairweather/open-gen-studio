@@ -96,6 +96,16 @@ fn emit_kind_failure(app: &AppHandle, kind: &str, job_key: &str, err: &str) {
                 }),
             );
         }
+    } else if kind == "runtime" {
+        // Closing mid-extract leaves runtimeBusy stuck unless the UI sees this.
+        let _ = app.emit(
+            "runtimes://progress",
+            comfy::RuntimeProgress {
+                engine: comfy::ENGINE.into(),
+                stage: "error".into(),
+                message: err.to_string(),
+            },
+        );
     }
 }
 

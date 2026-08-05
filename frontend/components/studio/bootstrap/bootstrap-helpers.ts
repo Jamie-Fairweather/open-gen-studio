@@ -85,21 +85,22 @@ function resolveSizeControls(
   return { ...values, width, height }
 }
 
-/** Build control-value defaults from manifest defaults + per-control defaults. */
+/** Build control-value defaults from per-control defaults, then pack overrides. */
 export function defaultsFromBlueprintDetail(
   detail: BlueprintDetail
 ): Record<string, unknown> {
   const controlIds = new Set(detail.controls.map((c) => c.id))
   const next: Record<string, unknown> = {}
+  for (const c of detail.controls) {
+    if (c.default !== undefined) {
+      next[c.id] = c.default
+    }
+  }
+  // Manifest pack defaults win (e.g. Krea 2 Turbo steps/CFG over arch fallbacks).
   const packDefaults = detail.defaults
   if (packDefaults && typeof packDefaults === "object") {
     for (const [key, value] of Object.entries(packDefaults)) {
       if (controlIds.has(key)) next[key] = value
-    }
-  }
-  for (const c of detail.controls) {
-    if (c.default !== undefined) {
-      next[c.id] = c.default
     }
   }
   return next
@@ -125,8 +126,9 @@ export function applyLoadedBlueprintDetail(detail: BlueprintDetail): void {
   const recipe = studioRefs.pendingRecipe
   studioRefs.pendingRecipe = null
   // Recipe (user reuse) wins over restored session for this detail load.
-  const session = recipe ? null : studioRefs.pendingSession
-  if (recipe || session) {
+  // Explicit picker/onboarding select skips session so pack steps/CFG apply.
+  const session = recipe || forceDefaults ? null : studioRefs.pendingSession
+  if (recipe || studioRefs.pendingSession) {
     studioRefs.pendingSession = null
   }
   const controlIds = detail.controls.map((c) => c.id)

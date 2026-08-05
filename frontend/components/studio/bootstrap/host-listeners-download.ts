@@ -20,6 +20,21 @@ export function registerDownloadListeners(
 
   void onDownloadManager((snap) => {
     getStore().setDownloadSnapshot(snap)
+    const runtimePending =
+      snap.active?.kind === "runtime" ||
+      snap.queued.some((j) => j.kind === "runtime")
+    if (!runtimePending) {
+      const failedRuntime = [...snap.history]
+        .reverse()
+        .find((j) => j.kind === "runtime" && j.status === "error")
+      if (failedRuntime) {
+        // Closing mid-extract can miss runtimes://progress; clear busy from the job.
+        getStore().setRuntimeBusy(false)
+        if (failedRuntime.error) {
+          getStore().setRuntimeMessage(failedRuntime.error)
+        }
+      }
+    }
     // Retry warm-start after runtime install: "done" can race the snapshot clear.
     getStore().maybeAutoStartComfy()
   }).then((u) => {

@@ -311,12 +311,13 @@ describe("applyLoadedBlueprintDetail", () => {
           type: "number",
           nodeId: "1",
           input: "steps",
-          default: 8,
+          default: 26,
         },
-        { id: "cfg", type: "number", nodeId: "1", input: "cfg", default: 1 },
+        { id: "cfg", type: "number", nodeId: "1", input: "cfg", default: 4 },
         { id: "seed", type: "number", nodeId: "1", input: "seed", default: 0 },
       ],
     })
+    // Pack defaults override per-control fallbacks (Krea turbo vs Chroma-like).
     expect(defaultsFromBlueprintDetail(withSampling)).toEqual({
       steps: 8,
       cfg: 1,
@@ -329,6 +330,67 @@ describe("applyLoadedBlueprintDetail", () => {
     studioRefs.forceBlueprintDefaults = true
     applyLoadedBlueprintDetail(withSampling)
     expect(studioRefs.forceBlueprintDefaults).toBe(false)
+    expect(setControlValues).toHaveBeenCalledWith(
+      expect.objectContaining({ steps: 8, cfg: 1, seed: 0 })
+    )
+  })
+
+  it("forceBlueprintDefaults beats a pending session's stale steps/CFG", () => {
+    const withSampling = detail({
+      id: "krea2-turbo",
+      defaults: { steps: 8, cfg: 1 },
+      controls: [
+        {
+          id: "steps",
+          type: "number",
+          nodeId: "1",
+          input: "steps",
+          default: 8,
+        },
+        { id: "cfg", type: "number", nodeId: "1", input: "cfg", default: 1 },
+        { id: "seed", type: "number", nodeId: "1", input: "seed", default: 0 },
+      ],
+    })
+    studioRefs.pendingSession = {
+      v: 1,
+      prompt: "",
+      aspectId: "1:1",
+      sideLength: 1024,
+      // Bootstrap often loaded another pack first (e.g. Chroma 26/4).
+      controlValues: { steps: 26, cfg: 4, seed: 9 },
+      loraStack: [],
+      upscaleEnabled: false,
+      upscaleModelId: "x",
+      usduEnabled: false,
+      usduScale: 2,
+      usduSteps: 12,
+      usduDenoise: 0.2,
+      selectedGalleryId: null,
+      followLive: true,
+      toolsPath: null,
+      imageToPrompt: {
+        imagePath: null,
+        previewUrl: null,
+        format: "general",
+        target: "auto",
+        result: "",
+        negative: null,
+        fields: null,
+        galleryOpen: false,
+      },
+      promptEnhance: {
+        input: "",
+        result: "",
+        negative: null,
+        target: "auto",
+        mode: "expand",
+        styleLook: "cinematic",
+        seeded: false,
+      },
+    }
+    studioRefs.forceBlueprintDefaults = true
+    applyLoadedBlueprintDetail(withSampling)
+    expect(studioRefs.pendingSession).toBeNull()
     expect(setControlValues).toHaveBeenCalledWith(
       expect.objectContaining({ steps: 8, cfg: 1, seed: 0 })
     )

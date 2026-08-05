@@ -66,9 +66,10 @@ export const createCatalogSlice: StateCreator<
 
   selectBlueprint: (id) => {
     // Picker / onboarding picks should load that pack's defaults (steps, CFG),
-    // not a stale in-session stash from an earlier visit.
+    // not a stale session/stash from bootstrap's first catalog entry (e.g. Chroma).
     delete studioRefs.controlValuesByBlueprintId[id]
     studioRefs.forceBlueprintDefaults = true
+    studioRefs.pendingSession = null
     set((s) => ({
       selectedId: id,
       // Bump so the detail-load effect re-runs even when id is unchanged.

@@ -17,15 +17,15 @@ export const ONBOARDING_RECOMMENDED: {
 }[] = [
   {
     id: "krea2-turbo",
-    blurb: "Best balance of quality and speed",
+    blurb: "Best balance of quality and speed. 8GB VRAM.",
   },
   {
     id: "flux2-dev",
-    blurb: "Highest quality",
+    blurb: "Highest quality. 16GB VRAM.",
   },
   {
     id: "z-image-turbo",
-    blurb: "Faster on lower-end GPUs",
+    blurb: "Faster on lower-end GPUs. 8GB VRAM.",
   },
 ]
 

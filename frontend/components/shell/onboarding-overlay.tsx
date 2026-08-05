@@ -1,6 +1,6 @@
 "use client"
 
-import { HardDriveIcon, ImageIcon, LayersIcon } from "lucide-react"
+import { ImageIcon, LayersIcon } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import {
   vendorOptionsFromAdapters,
@@ -76,6 +76,7 @@ export function OnboardingOverlay() {
   const gpu = useStudioStore((s) => s.gpu)
   const hasHfToken = useStudioStore((s) => s.hasHfToken)
   const runtimeBusy = useStudioStore((s) => s.runtimeBusy)
+  const setRuntimeBusy = useStudioStore((s) => s.setRuntimeBusy)
   const runtimeMessage = useStudioStore((s) => s.runtimeMessage)
   const downloadSnapshot = useStudioStore((s) => s.downloadSnapshot)
   const downloadSpeedBps = useStudioStore((s) => s.downloadSpeedBps)
@@ -102,6 +103,12 @@ export function OnboardingOverlay() {
   const [hfToken, setHfToken] = useState("")
   const [hfBusy, setHfBusy] = useState(false)
   const [storageInfo, setStorageInfo] = useState<DataDirInfo | null>(null)
+  const [storageMode, setStorageMode] = useState<"default" | "custom">(
+    "default"
+  )
+  const [customStoragePath, setCustomStoragePath] = useState<string | null>(
+    null
+  )
   const [storageBusy, setStorageBusy] = useState(false)
   const [storageError, setStorageError] = useState<string | null>(null)
   const [installError, setInstallError] = useState<string | null>(null)
@@ -262,13 +269,26 @@ export function OnboardingOverlay() {
     blueprintIdFromJobKey(downloadSnapshot.active.jobKey) === blueprintId
       ? downloadSnapshot.active
       : null
+  const runtimeJobPending =
+    downloadSnapshot.active?.kind === "runtime" ||
+    downloadSnapshot.queued.some((j) => j.kind === "runtime")
+  const failedRuntimeJob = !runtimeJobPending
+    ? downloadSnapshot.active?.kind === "runtime" &&
+      downloadSnapshot.active.status === "error"
+      ? downloadSnapshot.active
+      : ([...downloadSnapshot.history]
+          .reverse()
+          .find((j) => j.kind === "runtime" && j.status === "error") ?? null)
+    : null
   const derivedInstallError =
     step === "install"
       ? comfy?.status === "error"
         ? comfy.error || "ComfyUI install failed"
-        : activeBpJob?.status === "error"
-          ? activeBpJob.error || "Blueprint install failed"
-          : null
+        : failedRuntimeJob
+          ? failedRuntimeJob.error || "ComfyUI install failed"
+          : activeBpJob?.status === "error"
+            ? activeBpJob.error || "Blueprint install failed"
+            : null
       : null
   const displayInstallError = installError ?? derivedInstallError
 
@@ -340,17 +360,28 @@ export function OnboardingOverlay() {
     }
   }
 
-  async function chooseStorageFolder() {
+  async function selectCustomStorage() {
+    setStorageMode("custom")
     setStorageError(null)
     try {
       const picked = await pickDataDir()
       if (!picked) return
-      await confirmStorage(picked)
+      setCustomStoragePath(picked)
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
       setStorageError(message)
       notifyError(message, "Could not choose folder")
     }
+  }
+
+  async function confirmStorageChoice() {
+    // Continue stays disabled in custom mode until a folder is picked.
+    if (storageMode === "custom") {
+      if (!customStoragePath) return
+      await confirmStorage(customStoragePath)
+      return
+    }
+    await confirmStorage(null)
   }
 
   async function saveHfAndContinue() {
@@ -399,7 +430,10 @@ export function OnboardingOverlay() {
     }
 
     // Terminal errors are derived during render — just allow retry.
-    if (comfy?.status === "error") return
+    if (comfy?.status === "error" || failedRuntimeJob) {
+      installStartedRef.current.comfy = false
+      return
+    }
     if (activeBpJob?.status === "error") {
       installStartedRef.current.blueprint = false
       return
@@ -408,10 +442,6 @@ export function OnboardingOverlay() {
     const bpJobMatch = (job: { kind: string; jobKey: string }) =>
       job.kind === "blueprint" &&
       blueprintIdFromJobKey(job.jobKey) === blueprintId
-
-    const runtimeJobPending =
-      downloadSnapshot.active?.kind === "runtime" ||
-      downloadSnapshot.queued.some((j) => j.kind === "runtime")
 
     let cancelled = false
     void (async () => {
@@ -442,8 +472,8 @@ export function OnboardingOverlay() {
       if (cancelled) return
 
       // Preview steps already show the blueprint plan; only enqueue once Comfy
-      // is done (or already ready) so queue order stays Comfy → blueprint.
-      if (!comfyReady) return
+      // is fully done (including extensions) so the title/queue stay Comfy → blueprint.
+      if (!comfyReady || runtimeJobPending) return
 
       if (bp && !isInstalled(bp) && !installStartedRef.current.blueprint) {
         const activeBp =
@@ -477,6 +507,8 @@ export function OnboardingOverlay() {
     blueprints,
     comfy?.status,
     activeBpJob?.status,
+    failedRuntimeJob,
+    runtimeJobPending,
     runtimeBusy,
     downloadSnapshot,
     handleInstallComfy,
@@ -488,16 +520,44 @@ export function OnboardingOverlay() {
   function retryInstall() {
     installStartedRef.current = { comfy: false, blueprint: false }
     setInstallError(null)
-    setInstallKick((n) => n + 1)
+    // Mid-extract quit leaves runtimeBusy true with a failed history job.
+    setRuntimeBusy(false)
+    const comfyReadyNow = isComfyReady(runtimes)
+    void (async () => {
+      if (!comfyReadyNow) {
+        installStartedRef.current.comfy = true
+        try {
+          await handleInstallComfy()
+        } catch (e) {
+          setInstallError(e instanceof Error ? e.message : String(e))
+          installStartedRef.current.comfy = false
+        }
+        setInstallKick((n) => n + 1)
+        return
+      }
+      if (blueprintId) {
+        installStartedRef.current.blueprint = true
+        try {
+          await requestBlueprintInstall(blueprintId)
+        } catch (e) {
+          setInstallError(e instanceof Error ? e.message : String(e))
+          installStartedRef.current.blueprint = false
+        }
+      }
+      setInstallKick((n) => n + 1)
+    })()
   }
 
   if (phase === "hidden" || !readyToShow) return null
 
-  const installPhaseLabel = !isComfyReady(runtimes)
-    ? "Installing ComfyUI"
-    : selectedBp && !isInstalled(selectedBp)
-      ? `Installing ${selectedBp.name}`
-      : "Finishing setup"
+  // Configure marks the runtime "ready" before the extensions step finishes —
+  // keep the Comfy title while a runtime job is still active/queued.
+  const installPhaseLabel =
+    !isComfyReady(runtimes) || runtimeJobPending
+      ? "Installing ComfyUI"
+      : selectedBp && !isInstalled(selectedBp)
+        ? `Installing ${selectedBp.name}`
+        : "Finishing setup"
 
   const stageTitle =
     stageStep === "storage"
@@ -581,23 +641,17 @@ export function OnboardingOverlay() {
 
   const footerPrimary =
     footerStep === "storage" ? (
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Button
-          type="button"
-          variant="outline"
-          disabled={storageBusy || stageBusy}
-          onClick={() => void chooseStorageFolder()}
-        >
-          Choose folder…
-        </Button>
-        <Button
-          type="button"
-          disabled={storageBusy || stageBusy}
-          onClick={() => void confirmStorage(null)}
-        >
-          {storageBusy ? "Saving…" : "Use default"}
-        </Button>
-      </div>
+      <Button
+        type="button"
+        disabled={
+          storageBusy ||
+          stageBusy ||
+          (storageMode === "custom" && !customStoragePath)
+        }
+        onClick={() => void confirmStorageChoice()}
+      >
+        {storageBusy ? "Saving…" : "Continue"}
+      </Button>
     ) : footerStep === "gpu" ? (
       <Button
         type="button"
@@ -708,25 +762,54 @@ export function OnboardingOverlay() {
               {stageStep === "storage" ? (
                 <div className="flex flex-col gap-3">
                   <p className="text-center text-sm text-muted-foreground">
-                    Models and ComfyUI can use tens of gigabytes. Pick a drive
-                    with enough free space — you can change this later in
-                    Settings.
+                    AI Models can use tens of gigabytes. Pick a drive with
+                    enough free space.
+                    <br />
+                    Minimum 50GB - Recommended 400GB.
+                    <br />
+                    You can change and migrate your data later in Settings.
                   </p>
-                  <div className="rounded-lg border px-3 py-2.5 text-sm">
-                    <p className="flex items-center gap-2 font-medium">
-                      <HardDriveIcon className="size-4 text-primary" />
-                      Default location
-                    </p>
-                    <p className="mt-1 font-mono text-xs break-all text-muted-foreground">
-                      {storageInfo?.locatorPath ?? storageInfo?.path ?? "…"}
-                    </p>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      disabled={storageBusy}
+                      onClick={() => {
+                        setStorageMode("default")
+                        setStorageError(null)
+                      }}
+                      className={cn(
+                        "flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors",
+                        storageMode === "default"
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:bg-muted/50"
+                      )}
+                    >
+                      <span className="font-medium">Default location</span>
+                      <span className="font-mono text-xs break-all text-muted-foreground">
+                        {storageInfo?.locatorPath ?? storageInfo?.path ?? "…"}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={storageBusy}
+                      onClick={() => void selectCustomStorage()}
+                      className={cn(
+                        "flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors",
+                        storageMode === "custom"
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:bg-muted/50"
+                      )}
+                    >
+                      <span className="font-medium">Custom location</span>
+                      <span className="text-xs break-all text-muted-foreground">
+                        {customStoragePath ? (
+                          <span className="font-mono">{customStoragePath}</span>
+                        ) : (
+                          "Choose a folder on another drive…"
+                        )}
+                      </span>
+                    </button>
                   </div>
-                  {storageInfo?.isCustom ? (
-                    <p className="text-center text-xs break-all text-muted-foreground">
-                      Current:{" "}
-                      <span className="font-mono">{storageInfo.path}</span>
-                    </p>
-                  ) : null}
                   {storageError ? (
                     <p className="text-center text-sm text-destructive">
                       {storageError}
@@ -739,7 +822,9 @@ export function OnboardingOverlay() {
                 <div className="flex flex-col gap-3">
                   <p className="text-center text-sm text-muted-foreground">
                     This PC has more than one GPU vendor. Pick which one to use
-                    for generation. You can change this later in Settings.
+                    for generation.
+                    <br />
+                    You can change your GPU selection later in Settings.
                   </p>
                   <div className="flex flex-col gap-2">
                     {options.map(({ vendor, adapter }, index) => {
@@ -787,8 +872,9 @@ export function OnboardingOverlay() {
               {stageStep === "blueprint" ? (
                 <div className="flex min-h-0 flex-1 flex-col gap-3">
                   <p className="shrink-0 text-center text-sm text-muted-foreground">
-                    Official Blueprints only. Start with a recommended pick —
-                    you can install more later from the library.
+                    Official Blueprints only. Start with a recommended pick.
+                    <br />
+                    You can install more later from the library.
                   </p>
                   <div className="relative min-h-0 flex-1">
                     <ScrollArea

@@ -126,14 +126,16 @@ fn write_pointer(locator: &Path, path: Option<&Path>) -> Result<(), String> {
     Ok(())
 }
 
-/// True when the user confirmed a storage location, or legacy data already exists.
+/// True when the user confirmed a storage location, or legacy library data exists.
+///
+/// Do **not** treat `open-gen-studio.db` alone as chosen — `Db::open` creates it on
+/// every cold start before onboarding can ask, which would skip the storage step.
 pub fn storage_chosen(locator: &Path) -> bool {
     if pointer_path(locator).is_file() {
         return true;
     }
-    locator.join("open-gen-studio.db").is_file()
-        || locator.join("models").is_dir()
-        || locator.join("runtimes").is_dir()
+    // Pre-pointer installs already had weights / Comfy under the locator.
+    locator.join("models").is_dir() || locator.join("runtimes").is_dir()
 }
 
 fn paths_equal(a: &Path, b: &Path) -> bool {
@@ -231,6 +233,11 @@ fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+fn migrate_data_root(from: &Path, to: &Path) -> Result<bool, String> {
+    migrate_data_root_with_progress(from, to, None)
 }
 
 pub fn migrate_data_root_with_progress(
@@ -388,9 +395,17 @@ mod tests {
     }
 
     #[test]
-    fn storage_chosen_when_legacy_db_present() {
-        let loc = tmp("legacy");
+    fn storage_not_chosen_for_db_only_locator() {
+        let loc = tmp("db-only");
         touch_file(&loc.join("open-gen-studio.db"));
+        assert!(!storage_chosen(&loc));
+        let _ = fs::remove_dir_all(&loc);
+    }
+
+    #[test]
+    fn storage_chosen_when_legacy_models_present() {
+        let loc = tmp("legacy-models");
+        fs::create_dir_all(loc.join("models")).unwrap();
         assert!(storage_chosen(&loc));
         let _ = fs::remove_dir_all(&loc);
     }

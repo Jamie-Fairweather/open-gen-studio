@@ -26,6 +26,7 @@ beforeEach(() => {
   studioRefs.preferredBlueprintId = null
   studioRefs.forceBlueprintDefaults = false
   studioRefs.controlValuesByBlueprintId = {}
+  studioRefs.pendingSession = null
   studioRefs.pushPath = vi.fn()
 })
 
@@ -35,11 +36,13 @@ describe("createCatalogSlice", () => {
     const s = store.getState()
 
     studioRefs.controlValuesByBlueprintId.bp1 = { steps: 40 }
+    studioRefs.pendingSession = { v: 1 } as never
     s.selectBlueprint("bp1")
     expect(store.getState().selectedId).toBe("bp1")
     expect(store.getState().detailReloadToken).toBe(1)
     expect(studioRefs.preferredBlueprintId).toBe("bp1")
     expect(studioRefs.forceBlueprintDefaults).toBe(true)
+    expect(studioRefs.pendingSession).toBeNull()
     expect(studioRefs.controlValuesByBlueprintId.bp1).toBeUndefined()
     expect(host.setSetting).toHaveBeenCalled()
     host.setSetting.mockRejectedValueOnce(new Error("x"))

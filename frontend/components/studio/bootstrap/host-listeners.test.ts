@@ -349,6 +349,69 @@ describe("registerHostListeners", () => {
     cleanupHostListeners(handles2)
   })
 
+  it("clears runtimeBusy when a runtime download job fails", async () => {
+    const store = createTestStudioStore()
+    store.setState({
+      runtimeBusy: true,
+      runtimeMessage: "Extracting…",
+      downloadSnapshot: {
+        active: { kind: "runtime", jobKey: "runtime:comfyui" } as never,
+        queued: [],
+        history: [],
+      },
+    })
+    const handles = registerHostListeners(() => store.getState())
+    await vi.waitFor(() => expect(cbs.dlManager.get()).toBeTruthy())
+
+    cbs.dlManager.emit({
+      active: null,
+      queued: [],
+      history: [
+        {
+          kind: "runtime",
+          jobKey: "runtime:comfyui",
+          status: "error",
+          error: "extract interrupted",
+        },
+      ],
+    })
+
+    expect(store.getState().runtimeBusy).toBe(false)
+    expect(store.getState().runtimeMessage).toBe("extract interrupted")
+    cleanupHostListeners(handles)
+  })
+
+  it("treats a queued runtime download as still pending", async () => {
+    const store = createTestStudioStore()
+    store.setState({
+      runtimeBusy: true,
+      runtimeMessage: "Installing extensions…",
+    })
+    const handles = registerHostListeners(() => store.getState())
+    await vi.waitFor(() => expect(cbs.dlManager.get()).toBeTruthy())
+
+    // active is a blueprint job, but runtime is still queued — keep busy.
+    cbs.dlManager.emit({
+      active: {
+        kind: "blueprint",
+        jobKey: "blueprint:krea2-turbo",
+      },
+      queued: [{ kind: "runtime", jobKey: "runtime:comfyui" }],
+      history: [
+        {
+          kind: "runtime",
+          jobKey: "runtime:old",
+          status: "error",
+          error: "stale",
+        },
+      ],
+    })
+
+    expect(store.getState().runtimeBusy).toBe(true)
+    expect(store.getState().runtimeMessage).toBe("Installing extensions…")
+    cleanupHostListeners(handles)
+  })
+
   it("auto-starts Comfy when download snapshot clears a finished runtime job", async () => {
     const store = createTestStudioStore()
     store.setState({

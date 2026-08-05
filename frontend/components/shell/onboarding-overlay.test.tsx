@@ -47,6 +47,9 @@ const store = vi.hoisted(() => ({
   },
   hasHfToken: false,
   runtimeBusy: false,
+  setRuntimeBusy: vi.fn((v: boolean) => {
+    store.runtimeBusy = v
+  }),
   runtimeMessage: null as string | null,
   downloadSnapshot: { active: null, queued: [], history: [] } as {
     active: null | {
@@ -56,7 +59,12 @@ const store = vi.hoisted(() => ({
       error: string | null
     }
     queued: { kind: string; jobKey: string }[]
-    history: never[]
+    history: {
+      kind: string
+      jobKey: string
+      status: string
+      error: string | null
+    }[]
   },
   downloadSpeedBps: 0,
   handleInstallComfy: vi.fn(async () => {}),
@@ -223,7 +231,10 @@ describe("OnboardingOverlay", () => {
     render(<OnboardingOverlay />)
     expect(await screen.findByText("Choose data folder")).toBeInTheDocument()
     expect(screen.getByText("Setup · Storage")).toBeInTheDocument()
-    await user.click(screen.getByRole("button", { name: "Use default" }))
+    expect(
+      screen.getByRole("button", { name: /Default location/i })
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Continue" }))
     await waitFor(() => {
       expect(host.setDataDir).toHaveBeenCalledWith(null)
     })
@@ -273,14 +284,17 @@ describe("OnboardingOverlay", () => {
     await waitForEnabled("Back")
     await user.click(screen.getByRole("button", { name: "Back" }))
     expect(await screen.findByText("Choose data folder")).toBeInTheDocument()
-    await user.click(screen.getByRole("button", { name: "Choose folder…" }))
+    await user.click(screen.getByRole("button", { name: /Custom location/i }))
+    await waitFor(() => expect(host.pickDataDir).toHaveBeenCalled())
+    await waitForEnabled("Continue")
+    await user.click(screen.getByRole("button", { name: "Continue" }))
     await waitFor(() => {
       expect(host.setDataDir).toHaveBeenCalledWith("D:/Open Gen Studio")
       expect(host.relaunchApp).toHaveBeenCalled()
     })
   })
 
-  it("handles choose-folder cancel, pick errors, and move failures", async () => {
+  it("handles custom pick cancel, pick errors, and confirm failures", async () => {
     const user = userEvent.setup()
     const { notifyError } = await import("@/lib/notify")
     host.getDataDirInfo.mockResolvedValue({
@@ -293,12 +307,22 @@ describe("OnboardingOverlay", () => {
     expect(await screen.findByText("Choose data folder")).toBeInTheDocument()
 
     host.pickDataDir.mockResolvedValueOnce(null)
-    await user.click(screen.getByRole("button", { name: "Choose folder…" }))
+    await user.click(screen.getByRole("button", { name: /Custom location/i }))
     await waitFor(() => expect(host.pickDataDir).toHaveBeenCalled())
     expect(host.setDataDir).not.toHaveBeenCalled()
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled()
+    // Defensive no-op if Continue is invoked without a custom path.
+    await userEvent
+      .setup({ pointerEventsCheck: 0 })
+      .click(screen.getByRole("button", { name: "Continue" }))
+    expect(host.setDataDir).not.toHaveBeenCalled()
+
+    // Switching back to default clears custom mode and re-enables Continue.
+    await user.click(screen.getByRole("button", { name: /Default location/i }))
+    expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled()
 
     host.pickDataDir.mockRejectedValueOnce(new Error("picker blew up"))
-    await user.click(screen.getByRole("button", { name: "Choose folder…" }))
+    await user.click(screen.getByRole("button", { name: /Custom location/i }))
     await waitFor(() => {
       expect(notifyError).toHaveBeenCalledWith(
         "picker blew up",
@@ -308,7 +332,9 @@ describe("OnboardingOverlay", () => {
 
     host.pickDataDir.mockResolvedValueOnce("D:/Open Gen Studio")
     host.setDataDir.mockRejectedValueOnce("disk full")
-    await user.click(screen.getByRole("button", { name: "Choose folder…" }))
+    await user.click(screen.getByRole("button", { name: /Custom location/i }))
+    await waitForEnabled("Continue")
+    await user.click(screen.getByRole("button", { name: "Continue" }))
     await waitFor(() => {
       expect(notifyError).toHaveBeenCalledWith(
         "disk full",
@@ -356,7 +382,10 @@ describe("OnboardingOverlay", () => {
     expect(await screen.findByText("Choose your GPU")).toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "Back" }))
     expect(await screen.findByText("Choose data folder")).toBeInTheDocument()
-    await user.click(screen.getByRole("button", { name: "Choose folder…" }))
+    await user.click(screen.getByRole("button", { name: /Custom location/i }))
+    await waitFor(() => expect(host.pickDataDir).toHaveBeenCalled())
+    await waitForEnabled("Continue")
+    await user.click(screen.getByRole("button", { name: "Continue" }))
     await waitFor(() => {
       expect(host.setDataDir).toHaveBeenCalledWith("D:/New")
     })
@@ -392,7 +421,10 @@ describe("OnboardingOverlay", () => {
     expect(await screen.findByText("Choose your GPU")).toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "Back" }))
     expect(await screen.findByText("Choose data folder")).toBeInTheDocument()
-    await user.click(screen.getByRole("button", { name: "Choose folder…" }))
+    await user.click(screen.getByRole("button", { name: /Custom location/i }))
+    await waitFor(() => expect(host.pickDataDir).toHaveBeenCalled())
+    await waitForEnabled("Continue")
+    await user.click(screen.getByRole("button", { name: "Continue" }))
     await waitFor(() => {
       expect(notifyError).toHaveBeenCalledWith(
         "copy failed",
@@ -636,9 +668,75 @@ describe("OnboardingOverlay", () => {
     render(<OnboardingOverlay />)
     expect(await screen.findByRole("button", { name: "Retry" })).toBeTruthy()
     await user.click(screen.getByRole("button", { name: "Retry" }))
+    await waitFor(() => {
+      expect(store.handleInstallComfy).toHaveBeenCalled()
+    })
+  })
+
+  it("records Comfy retry failures from host calls", async () => {
+    const user = userEvent.setup()
+    host.listSettings.mockResolvedValue({
+      ui_onboarding_v1: JSON.stringify({
+        step: "install",
+        blueprintId: "krea2-turbo",
+        hfSkipped: true,
+      }),
+    })
+    store.runtimes = [
+      {
+        ...readyComfy(),
+        status: "error",
+        error: "boom",
+      },
+    ] as never[]
+    store.handleInstallComfy.mockRejectedValueOnce(new Error("retry-fail"))
+    render(<OnboardingOverlay />)
+    expect(await screen.findByRole("button", { name: "Retry" })).toBeTruthy()
+    await user.click(screen.getByRole("button", { name: "Retry" }))
+    await waitFor(() => {
+      expect(store.handleInstallComfy).toHaveBeenCalled()
+    })
+    expect(await screen.findByTestId("install-progress")).toHaveTextContent(
+      "retry-fail"
+    )
+  })
+
+  it("shows retry when Comfy extract failed after app restart", async () => {
+    const user = userEvent.setup()
+    host.listSettings.mockResolvedValue({
+      ui_onboarding_v1: JSON.stringify({
+        step: "install",
+        blueprintId: "krea2-turbo",
+        hfSkipped: true,
+      }),
+    })
+    store.runtimeBusy = true
+    store.downloadSnapshot = {
+      active: null,
+      queued: [],
+      history: [
+        {
+          kind: "runtime",
+          jobKey: "runtime:comfyui",
+          status: "error",
+          error: "extract interrupted",
+        },
+      ],
+    }
+    render(<OnboardingOverlay />)
+    expect(await screen.findByRole("button", { name: "Retry" })).toBeTruthy()
+    expect(screen.getByTestId("install-progress")).toHaveTextContent(
+      "extract interrupted"
+    )
+    await user.click(screen.getByRole("button", { name: "Retry" }))
+    await waitFor(() => {
+      expect(store.setRuntimeBusy).toHaveBeenCalledWith(false)
+      expect(store.handleInstallComfy).toHaveBeenCalled()
+    })
   })
 
   it("shows retry for blueprint job errors and allows requeue", async () => {
+    const user = userEvent.setup()
     host.listSettings.mockResolvedValue({
       ui_onboarding_v1: JSON.stringify({
         step: "install",
@@ -659,6 +757,42 @@ describe("OnboardingOverlay", () => {
     }
     render(<OnboardingOverlay />)
     expect(await screen.findByRole("button", { name: "Retry" })).toBeTruthy()
+    await user.click(screen.getByRole("button", { name: "Retry" }))
+    await waitFor(() => {
+      expect(store.requestBlueprintInstall).toHaveBeenCalledWith("krea2-turbo")
+    })
+  })
+
+  it("records blueprint retry failures from host calls", async () => {
+    const user = userEvent.setup()
+    host.listSettings.mockResolvedValue({
+      ui_onboarding_v1: JSON.stringify({
+        step: "install",
+        blueprintId: "krea2-turbo",
+        hfSkipped: true,
+      }),
+    })
+    store.runtimes = [readyComfy()] as never[]
+    store.downloadSnapshot = {
+      active: {
+        kind: "blueprint",
+        jobKey: "blueprint:krea2-turbo",
+        status: "error",
+        error: "bp failed",
+      },
+      queued: [],
+      history: [],
+    }
+    store.requestBlueprintInstall.mockRejectedValueOnce(new Error("bp-retry"))
+    render(<OnboardingOverlay />)
+    expect(await screen.findByRole("button", { name: "Retry" })).toBeTruthy()
+    await user.click(screen.getByRole("button", { name: "Retry" }))
+    await waitFor(() => {
+      expect(store.requestBlueprintInstall).toHaveBeenCalledWith("krea2-turbo")
+    })
+    expect(await screen.findByTestId("install-progress")).toHaveTextContent(
+      "bp-retry"
+    )
   })
 
   it("records install failures from host calls", async () => {
@@ -746,6 +880,32 @@ describe("OnboardingOverlay", () => {
     render(<OnboardingOverlay />)
     expect(await screen.findByText("Installing ComfyUI")).toBeInTheDocument()
     expect(store.handleInstallComfy).not.toHaveBeenCalled()
+  })
+
+  it("keeps ComfyUI title while extensions run after runtime is marked ready", async () => {
+    host.listSettings.mockResolvedValue({
+      ui_onboarding_v1: JSON.stringify({
+        step: "install",
+        blueprintId: "krea2-turbo",
+        hfSkipped: true,
+      }),
+    })
+    // Configure step marks DB status ready before the extensions step finishes.
+    store.runtimes = [readyComfy()] as never[]
+    store.downloadSnapshot = {
+      active: {
+        kind: "runtime",
+        jobKey: "runtime:comfyui",
+        status: "running",
+        error: null,
+      },
+      queued: [],
+      history: [],
+    }
+    render(<OnboardingOverlay />)
+    expect(await screen.findByText("Installing ComfyUI")).toBeInTheDocument()
+    expect(screen.queryByText(/Installing Krea 2 Turbo/)).toBeNull()
+    expect(store.requestBlueprintInstall).not.toHaveBeenCalled()
   })
 
   it("treats a queued runtime job as pending", async () => {

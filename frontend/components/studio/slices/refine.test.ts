@@ -6,6 +6,7 @@ const host = vi.hoisted(() => ({
     civitai: false,
   })),
   ensureDownload: vi.fn(async () => ({ status: "queued", jobId: "d1" })),
+  uninstallLoraVariant: vi.fn(async () => ({ removed: 1, kept: 0 })),
 }))
 
 vi.mock("@/lib/host", async () => {
@@ -23,7 +24,7 @@ vi.mock("./session-persist", () => ({
   schedulePersistSession: vi.fn(),
 }))
 
-import { notifyError } from "@/lib/notify"
+import { notifyError, notifySuccess } from "@/lib/notify"
 import { createTestStudioStore } from "@/test/create-test-store"
 
 beforeEach(() => vi.clearAllMocks())
@@ -99,5 +100,21 @@ describe("createRefineSlice", () => {
     host.ensureDownload.mockRejectedValueOnce("plain-pt")
     await store.getState().beginPromptToolsInstall("other2")
     expect(notifyError).toHaveBeenCalled()
+
+    store.setState({
+      loraPacks: [{ id: "lora1", name: "Lora One" } as never],
+    })
+    await store.getState().beginLoraUninstall("lora1", "flux")
+    expect(host.uninstallLoraVariant).toHaveBeenCalledWith("lora1", "flux")
+    expect(notifySuccess).toHaveBeenCalledWith("Lora One", "Removed 1 file(s)")
+    host.uninstallLoraVariant.mockResolvedValueOnce({ removed: 0, kept: 2 })
+    await store.getState().beginLoraUninstall("missing", "flux")
+    expect(notifySuccess).toHaveBeenCalledWith(
+      "missing",
+      "Removed 0 file(s); kept 2 shared"
+    )
+    host.uninstallLoraVariant.mockRejectedValueOnce(new Error("rm"))
+    await store.getState().beginLoraUninstall("lora1", "flux")
+    expect(notifyError).toHaveBeenCalledWith("rm", "LoRA uninstall failed")
   })
 })

@@ -88,6 +88,7 @@ describe("BlueprintPickerDialog", () => {
         sizesProbing
         onSelect={onSelect}
         onInstall={onInstall}
+        onUninstall={() => {}}
       />
     )
 
@@ -128,6 +129,7 @@ describe("BlueprintPickerDialog", () => {
         sizesProbing={false}
         onSelect={onSelect}
         onInstall={() => {}}
+        onUninstall={() => {}}
       />
     )
     await user.click(screen.getByRole("button", { name: /^Select$/i }))
@@ -135,9 +137,10 @@ describe("BlueprintPickerDialog", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
-  it("install buttons for available/installed/resume", async () => {
+  it("install/resume/uninstall buttons", async () => {
     const user = userEvent.setup()
     const onInstall = vi.fn()
+    const onUninstall = vi.fn()
     render(
       <BlueprintPickerDialog
         open
@@ -168,12 +171,17 @@ describe("BlueprintPickerDialog", () => {
         sizesProbing={false}
         onSelect={() => {}}
         onInstall={onInstall}
+        onUninstall={onUninstall}
       />
     )
     await user.click(screen.getByRole("button", { name: /^Install$/i }))
     expect(onInstall).toHaveBeenCalledWith("a")
-    await user.click(screen.getByRole("button", { name: /^Check$/i }))
-    expect(onInstall).toHaveBeenCalledWith("b")
+    await user.click(screen.getByRole("button", { name: /^Uninstall$/i }))
+    expect(screen.getByText(/Uninstall blueprint\?/)).toBeTruthy()
+    await user.click(
+      screen.getAllByRole("button", { name: /^Uninstall$/i }).at(-1)!
+    )
+    expect(onUninstall).toHaveBeenCalledWith("b")
     await user.click(screen.getByRole("button", { name: /^Resume$/i }))
     expect(onInstall).toHaveBeenCalledWith("c")
   })

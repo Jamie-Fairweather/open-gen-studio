@@ -77,6 +77,8 @@ pub fn delete_user_lora(app: &AppHandle, id: &str) -> Result<(), String> {
     if !dir.is_dir() {
         return Err(format!("User LoRA not found: {id}"));
     }
+    // GC weights while this pack still exists so it is excluded from protectors by id.
+    let _ = super::uninstall::uninstall_all_variants(app, id)?;
     fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
     let _ = app.emit("loras://updated", id);
     Ok(())

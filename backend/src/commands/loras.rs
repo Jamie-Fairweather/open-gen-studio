@@ -1,4 +1,5 @@
 use super::state::AppState;
+use crate::blueprints::UninstallSummary;
 use crate::download_manager::{self, DownloadSpec, EnsureOpts};
 use crate::loras::{self, LoraPack, SaveUserLoraArgs};
 use tauri::{AppHandle, State};
@@ -33,6 +34,17 @@ pub fn install_lora_variant(
         },
     )?;
     Ok(())
+}
+
+/// Remove a LoRA variant weight file if unused by other ready variants.
+#[tauri::command]
+#[specta::specta]
+pub fn uninstall_lora_variant(
+    app: AppHandle,
+    id: String,
+    arch: crate::recipe::RecipeArch,
+) -> Result<UninstallSummary, String> {
+    loras::uninstall_variant(&app, &id, arch.as_str())
 }
 
 #[tauri::command]

@@ -236,6 +236,8 @@ pub fn delete_user_blueprint(app: &AppHandle, id: &str) -> Result<(), String> {
     if !dir.is_dir() {
         return Err(format!("User blueprint not found: {id}"));
     }
+    // GC weights while this pack still exists so it is excluded from protectors by id.
+    let _ = super::uninstall::uninstall_models(app, id)?;
     fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
     let _ = app.emit("blueprints://updated", id);
     Ok(())

@@ -52,14 +52,23 @@ vi.mock("@/components/job-queue-chrome", () => ({
   JobQueueExpandDialog: () => <div>job-expand</div>,
 }))
 vi.mock("@/components/libraries", () => ({
-  BlueprintPickerDialog: (p: { onInstall: (id: string) => void }) => (
-    <button type="button" onClick={() => p.onInstall("bp1")}>
-      bp-install
-    </button>
+  BlueprintPickerDialog: (p: {
+    onInstall: (id: string) => void
+    onUninstall: (id: string) => void
+  }) => (
+    <div>
+      <button type="button" onClick={() => p.onInstall("bp1")}>
+        bp-install
+      </button>
+      <button type="button" onClick={() => p.onUninstall("bp1")}>
+        bp-uninstall
+      </button>
+    </div>
   ),
   LoraPickerDialog: (p: {
     onSelect: (id: string) => void
     onInstall: (id: string, arch: string) => void
+    onUninstall: (id: string, arch: string) => void
   }) => (
     <div>
       <button type="button" onClick={() => p.onSelect("missing")}>
@@ -76,6 +85,12 @@ vi.mock("@/components/libraries", () => ({
       </button>
       <button type="button" onClick={() => p.onInstall("lora1", "bad")}>
         lora-bad
+      </button>
+      <button type="button" onClick={() => p.onUninstall("lora1", "z-image")}>
+        lora-uninst
+      </button>
+      <button type="button" onClick={() => p.onUninstall("lora1", "bad")}>
+        lora-uninst-bad
       </button>
     </div>
   ),
@@ -165,8 +180,10 @@ function resetState(extra: Record<string, unknown> = {}) {
       state.loraStack = bag.stack
     },
     beginLoraInstall: vi.fn(async () => {}),
+    beginLoraUninstall: vi.fn(async () => {}),
     beginUpscaleInstall: vi.fn(async () => {}),
     handleInstallBlueprint: vi.fn(async () => {}),
+    handleUninstallBlueprint: vi.fn(async () => {}),
     selectBlueprint: vi.fn(),
     gatedModelDialogOpen: true,
     hfTokenDialogOpen: false,
@@ -221,6 +238,8 @@ describe("StudioDialogs", () => {
     const { unmount } = render(<StudioDialogs />)
     await userEvent.click(screen.getByText("bp-install"))
     expect(state.handleInstallBlueprint).toHaveBeenCalled()
+    await userEvent.click(screen.getByText("bp-uninstall"))
+    expect(state.handleUninstallBlueprint).toHaveBeenCalledWith("bp1")
 
     await userEvent.click(screen.getByText("lora-miss"))
     await userEvent.click(screen.getByText("lora-sel"))
@@ -236,6 +255,9 @@ describe("StudioDialogs", () => {
     ).toBe(1)
     await userEvent.click(screen.getByText("lora-inst"))
     await userEvent.click(screen.getByText("lora-bad"))
+    await userEvent.click(screen.getByText("lora-uninst"))
+    expect(state.beginLoraUninstall).toHaveBeenCalledWith("lora1", "z-image")
+    await userEvent.click(screen.getByText("lora-uninst-bad"))
     await userEvent.click(screen.getByText("mod-lora"))
     await userEvent.click(screen.getByText("mod-lora-bad"))
     await userEvent.click(screen.getByText("mod-up"))

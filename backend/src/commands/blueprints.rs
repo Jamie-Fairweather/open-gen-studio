@@ -1,6 +1,7 @@
 use super::state::AppState;
 use crate::blueprints::{
     self, Blueprint, BlueprintDetail, ModelEntry, ModelFileEntry, RecipeCapabilities,
+    UninstallSummary,
 };
 use crate::download;
 use crate::download_manager::{self, DownloadSpec, EnsureOpts};
@@ -128,6 +129,13 @@ pub fn install_official_blueprint(
         },
     )?;
     Ok(())
+}
+
+/// Remove weight files for a blueprint that are unused by other installed packs.
+#[tauri::command]
+#[specta::specta]
+pub fn uninstall_blueprint(app: AppHandle, id: String) -> Result<UninstallSummary, String> {
+    blueprints::uninstall_models(&app, &id)
 }
 
 #[tauri::command]

@@ -40,6 +40,7 @@ export function StudioDialogs() {
       onOpenChange: s.setPickerOpen,
       onSelect: s.selectBlueprint,
       onInstall: s.handleInstallBlueprint,
+      onUninstall: s.handleUninstallBlueprint,
       sizesProbing: s.sizesProbing,
     }))
   )
@@ -55,6 +56,7 @@ export function StudioDialogs() {
       packs: s.loraPacks,
       setLoraStack: s.setLoraStack,
       beginLoraInstall: s.beginLoraInstall,
+      beginLoraUninstall: s.beginLoraUninstall,
     }))
   )
   const activeArch = useStudioSelector(selectActiveArch)
@@ -107,6 +109,7 @@ export function StudioDialogs() {
         sizesProbing={picker.sizesProbing}
         onSelect={picker.onSelect}
         onInstall={(id) => void picker.onInstall(id)}
+        onUninstall={(id) => void picker.onUninstall(id)}
       />
 
       <LoraPickerDialog
@@ -128,6 +131,10 @@ export function StudioDialogs() {
         onInstall={(id, arch) => {
           if (!isRecipeArch(arch)) return
           void lora.beginLoraInstall(id, arch)
+        }}
+        onUninstall={(id, arch) => {
+          if (!isRecipeArch(arch)) return
+          void lora.beginLoraUninstall(id, arch)
         }}
       />
 

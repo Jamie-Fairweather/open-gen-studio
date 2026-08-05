@@ -102,6 +102,7 @@ describe("LoraPickerDialog", () => {
         queuedKeys={["many:flux"]}
         onSelect={onSelect}
         onInstall={onInstall}
+        onUninstall={() => {}}
       />
     )
     expect(screen.getByText(/Packs for flux/)).toBeTruthy()
@@ -161,6 +162,7 @@ describe("LoraPickerDialog", () => {
         arch="flux"
         onSelect={onSelect}
         onInstall={() => {}}
+        onUninstall={() => {}}
       />
     )
     // Official · Ready "Add" (second Add in DOM when both mine + ready exist)
@@ -178,6 +180,7 @@ describe("LoraPickerDialog", () => {
         arch="flux"
         onSelect={onSelect}
         onInstall={() => {}}
+        onUninstall={() => {}}
       />
     )
     await user.click(screen.getByRole("button", { name: /^Add$/i }))
@@ -185,9 +188,10 @@ describe("LoraPickerDialog", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
-  it("no arch mode and install ready/disabled", async () => {
+  it("no arch mode and install/uninstall flows", async () => {
     const user = userEvent.setup()
     const onInstall = vi.fn()
+    const onUninstall = vi.fn()
     render(
       <LoraPickerDialog
         open
@@ -211,11 +215,18 @@ describe("LoraPickerDialog", () => {
         ]}
         onSelect={() => {}}
         onInstall={onInstall}
+        onUninstall={onUninstall}
       />
     )
     expect(screen.getByText(/Official packs plus your saves/)).toBeTruthy()
     await user.click(screen.getByRole("button", { name: /^Install$/i }))
     expect(onInstall).toHaveBeenCalledWith("i", "flux")
+    await user.click(screen.getByRole("button", { name: /^Uninstall$/i }))
+    expect(screen.getByText(/Uninstall LoRA\?/)).toBeTruthy()
+    await user.click(
+      screen.getAllByRole("button", { name: /^Uninstall$/i }).at(-1)!
+    )
+    expect(onUninstall).toHaveBeenCalledWith("r", "flux")
 
     await user.type(screen.getByPlaceholderText("Search…"), "zzz")
     expect(screen.getByText(/No LoRA packs match/)).toBeTruthy()
@@ -246,6 +257,7 @@ describe("LoraPickerDialog", () => {
         ]}
         onSelect={() => {}}
         onInstall={() => {}}
+        onUninstall={() => {}}
       />
     )
     expect(screen.getByText("5 arches")).toBeTruthy()
@@ -270,6 +282,7 @@ describe("LoraPickerDialog", () => {
         ]}
         onSelect={() => {}}
         onInstall={() => {}}
+        onUninstall={() => {}}
       />
     )
     expect(screen.getByText("Bare")).toBeTruthy()

@@ -418,7 +418,8 @@ export function CreatorPanel({
               <span className="font-medium text-foreground">
                 {pendingDelete?.name}
               </span>{" "}
-              from Creator. Installed weight files are not deleted.
+              from Creator. Unused weight files are removed; files still used by
+              other installed packs are kept.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

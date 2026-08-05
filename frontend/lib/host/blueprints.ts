@@ -1,5 +1,8 @@
 import { commands } from "@/lib/generated/bindings"
-import type { SaveUserBlueprintArgs } from "@/lib/generated/bindings"
+import type {
+  SaveUserBlueprintArgs,
+  UninstallSummary,
+} from "@/lib/generated/bindings"
 import type {
   Blueprint,
   BlueprintDetail,
@@ -7,6 +10,8 @@ import type {
   OfficialBlueprint,
   ResolvedModelUrl,
 } from "./types"
+
+export type { UninstallSummary }
 
 export async function listOfficialBlueprints(): Promise<OfficialBlueprint[]> {
   return listBlueprints()
@@ -23,6 +28,12 @@ export async function resolveModelUrl(url: string): Promise<ResolvedModelUrl> {
 
 export async function installOfficialBlueprint(id: string): Promise<void> {
   await commands.installOfficialBlueprint(id)
+}
+
+export async function uninstallBlueprint(
+  id: string
+): Promise<UninstallSummary> {
+  return commands.uninstallBlueprint(id)
 }
 
 export async function cancelBlueprintInstall(): Promise<void> {

@@ -1,8 +1,23 @@
 "use client"
 
 import { isRecipeArch, type RecipeArch } from "@/lib/arch"
-import { CheckIcon, DownloadIcon, LayersIcon, SearchIcon } from "lucide-react"
+import {
+  CheckIcon,
+  DownloadIcon,
+  LayersIcon,
+  SearchIcon,
+  Trash2Icon,
+} from "lucide-react"
 import { useMemo, useState } from "react"
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -32,6 +47,7 @@ type LoraPickerDialogProps = {
   queuedKeys?: string[]
   onSelect: (id: string) => void
   onInstall: (id: string, arch: RecipeArch) => void
+  onUninstall: (id: string, arch: RecipeArch) => void
 }
 
 function variantForArch(pack: LoraPack, arch: string | null | undefined) {
@@ -54,8 +70,14 @@ export function LoraPickerDialog({
   queuedKeys = [],
   onSelect,
   onInstall,
+  onUninstall,
 }: LoraPickerDialogProps) {
   const [query, setQuery] = useState("")
+  const [pendingUninstall, setPendingUninstall] = useState<{
+    id: string
+    name: string
+    arch: RecipeArch
+  } | null>(null)
 
   const sorted = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -127,6 +149,7 @@ export function LoraPickerDialog({
                   onOpenChange(false)
                 }}
                 onInstall={onInstall}
+                onRequestUninstall={setPendingUninstall}
               />
               <LoraGridSection
                 title="Official · Ready"
@@ -142,6 +165,7 @@ export function LoraPickerDialog({
                   onOpenChange(false)
                 }}
                 onInstall={onInstall}
+                onRequestUninstall={setPendingUninstall}
               />
               <LoraGridSection
                 title="Official · Available"
@@ -156,11 +180,52 @@ export function LoraPickerDialog({
                   onOpenChange(false)
                 }}
                 onInstall={onInstall}
+                onRequestUninstall={setPendingUninstall}
               />
             </div>
           )}
         </DialogPanel>
       </DialogPopup>
+
+      <AlertDialog
+        open={pendingUninstall != null}
+        onOpenChange={(next) => {
+          if (!next) setPendingUninstall(null)
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Uninstall LoRA?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove the{" "}
+              <span className="font-medium text-foreground">
+                {pendingUninstall?.arch}
+              </span>{" "}
+              weight file for{" "}
+              <span className="font-medium text-foreground">
+                {pendingUninstall?.name}
+              </span>
+              . Files still used by other ready LoRAs are kept.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline" />}>
+              Cancel
+            </AlertDialogClose>
+            <AlertDialogClose
+              render={<Button variant="destructive" />}
+              onClick={() => {
+                if (pendingUninstall) {
+                  onUninstall(pendingUninstall.id, pendingUninstall.arch)
+                }
+                setPendingUninstall(null)
+              }}
+            >
+              Uninstall
+            </AlertDialogClose>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </Dialog>
   )
 }
@@ -176,6 +241,7 @@ function LoraGridSection({
   forceInstallingFalse,
   onSelect,
   onInstall,
+  onRequestUninstall,
 }: {
   title: string
   items: LoraPack[]
@@ -187,6 +253,11 @@ function LoraGridSection({
   forceInstallingFalse?: boolean
   onSelect: (id: string) => void
   onInstall: (id: string, arch: RecipeArch) => void
+  onRequestUninstall: (pending: {
+    id: string
+    name: string
+    arch: RecipeArch
+  }) => void
 }) {
   if (items.length === 0) return null
   return (
@@ -210,6 +281,12 @@ function LoraGridSection({
               const a = arch ?? pack.arches[0]
               if (a && isRecipeArch(a)) onInstall(pack.id, a)
             }}
+            onRequestUninstall={() => {
+              const a = arch ?? pack.arches[0]
+              if (a && isRecipeArch(a)) {
+                onRequestUninstall({ id: pack.id, name: pack.name, arch: a })
+              }
+            }}
           />
         ))}
       </div>
@@ -225,6 +302,7 @@ function LoraCard({
   queued,
   onSelect,
   onInstall,
+  onRequestUninstall,
 }: {
   pack: LoraPack
   arch?: string | null
@@ -233,6 +311,7 @@ function LoraCard({
   queued: boolean
   onSelect: () => void
   onInstall: () => void
+  onRequestUninstall: () => void
 }) {
   const variant = variantForArch(pack, arch)
   const ready = variant?.ready ?? false
@@ -333,17 +412,28 @@ function LoraCard({
                 Queued
               </Button>
             </WithTooltip>
+          ) : ready ? (
+            <WithTooltip label="Remove weight file if unused">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onRequestUninstall}
+              >
+                <Trash2Icon />
+                Uninstall
+              </Button>
+            </WithTooltip>
           ) : (
-            <WithTooltip label={ready ? "Already on disk" : "Download file"}>
+            <WithTooltip label="Download file">
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
                 onClick={onInstall}
-                disabled={ready}
               >
                 <DownloadIcon />
-                {ready ? "Ready" : "Install"}
+                Install
               </Button>
             </WithTooltip>
           )}

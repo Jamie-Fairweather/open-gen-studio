@@ -115,6 +115,7 @@ export {
   listBlueprints,
   resolveModelUrl,
   installOfficialBlueprint,
+  uninstallBlueprint,
   cancelBlueprintInstall,
   listModelFiles,
   openModelsDir,
@@ -126,11 +127,13 @@ export {
   setUserBlueprintThumbnail,
   clearUserBlueprintThumbnail,
 } from "./host/blueprints"
+export type { UninstallSummary } from "./host/blueprints"
 
 export {
   listLoras,
   getLora,
   installLoraVariant,
+  uninstallLoraVariant,
   saveUserLora,
   deleteUserLora,
   openUserLorasDir,

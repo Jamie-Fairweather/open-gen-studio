@@ -84,6 +84,9 @@ export const commands = {
   /**  Enqueue blueprint install via Download Manager (soft / non-blocking). */
   installOfficialBlueprint: (id: string) =>
     __TAURI_INVOKE<null>("install_official_blueprint", { id }),
+  /**  Remove weight files for a blueprint that are unused by other installed packs. */
+  uninstallBlueprint: (id: string) =>
+    __TAURI_INVOKE<UninstallSummary>("uninstall_blueprint", { id }),
   cancelBlueprintInstall: () =>
     __TAURI_INVOKE<null>("cancel_blueprint_install"),
   listLoras: () => __TAURI_INVOKE<LoraPack[]>("list_loras"),
@@ -91,6 +94,9 @@ export const commands = {
   /**  Enqueue LoRA variant install via Download Manager. */
   installLoraVariant: (id: string, arch: RecipeArch) =>
     __TAURI_INVOKE<null>("install_lora_variant", { id, arch }),
+  /**  Remove a LoRA variant weight file if unused by other ready variants. */
+  uninstallLoraVariant: (id: string, arch: RecipeArch) =>
+    __TAURI_INVOKE<UninstallSummary>("uninstall_lora_variant", { id, arch }),
   saveUserLora: (args: SaveUserLoraArgs) =>
     __TAURI_INVOKE<LoraPack>("save_user_lora", { args }),
   deleteUserLora: (id: string) =>
@@ -713,6 +719,13 @@ export type SuggestedModel = {
 }
 
 export type TokenProvider = "huggingFace" | "civitAi"
+
+export type UninstallSummary = {
+  /**  Weight files deleted from the shared models library. */
+  removed: number
+  /**  Weight files left on disk because another installed pack still needs them. */
+  kept: number
+}
 
 export type UpscaleKind = "sr" | "supir"
 

@@ -5,6 +5,7 @@ const commands = vi.hoisted(() => ({
   listLoras: vi.fn(async () => []),
   getLora: vi.fn(async () => ({ id: "l1" })),
   installLoraVariant: vi.fn(async () => {}),
+  uninstallLoraVariant: vi.fn(async () => ({ removed: 1, kept: 0 })),
   saveUserLora: vi.fn(async () => ({ id: "u1" })),
   deleteUserLora: vi.fn(async () => {}),
   openUserLorasDir: vi.fn(async () => "/loras"),
@@ -20,6 +21,7 @@ import {
   expandCivitaiLoraUrl,
   getLora,
   installLoraVariant,
+  uninstallLoraVariant,
   listLoras,
   openUserLorasDir,
   saveUserLora,
@@ -37,6 +39,11 @@ describe("loras host wrappers", () => {
     await getLora("l1")
     await installLoraVariant("l1", "flux")
     expect(commands.installLoraVariant).toHaveBeenCalledWith("l1", "flux")
+    await expect(uninstallLoraVariant("l1", "flux")).resolves.toEqual({
+      removed: 1,
+      kept: 0,
+    })
+    expect(commands.uninstallLoraVariant).toHaveBeenCalledWith("l1", "flux")
     const input = { id: "u1", name: "L" } as never
     await saveUserLora(input)
     expect(commands.saveUserLora).toHaveBeenCalledWith(input)

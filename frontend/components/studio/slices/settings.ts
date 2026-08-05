@@ -6,6 +6,8 @@ import {
   getBlueprint,
   providerTokenStatus,
   setProviderToken,
+  uninstallBlueprint,
+  type UninstallSummary,
 } from "@/lib/host"
 import { hfRepoFromModelUrl, type GatedModelRepo } from "@/lib/hf"
 import { isRecipeArch, type RecipeArch } from "@/lib/arch"
@@ -55,6 +57,14 @@ export type SettingsSlice = {
   handleCivitaiTokenDialogConfirm: (token: string) => Promise<void>
   requestBlueprintInstall: (id: string) => Promise<void>
   handleInstallBlueprint: (id: string) => Promise<void>
+  handleUninstallBlueprint: (id: string) => Promise<void>
+}
+
+function uninstallToastDescription(summary: UninstallSummary): string {
+  if (summary.kept > 0) {
+    return `Removed ${summary.removed} file(s); kept ${summary.kept} shared`
+  }
+  return `Removed ${summary.removed} file(s)`
 }
 
 export const createSettingsSlice: StateCreator<
@@ -277,6 +287,19 @@ export const createSettingsSlice: StateCreator<
       if (!(await ensureInstallTokens(id))) return
       set({ gatedTermsAcked: false, pendingInstallId: null })
       await get().requestBlueprintInstall(id)
+    },
+
+    handleUninstallBlueprint: async (id) => {
+      try {
+        const summary = await uninstallBlueprint(id)
+        const name = get().blueprints.find((b) => b.id === id)?.name ?? id
+        notifySuccess(name, uninstallToastDescription(summary))
+      } catch (e) {
+        notifyError(
+          e instanceof Error ? e.message : String(e),
+          "Blueprint uninstall failed"
+        )
+      }
     },
 
     handleGatedModelDialogConfirm: async () => {

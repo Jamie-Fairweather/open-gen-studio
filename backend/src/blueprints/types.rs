@@ -3,6 +3,15 @@ use specta::Type;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
+pub struct UninstallSummary {
+    /// Weight files deleted from the shared models library.
+    pub removed: u32,
+    /// Weight files left on disk because another installed pack still needs them.
+    pub kept: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct Blueprint {
     pub id: String,
     pub name: String,

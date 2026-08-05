@@ -3,10 +3,11 @@ import type { StateCreator } from "zustand"
 import {
   ensureDownload,
   providerTokenStatus,
+  uninstallLoraVariant,
   type LoraStackEntry,
 } from "@/lib/host"
 import type { RecipeArch } from "@/lib/arch"
-import { notifyError } from "@/lib/notify"
+import { notifyError, notifySuccess } from "@/lib/notify"
 import type { StudioStore } from "../studio-store-types"
 import { applySet, DEFAULT_UPSCALE_MODEL_ID } from "./helpers"
 import { flushPersistSession } from "./session-persist"
@@ -29,6 +30,7 @@ export type RefineSlice = {
   setUsduSteps: Dispatch<SetStateAction<number>>
   setUsduDenoise: Dispatch<SetStateAction<number>>
   beginLoraInstall: (id: string, arch: RecipeArch) => Promise<void>
+  beginLoraUninstall: (id: string, arch: RecipeArch) => Promise<void>
   beginUpscaleInstall: (id: string) => Promise<void>
   beginUsduInstall: () => Promise<void>
   beginPromptToolsInstall: (provider?: string) => Promise<void>
@@ -98,6 +100,23 @@ export const createRefineSlice: StateCreator<
       notifyError(
         e instanceof Error ? e.message : String(e),
         "LoRA install failed"
+      )
+    }
+  },
+
+  beginLoraUninstall: async (id, arch) => {
+    try {
+      const summary = await uninstallLoraVariant(id, arch)
+      const name = get().loraPacks.find((p) => p.id === id)?.name ?? id
+      const detail =
+        summary.kept > 0
+          ? `Removed ${summary.removed} file(s); kept ${summary.kept} shared`
+          : `Removed ${summary.removed} file(s)`
+      notifySuccess(name, detail)
+    } catch (e) {
+      notifyError(
+        e instanceof Error ? e.message : String(e),
+        "LoRA uninstall failed"
       )
     }
   },

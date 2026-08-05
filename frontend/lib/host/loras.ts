@@ -3,8 +3,11 @@ import type { RecipeArch } from "@/lib/arch"
 import type {
   CivitaiLoraExpand,
   SaveUserLoraArgs,
+  UninstallSummary,
 } from "@/lib/generated/bindings"
 import type { LoraPack } from "./types"
+
+export type { UninstallSummary }
 
 export type { CivitaiLoraExpand }
 
@@ -27,6 +30,13 @@ export async function installLoraVariant(
   arch: RecipeArch
 ): Promise<void> {
   await commands.installLoraVariant(id, arch)
+}
+
+export async function uninstallLoraVariant(
+  id: string,
+  arch: RecipeArch
+): Promise<UninstallSummary> {
+  return commands.uninstallLoraVariant(id, arch)
 }
 
 export async function saveUserLora(input: SaveUserLoraArgs): Promise<LoraPack> {

@@ -5,6 +5,7 @@ mod list;
 mod models_fs;
 mod paths;
 mod types;
+mod uninstall;
 
 pub(crate) use cache::probe_remote_size;
 #[allow(unused_imports)]
@@ -29,5 +30,8 @@ pub(crate) use types::ManifestFile;
 #[allow(unused_imports)]
 pub use types::{
     Blueprint, BlueprintControl, BlueprintDetail, BlueprintModelInfo, BlueprintProgress,
-    CustomNodeDep, ModelEntry, ModelFileEntry, RecipeCapabilities,
+    CustomNodeDep, ModelEntry, ModelFileEntry, RecipeCapabilities, UninstallSummary,
 };
+#[allow(unused_imports)]
+pub use uninstall::uninstall_models;
+pub(crate) use uninstall::{file_key, gc_model_files};

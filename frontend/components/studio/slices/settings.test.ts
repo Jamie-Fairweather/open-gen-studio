@@ -8,6 +8,7 @@ const host = vi.hoisted(() => ({
   setProviderToken: vi.fn(async () => {}),
   clearProviderToken: vi.fn(async () => {}),
   ensureDownload: vi.fn(async () => ({ status: "queued", jobId: "d1" })),
+  uninstallBlueprint: vi.fn(async () => ({ removed: 2, kept: 1 })),
   getBlueprint: vi.fn(async () => ({
     models: [
       {
@@ -396,5 +397,24 @@ describe("createSettingsSlice", () => {
       pendingLoraInstall: { id: "l2", arch: "bad" as never },
     })
     await store.getState().handleCivitaiTokenDialogConfirm("civ")
+
+    store.setState({
+      blueprints: [{ id: "bp1", name: "Flux" } as never],
+    })
+    await store.getState().handleUninstallBlueprint("bp1")
+    expect(host.uninstallBlueprint).toHaveBeenCalledWith("bp1")
+    expect(notifySuccess).toHaveBeenCalledWith(
+      "Flux",
+      "Removed 2 file(s); kept 1 shared"
+    )
+    host.uninstallBlueprint.mockResolvedValueOnce({ removed: 3, kept: 0 })
+    await store.getState().handleUninstallBlueprint("missing")
+    expect(notifySuccess).toHaveBeenCalledWith("missing", "Removed 3 file(s)")
+    host.uninstallBlueprint.mockRejectedValueOnce(new Error("gone"))
+    await store.getState().handleUninstallBlueprint("bp1")
+    expect(notifyError).toHaveBeenCalledWith(
+      "gone",
+      "Blueprint uninstall failed"
+    )
   })
 })

@@ -7,6 +7,7 @@ const commands = vi.hoisted(() => ({
     filename: "y.safetensors",
   })),
   installOfficialBlueprint: vi.fn(async () => {}),
+  uninstallBlueprint: vi.fn(async () => ({ removed: 1, kept: 0 })),
   cancelBlueprintInstall: vi.fn(async () => {}),
   listModelFiles: vi.fn(async () => []),
   openModelsDir: vi.fn(async () => "/models"),
@@ -27,6 +28,7 @@ import {
   getBlueprint,
   getOfficialBlueprint,
   installOfficialBlueprint,
+  uninstallBlueprint,
   listBlueprints,
   listModelFiles,
   listOfficialBlueprints,
@@ -51,6 +53,11 @@ describe("blueprints host wrappers", () => {
     expect(commands.resolveModelUrl).toHaveBeenCalledWith("https://hf.co/x")
 
     await installOfficialBlueprint("bp1")
+    await expect(uninstallBlueprint("bp1")).resolves.toEqual({
+      removed: 1,
+      kept: 0,
+    })
+    expect(commands.uninstallBlueprint).toHaveBeenCalledWith("bp1")
     await cancelBlueprintInstall()
     await listModelFiles()
     await openModelsDir()

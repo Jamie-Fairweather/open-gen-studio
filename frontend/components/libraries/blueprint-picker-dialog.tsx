@@ -6,8 +6,18 @@ import {
   ImageIcon,
   KeyRoundIcon,
   SearchIcon,
+  Trash2Icon,
 } from "lucide-react"
 import { useMemo, useState } from "react"
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -63,6 +73,7 @@ type BlueprintPickerDialogProps = {
   sizesProbing: boolean
   onSelect: (id: string) => void
   onInstall: (id: string) => void
+  onUninstall: (id: string) => void
 }
 
 export function BlueprintPickerDialog({
@@ -75,8 +86,13 @@ export function BlueprintPickerDialog({
   sizesProbing,
   onSelect,
   onInstall,
+  onUninstall,
 }: BlueprintPickerDialogProps) {
   const [query, setQuery] = useState("")
+  const [pendingUninstall, setPendingUninstall] = useState<{
+    id: string
+    name: string
+  } | null>(null)
 
   const sorted = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -146,6 +162,7 @@ export function BlueprintPickerDialog({
                   onOpenChange(false)
                 }}
                 onInstall={onInstall}
+                onRequestUninstall={setPendingUninstall}
               />
               <BlueprintGridSection
                 title="Official · Installed"
@@ -160,6 +177,7 @@ export function BlueprintPickerDialog({
                   onOpenChange(false)
                 }}
                 onInstall={onInstall}
+                onRequestUninstall={setPendingUninstall}
               />
               <BlueprintGridSection
                 title="Official · Available"
@@ -171,11 +189,46 @@ export function BlueprintPickerDialog({
                 sizesProbing={sizesProbing}
                 onSelect={onSelect}
                 onInstall={onInstall}
+                onRequestUninstall={setPendingUninstall}
               />
             </div>
           )}
         </DialogPanel>
       </DialogPopup>
+
+      <AlertDialog
+        open={pendingUninstall != null}
+        onOpenChange={(next) => {
+          if (!next) setPendingUninstall(null)
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Uninstall blueprint?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove weight files for{" "}
+              <span className="font-medium text-foreground">
+                {pendingUninstall?.name}
+              </span>
+              . Files still used by other installed blueprints are kept.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline" />}>
+              Cancel
+            </AlertDialogClose>
+            <AlertDialogClose
+              render={<Button variant="destructive" />}
+              onClick={() => {
+                if (pendingUninstall) onUninstall(pendingUninstall.id)
+                setPendingUninstall(null)
+              }}
+            >
+              Uninstall
+            </AlertDialogClose>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </Dialog>
   )
 }
@@ -190,6 +243,7 @@ function BlueprintGridSection({
   sizesProbing,
   onSelect,
   onInstall,
+  onRequestUninstall,
 }: {
   title: string
   items: Blueprint[]
@@ -200,6 +254,7 @@ function BlueprintGridSection({
   sizesProbing: boolean
   onSelect: (id: string) => void
   onInstall: (id: string) => void
+  onRequestUninstall: (bp: { id: string; name: string }) => void
 }) {
   if (items.length === 0) return null
   return (
@@ -216,6 +271,9 @@ function BlueprintGridSection({
             sizesProbing={sizesProbing}
             onSelect={() => onSelect(bp.id)}
             onInstall={() => onInstall(bp.id)}
+            onRequestUninstall={() =>
+              onRequestUninstall({ id: bp.id, name: bp.name })
+            }
           />
         ))}
       </div>
@@ -231,6 +289,7 @@ function BlueprintCard({
   sizesProbing,
   onSelect,
   onInstall,
+  onRequestUninstall,
 }: {
   bp: Blueprint
   selected: boolean
@@ -239,6 +298,7 @@ function BlueprintCard({
   sizesProbing: boolean
   onSelect: () => void
   onInstall: () => void
+  onRequestUninstall: () => void
 }) {
   const installed = isInstalled(bp)
   const sizeTotal = bp.totalSizeBytes
@@ -382,10 +442,20 @@ function BlueprintCard({
                 Queued
               </Button>
             </WithTooltip>
+          ) : installed ? (
+            <WithTooltip label="Remove unused weight files">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onRequestUninstall}
+              >
+                <Trash2Icon />
+                Uninstall
+              </Button>
+            </WithTooltip>
           ) : (
-            <WithTooltip
-              label={installed ? "Re-check models" : "Download models"}
-            >
+            <WithTooltip label="Download models">
               <Button
                 type="button"
                 size="sm"
@@ -393,11 +463,7 @@ function BlueprintCard({
                 onClick={onInstall}
               >
                 <DownloadIcon />
-                {installed
-                  ? "Check"
-                  : bp.modelsReady > 0
-                    ? "Resume"
-                    : "Install"}
+                {bp.modelsReady > 0 ? "Resume" : "Install"}
               </Button>
             </WithTooltip>
           )}

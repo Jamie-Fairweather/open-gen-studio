@@ -1,21 +1,10 @@
 "use client"
 
-import { ArrowLeftIcon } from "lucide-react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useEffect } from "react"
-import {
-  selectActiveArch,
-  selectHasNegativePrompt,
-} from "@/components/studio/selectors"
+import { selectActiveArch } from "@/components/studio/selectors"
 import { useStudioSelector, useStudioStore } from "@/components/studio/store"
-import {
-  StudioPanel,
-  StudioPanelBody,
-  StudioPanelHeader,
-} from "@/components/shell"
-import { applyPromptToStudio } from "@/components/tools/apply-prompt-to-studio"
 import { ToolModelGate } from "@/components/tools/tool-model-gate"
+import { ToolPanelChrome } from "@/components/tools/tool-panel-chrome"
 import { ToolResultActions } from "@/components/tools/tool-result-actions"
 import { ToolRunBar } from "@/components/tools/tool-run-bar"
 import {
@@ -24,7 +13,7 @@ import {
   ToolSurface,
   ToolSurfaceHeader,
 } from "@/components/tools/tool-shell"
-import { Button } from "@/components/ui/button"
+import { useToolStudioBridge } from "@/components/tools/use-tool-studio-bridge"
 import { Textarea } from "@/components/ui/textarea"
 import {
   ENHANCE_MODES,
@@ -34,17 +23,14 @@ import {
 } from "@/lib/prompt-tools"
 
 export function PromptEnhancerPanel() {
-  const router = useRouter()
   const studioPrompt = useStudioStore((s) => s.prompt)
   const consumeToolsHandoff = useStudioStore((s) => s.consumeToolsHandoff)
-  const setPrompt = useStudioStore((s) => s.setPrompt)
-  const setControlValues = useStudioStore((s) => s.setControlValues)
   const state = useStudioStore((s) => s.promptEnhance)
   const patch = useStudioStore((s) => s.patchPromptEnhance)
   const run = useStudioStore((s) => s.runPromptEnhanceTool)
   const cancel = useStudioStore((s) => s.cancelPromptEnhanceTool)
   const activeArch = useStudioSelector(selectActiveArch)
-  const hasNegativePrompt = useStudioSelector(selectHasNegativePrompt)
+  const { sendToStudio } = useToolStudioBridge()
 
   const {
     input,
@@ -84,123 +70,98 @@ export function PromptEnhancerPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once
   }, [])
 
-  const useInStudio = () => {
-    applyPromptToStudio({
-      prompt: result || input,
-      negative,
-      hasNegativePrompt,
-      setPrompt,
-      setControlValues,
-      router,
-    })
-  }
-
   const hasResult = Boolean(result.trim())
 
   return (
-    <StudioPanel className="min-h-0 flex-1">
-      <StudioPanelHeader
-        title="Prompt Enhancer"
-        description="Expand a short idea into a model-ready prompt."
-        action={
-          <Button
-            render={<Link href="/tools" />}
-            variant="ghost"
-            size="sm"
-            className="gap-1.5"
-          >
-            <ArrowLeftIcon className="size-3.5" />
-            Tools
-          </Button>
-        }
-      />
-      <StudioPanelBody className="gap-4">
-        <ToolModelGate providerId="enhancer" toolLabel="Prompt Enhancer">
-          <ToolSurface>
-            <div className="flex flex-col gap-4 p-4">
-              <label className="flex flex-col gap-2">
-                <ToolFieldLabel>Your idea</ToolFieldLabel>
-                <Textarea
-                  value={input}
-                  onChange={(e) => patch({ input: e.target.value })}
-                  disabled={busy}
-                  rows={6}
-                  placeholder="A short subject or rough prompt…"
-                  className="min-h-32 resize-y"
-                />
-              </label>
-
-              <ToolChipRow
-                label="Mode"
-                options={ENHANCE_MODES.map((m) => ({
-                  id: m.id,
-                  label: m.label,
-                }))}
-                value={mode}
-                onChange={(v) => patch({ mode: v })}
+    <ToolPanelChrome
+      title="Prompt Enhancer"
+      description="Expand a short idea into a model-ready prompt."
+    >
+      <ToolModelGate providerId="enhancer" toolLabel="Prompt Enhancer">
+        <ToolSurface>
+          <div className="flex flex-col gap-4 p-4">
+            <label className="flex flex-col gap-2">
+              <ToolFieldLabel>Your idea</ToolFieldLabel>
+              <Textarea
+                value={input}
+                onChange={(e) => patch({ input: e.target.value })}
                 disabled={busy}
+                rows={6}
+                placeholder="A short subject or rough prompt…"
+                className="min-h-32 resize-y"
               />
-              {mode === "style" ? (
-                <ToolChipRow
-                  label="Look"
-                  options={STYLE_LOOKS}
-                  value={styleLook}
-                  onChange={(v) => patch({ styleLook: v })}
-                  disabled={busy}
-                />
-              ) : null}
-              <ToolChipRow
-                label="Target"
-                options={PROMPT_TARGETS}
-                value={target}
-                onChange={(v) => patch({ target: v })}
-                disabled={busy}
-              />
+            </label>
 
-              <ToolRunBar
-                label="Enhance"
-                busy={busy}
-                disabled={!input.trim()}
-                jobId={jobId}
-                status={status}
-                error={error}
-                onRun={() => void run()}
-                onCancel={() => void cancel()}
-              />
-            </div>
-          </ToolSurface>
-
-          <ToolSurface>
-            <ToolSurfaceHeader
-              title="Enhanced prompt"
-              actions={
-                <ToolResultActions
-                  copyText={result}
-                  copyDisabled={!result.trim()}
-                  useInStudioDisabled={!result.trim() && !input.trim()}
-                  onUseInStudio={useInStudio}
-                />
-              }
+            <ToolChipRow
+              label="Mode"
+              options={ENHANCE_MODES.map((m) => ({
+                id: m.id,
+                label: m.label,
+              }))}
+              value={mode}
+              onChange={(v) => patch({ mode: v })}
+              disabled={busy}
             />
-            <div className="p-4">
-              {!hasResult && !busy ? (
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Enhanced text appears here. Nothing is written to Image Studio
-                  until you confirm.
-                </p>
-              ) : (
-                <Textarea
-                  value={result}
-                  onChange={(e) => patch({ result: e.target.value })}
-                  placeholder={busy ? "Working…" : "Enhanced prompt"}
-                  rows={10}
-                  className="min-h-48 resize-y"
-                />
-              )}
-            </div>
-          </ToolSurface>
-        </ToolModelGate>
-      </StudioPanelBody>
-    </StudioPanel>
+            {mode === "style" ? (
+              <ToolChipRow
+                label="Look"
+                options={STYLE_LOOKS}
+                value={styleLook}
+                onChange={(v) => patch({ styleLook: v })}
+                disabled={busy}
+              />
+            ) : null}
+            <ToolChipRow
+              label="Target"
+              options={PROMPT_TARGETS}
+              value={target}
+              onChange={(v) => patch({ target: v })}
+              disabled={busy}
+            />
+
+            <ToolRunBar
+              label="Enhance"
+              busy={busy}
+              disabled={!input.trim()}
+              jobId={jobId}
+              status={status}
+              error={error}
+              onRun={() => void run()}
+              onCancel={() => void cancel()}
+            />
+          </div>
+        </ToolSurface>
+
+        <ToolSurface>
+          <ToolSurfaceHeader
+            title="Enhanced prompt"
+            actions={
+              <ToolResultActions
+                copyText={result}
+                copyDisabled={!result.trim()}
+                useInStudioDisabled={!result.trim() && !input.trim()}
+                onUseInStudio={() => sendToStudio(result || input, negative)}
+              />
+            }
+          />
+          <div className="p-4">
+            {!hasResult && !busy ? (
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Enhanced text appears here. Nothing is written to Image Studio
+                until you confirm.
+              </p>
+            ) : (
+              <Textarea
+                value={result}
+                onChange={(e) => patch({ result: e.target.value })}
+                placeholder={busy ? "Working…" : "Enhanced prompt"}
+                rows={10}
+                className="min-h-48 resize-y"
+              />
+            )}
+          </div>
+        </ToolSurface>
+      </ToolModelGate>
+    </ToolPanelChrome>
   )
 }

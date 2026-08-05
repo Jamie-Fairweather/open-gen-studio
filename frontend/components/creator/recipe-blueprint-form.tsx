@@ -1,111 +1,17 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
 import {
   STUDIO_PANEL_GUTTER,
   StudioPanelColumn,
   StudioPanelFooter,
 } from "@/components/shell"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import {
-  NumberField,
-  NumberFieldGroup,
-  NumberFieldInput,
-} from "@/components/ui/number-field"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { WithTooltip } from "@/components/ui/tooltip"
-import {
-  CreatorThumbnailField,
-  type PendingThumbnail,
-} from "./creator-thumbnail-field"
-import {
-  COMFY_SAMPLER_ITEMS,
-  COMFY_SCHEDULER_ITEMS,
-} from "@/lib/comfy-samplers"
-import {
-  clearUserBlueprintThumbnail,
-  getBlueprint,
-  resolveModelUrl,
-  saveUserBlueprint,
-  setUserBlueprintThumbnail,
-} from "@/lib/host"
-import { notifyError, notifySuccess } from "@/lib/notify"
 import { cn } from "@/lib/utils"
-import {
-  ARCHES,
-  ARCH_ITEMS,
-  isArchId,
-  type ArchDef,
-  type ArchId,
-} from "@/lib/creator-arches"
-
-type ModelDraft = {
-  role: string
-  path: string
-  filename: string
-  url: string
-}
-
-function slugify(name: string): string {
-  return name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 64)
-}
-
-/** Last path segment of a download URL (query/hash stripped). */
-function filenameFromUrl(url: string): string {
-  const trimmed = url.trim()
-  if (!trimmed) return ""
-  try {
-    const parsed = new URL(trimmed)
-    const segment = parsed.pathname.split("/").filter(Boolean).pop() ?? ""
-    return decodeURIComponent(segment)
-  } catch {
-    const noQuery = trimmed.split(/[?#]/)[0] ?? ""
-    const segment = noQuery.split("/").filter(Boolean).pop() ?? ""
-    try {
-      return decodeURIComponent(segment)
-    } catch {
-      return segment
-    }
-  }
-}
-
-/** Page URLs (CivitAI, …) need a backend resolve for the real filename. */
-function needsProviderResolve(url: string): boolean {
-  const u = url.trim().toLowerCase()
-  if (!u) return false
-  if (u.includes("civitai.com") || u.includes("civitai.red")) {
-    // Direct API download already has a version id - still resolve for filename.
-    return true
-  }
-  const guessed = filenameFromUrl(url)
-  return !guessed.includes(".")
-}
-
-function draftsForArch(arch: ArchDef): ModelDraft[] {
-  return arch.slots.map((s) => {
-    const url = s.defaultUrl ?? ""
-    return {
-      role: s.role,
-      path: s.path,
-      filename: filenameFromUrl(url),
-      url,
-    }
-  })
-}
+import { RecipeDefaultsSection } from "./recipe-defaults-section"
+import { RecipeIdentitySection } from "./recipe-identity-section"
+import { RecipeModelsSection } from "./recipe-models-section"
+import { useRecipeBlueprintForm } from "./use-recipe-blueprint-form"
 
 type RecipeBlueprintFormProps = {
   onSaved: (id: string) => void
@@ -121,657 +27,77 @@ export function RecipeBlueprintForm({
   onEditCleared,
   onDelete,
 }: RecipeBlueprintFormProps) {
-  const [busy, setBusy] = useState(false)
-  const [loadingEdit, setLoadingEdit] = useState(() => Boolean(editBlueprintId))
-  const [name, setName] = useState("")
-  const [idManual, setIdManual] = useState("")
-  const [idTouched, setIdTouched] = useState(false)
-  const [description, setDescription] = useState("")
-  const [archId, setArchId] = useState<ArchId>("z-image")
-  const [sampler, setSampler] = useState(ARCHES[0].sampler)
-  const [scheduler, setScheduler] = useState(ARCHES[0].scheduler)
-  const [models, setModels] = useState<ModelDraft[]>(() =>
-    draftsForArch(ARCHES[0])
-  )
-  const [steps, setSteps] = useState(ARCHES[0].defaults.steps)
-  const [cfg, setCfg] = useState(ARCHES[0].defaults.cfg)
-  const [guidance, setGuidance] = useState(ARCHES[0].defaults.guidance ?? 3.5)
-  const [allowNegative, setAllowNegative] = useState(
-    ARCHES[0].capabilities.negative
-  )
-  const [thumbnailPath, setThumbnailPath] = useState<string | null>(null)
-  const [pendingThumb, setPendingThumb] = useState<PendingThumbnail | null>(
-    null
-  )
-  const editing = Boolean(editBlueprintId)
-
-  const arch = useMemo(
-    () => ARCHES.find((a) => a.id === archId) ?? ARCHES[0],
-    [archId]
-  )
-  const id = editing || idTouched ? idManual : slugify(name)
-
-  function applyArch(nextId: ArchId) {
-    const next = ARCHES.find((a) => a.id === nextId) ?? ARCHES[0]
-    setArchId(next.id)
-    setSampler(next.sampler)
-    setScheduler(next.scheduler)
-    setModels(draftsForArch(next))
-    setSteps(next.defaults.steps)
-    setCfg(next.defaults.cfg)
-    setGuidance(next.defaults.guidance ?? 3.5)
-    setAllowNegative(next.capabilities.negative)
-  }
-
-  useEffect(() => {
-    if (!editBlueprintId) return
-    let cancelled = false
-    void getBlueprint(editBlueprintId)
-      .then((detail) => {
-        if (cancelled) return
-        const nextArch: ArchId = isArchId(detail.arch ?? "")
-          ? (detail.arch as ArchId)
-          : "z-image"
-        const archDef = ARCHES.find((a) => a.id === nextArch) ?? ARCHES[0]
-        setName(detail.name)
-        setIdManual(detail.id)
-        setIdTouched(true)
-        setDescription(detail.description ?? "")
-        setArchId(nextArch)
-        setSampler(detail.sampler?.trim() || archDef.sampler)
-        setScheduler(detail.scheduler?.trim() || archDef.scheduler)
-        setAllowNegative(
-          detail.capabilities?.negative ?? archDef.capabilities.negative
-        )
-
-        const defaults = detail.defaults ?? {}
-        const stepsVal = Number(defaults.steps)
-        setSteps(Number.isFinite(stepsVal) ? stepsVal : archDef.defaults.steps)
-        const cfgVal = Number(defaults.cfg)
-        setCfg(Number.isFinite(cfgVal) ? cfgVal : archDef.defaults.cfg)
-        const guidanceVal = Number(defaults.guidance)
-        setGuidance(
-          Number.isFinite(guidanceVal)
-            ? guidanceVal
-            : (archDef.defaults.guidance ?? 3.5)
-        )
-
-        const byRole = new Map(
-          (detail.models ?? []).map((m) => [m.role || "", m])
-        )
-        setModels(
-          archDef.slots.map((slot) => {
-            const entry = byRole.get(slot.role)
-            if (entry) {
-              return {
-                role: slot.role,
-                path: entry.path || slot.path,
-                filename: entry.filename ?? "",
-                url: entry.url ?? "",
-              }
-            }
-            const url = slot.defaultUrl ?? ""
-            return {
-              role: slot.role,
-              path: slot.path,
-              filename: filenameFromUrl(url),
-              url,
-            }
-          })
-        )
-        setThumbnailPath(detail.thumbnailPath ?? null)
-        setPendingThumb((prev) => {
-          if (prev) URL.revokeObjectURL(prev.previewUrl)
-          return null
-        })
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          notifyError(
-            e instanceof Error ? e.message : String(e),
-            "Could not load blueprint"
-          )
-          onEditCleared?.()
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingEdit(false)
-      })
-    return () => {
-      cancelled = true
-    }
-    // Intentionally only re-load when the target id changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- onEditCleared is error-path only
-  }, [editBlueprintId])
-
-  function updateModelUrl(index: number, url: string) {
-    const guessed = filenameFromUrl(url)
-    const filename =
-      needsProviderResolve(url) && !guessed.includes(".") ? "" : guessed
-    setModels((prev) => {
-      const next = [...prev]
-      next[index] = {
-        ...next[index],
-        url,
-        filename,
-      }
-      return next
-    })
-  }
-
-  async function resolveModelRow(index: number, url: string) {
-    const trimmed = url.trim()
-    if (!trimmed || !needsProviderResolve(trimmed)) return
-    try {
-      const resolved = await resolveModelUrl(trimmed)
-      setModels((prev) => {
-        const next = [...prev]
-        if (next[index]?.url.trim() !== trimmed) return prev
-        next[index] = {
-          ...next[index],
-          filename: resolved.filename?.trim() || next[index].filename,
-        }
-        return next
-      })
-    } catch (e) {
-      notifyError(
-        e instanceof Error ? e.message : String(e),
-        "Could not resolve model URL"
-      )
-    }
-  }
-
-  async function handleSave() {
-    const trimmedId = id.trim()
-    if (!trimmedId || !name.trim()) {
-      notifyError("Name and id are required")
-      return
-    }
-
-    // Resolve provider page URLs (CivitAI, …) so filenames are real file names.
-    const resolvedFilenames = new Map<string, string>()
-    for (const m of models) {
-      const url = m.url.trim()
-      if (!url || !needsProviderResolve(url)) continue
-      const existing = m.filename.trim()
-      if (existing.includes(".")) {
-        resolvedFilenames.set(url, existing)
-        continue
-      }
-      try {
-        const resolved = await resolveModelUrl(url)
-        if (resolved.filename?.trim()) {
-          resolvedFilenames.set(url, resolved.filename.trim())
-        }
-      } catch (e) {
-        notifyError(
-          e instanceof Error ? e.message : String(e),
-          "Could not resolve model URL"
-        )
-        return
-      }
-    }
-
-    for (const slot of arch.slots) {
-      const row = models.find((m) => m.role === slot.role)
-      const url = row?.url.trim() ?? ""
-      const filename =
-        resolvedFilenames.get(url) ||
-        row?.filename.trim() ||
-        filenameFromUrl(url)
-      if (slot.required) {
-        if (!url) {
-          notifyError(`${slot.label} needs a download URL`)
-          return
-        }
-        if (!filename || filename.includes("/") || filename.includes("\\")) {
-          notifyError(
-            `${slot.label}: could not read a filename from the URL - use a direct file link or a CivitAI model page with a version selected`
-          )
-          return
-        }
-      } else if (url && !filename) {
-        notifyError(
-          `${slot.label}: could not read a filename from the URL - use a direct file link or a CivitAI model page`
-        )
-        return
-      }
-    }
-
-    const modelEntries = models
-      .map((m) => {
-        const url = m.url.trim()
-        return {
-          role: m.role,
-          filename:
-            resolvedFilenames.get(url) ||
-            m.filename.trim() ||
-            filenameFromUrl(m.url),
-          path: m.path,
-          url,
-          gated: false,
-        }
-      })
-      .filter((m) => m.url && m.filename)
-
-    // Size/seed are product defaults (arch size, seed always random=0) - not authorable here.
-    const defaults: Record<string, unknown> = {
-      width: arch.defaults.width,
-      height: arch.defaults.height,
-      steps,
-      seed: 0,
-    }
-    if (arch.usesGuidance) {
-      defaults.guidance = guidance
-      defaults.cfg = 1
-    } else {
-      defaults.cfg = cfg
-    }
-    if (arch.defaults.clipType) defaults.clipType = arch.defaults.clipType
-    if (arch.defaults.auraShift != null) {
-      defaults.auraShift = arch.defaults.auraShift
-    }
-    if (arch.defaults.sd3Shift != null) {
-      defaults.sd3Shift = arch.defaults.sd3Shift
-    }
-    if (arch.defaults.weightDtype) {
-      defaults.weightDtype = arch.defaults.weightDtype
-    }
-    if (arch.defaults.mu != null) defaults.mu = arch.defaults.mu
-    if (arch.defaults.std != null) defaults.std = arch.defaults.std
-    if (arch.defaults.cfgOverride != null) {
-      defaults.cfgOverride = arch.defaults.cfgOverride
-    }
-    if (arch.defaults.cfgOverrideStart != null) {
-      defaults.cfgOverrideStart = arch.defaults.cfgOverrideStart
-    }
-    if (arch.defaults.cfgOverrideEnd != null) {
-      defaults.cfgOverrideEnd = arch.defaults.cfgOverrideEnd
-    }
-
-    setBusy(true)
-    try {
-      await saveUserBlueprint({
-        id: trimmedId,
-        name: name.trim(),
-        category: "image",
-        description: description.trim(),
-        runtime: "comfyui",
-        flowType: "txt2img",
-        arch: arch.id,
-        sampler: sampler.trim() || arch.sampler,
-        scheduler: scheduler.trim() || arch.scheduler,
-        capabilities: {
-          ...arch.capabilities,
-          negative: arch.capabilities.negative ? allowNegative : false,
-        },
-        defaults,
-        models: modelEntries,
-      })
-      if (pendingThumb) {
-        const path = await setUserBlueprintThumbnail(
-          trimmedId,
-          pendingThumb.bytes,
-          pendingThumb.ext
-        )
-        URL.revokeObjectURL(pendingThumb.previewUrl)
-        setPendingThumb(null)
-        setThumbnailPath(path)
-      }
-      notifySuccess(
-        editing ? "Blueprint updated" : "Blueprint saved",
-        trimmedId
-      )
-      onSaved(trimmedId)
-    } catch (e) {
-      notifyError(e instanceof Error ? e.message : String(e), "Save failed")
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const fieldLabel = "text-[11px] font-medium text-muted-foreground"
-  const sectionTitle =
-    "text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase"
-
-  const missingSlots = arch.slots.filter((slot) => {
-    if (!slot.required) return false
-    const row = models.find((m) => m.role === slot.role)
-    return !(
-      row?.url.trim() &&
-      (row.filename.trim() || filenameFromUrl(row.url))
-    )
+  const form = useRecipeBlueprintForm({
+    onSaved,
+    editBlueprintId,
+    onEditCleared,
   })
-  const footerStatus = (() => {
-    const parts: string[] = [arch.label]
-    if (name.trim()) {
-      parts.push(`My blueprints/${id || "…"}`)
-    } else {
-      parts.push("needs a name")
-    }
-    if (missingSlots.length > 0) {
-      parts.push(
-        `${missingSlots.length} model${missingSlots.length === 1 ? "" : "s"} missing`
-      )
-    } else {
-      parts.push("models ready")
-    }
-    return parts.join(" · ")
-  })()
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ScrollArea className="min-h-0 flex-1" scrollFade>
         <div className={cn("py-4", STUDIO_PANEL_GUTTER)}>
           <StudioPanelColumn className="gap-4">
-            <section className="space-y-2.5 rounded-xl border border-border/50 bg-muted/10 p-4">
-              <h2 className={sectionTitle}>Recipe</h2>
-              <div className="space-y-1.5">
-                <span className={fieldLabel}>Thumbnail</span>
-                <CreatorThumbnailField
-                  savedPath={thumbnailPath}
-                  pending={pendingThumb}
-                  disabled={busy || loadingEdit}
-                  onPick={async (next) => {
-                    if (pendingThumb) {
-                      URL.revokeObjectURL(pendingThumb.previewUrl)
-                    }
-                    if (editing && editBlueprintId) {
-                      const path = await setUserBlueprintThumbnail(
-                        editBlueprintId,
-                        next.bytes,
-                        next.ext
-                      )
-                      URL.revokeObjectURL(next.previewUrl)
-                      setPendingThumb(null)
-                      setThumbnailPath(path)
-                      notifySuccess("Thumbnail updated")
-                      return
-                    }
-                    setPendingThumb(next)
-                  }}
-                  onClear={async () => {
-                    if (pendingThumb) {
-                      URL.revokeObjectURL(pendingThumb.previewUrl)
-                      setPendingThumb(null)
-                    }
-                    if (editing && editBlueprintId && thumbnailPath) {
-                      await clearUserBlueprintThumbnail(editBlueprintId)
-                      setThumbnailPath(null)
-                      notifySuccess("Thumbnail removed")
-                    } else {
-                      setThumbnailPath(null)
-                    }
-                  }}
-                />
-              </div>
-              <div className="grid gap-2.5 sm:grid-cols-2">
-                <label className="flex flex-col gap-1 sm:col-span-2">
-                  <span className={fieldLabel}>Name</span>
-                  <Input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="My realism pack"
-                  />
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className={fieldLabel}>Id</span>
-                  <WithTooltip
-                    label={
-                      editing
-                        ? "Id is fixed while editing. Save as a new recipe to change it."
-                        : undefined
-                    }
-                  >
-                    <Input
-                      value={id}
-                      onChange={(e) => {
-                        setIdTouched(true)
-                        setIdManual(e.target.value)
-                      }}
-                      placeholder="my-realism-pack"
-                      className="font-mono text-xs"
-                      disabled={editing || loadingEdit}
-                    />
-                  </WithTooltip>
-                </label>
-                <div className="flex flex-col gap-1">
-                  <span className={fieldLabel}>Architecture</span>
-                  <Select
-                    items={ARCH_ITEMS}
-                    value={ARCH_ITEMS.find((i) => i.value === archId) ?? null}
-                    onValueChange={(item) => {
-                      if (item) applyArch(item.value)
-                    }}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectPopup alignItemWithTrigger={false}>
-                      {ARCH_ITEMS.map((item) => (
-                        <SelectItem key={item.value} value={item}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                </div>
-                <label className="flex flex-col gap-1 sm:col-span-2">
-                  <span className={fieldLabel}>Description</span>
-                  <Textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Optional notes"
-                    rows={1}
-                    className="min-h-9 resize-none"
-                  />
-                </label>
-              </div>
-            </section>
-
-            <section className="space-y-2.5 rounded-xl border border-border/50 bg-muted/10 p-4">
-              <div className="flex items-baseline justify-between gap-3">
-                <h2 className={sectionTitle}>Models</h2>
-                <p className="text-[11px] text-muted-foreground">
-                  Filename from URL
-                </p>
-              </div>
-              <div className="divide-y divide-border/50">
-                {arch.slots.map((slot) => {
-                  const index = models.findIndex((m) => m.role === slot.role)
-                  const row = index >= 0 ? models[index] : null
-                  if (!row || index < 0) return null
-                  return (
-                    <div
-                      key={slot.role}
-                      className="grid gap-1.5 py-2.5 first:pt-0 last:pb-0"
-                    >
-                      <div className="flex items-baseline justify-between gap-2">
-                        <p className="text-xs font-medium">
-                          {slot.label}
-                          {slot.required ? (
-                            <span className="text-destructive"> *</span>
-                          ) : null}
-                        </p>
-                        <WithTooltip label={`Comfy folder: ${slot.path}/`}>
-                          <span className="font-mono text-[10px] text-muted-foreground/70">
-                            {slot.path}/
-                          </span>
-                        </WithTooltip>
-                      </div>
-                      <div className="grid gap-1.5 sm:grid-cols-[minmax(0,1fr)_minmax(7.5rem,11rem)]">
-                        <Input
-                          value={row.url}
-                          onChange={(e) =>
-                            updateModelUrl(index, e.target.value)
-                          }
-                          onBlur={() => void resolveModelRow(index, row.url)}
-                          placeholder="https://…/model.safetensors or CivitAI page"
-                          className="font-mono text-xs"
-                          required={slot.required}
-                          aria-label={`${slot.label} download URL`}
-                        />
-                        <WithTooltip label={row.filename || "Filled from URL"}>
-                          <Input
-                            value={row.filename}
-                            readOnly
-                            tabIndex={-1}
-                            placeholder="filename.safetensors"
-                            className="border-transparent bg-transparent font-mono text-xs text-muted-foreground shadow-none read-only:opacity-100"
-                            aria-label={`${slot.label} filename`}
-                          />
-                        </WithTooltip>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </section>
-
-            <section className="space-y-2.5 rounded-xl border border-border/50 bg-muted/10 p-4">
-              <h2 className={sectionTitle}>Generate defaults</h2>
-              <div
-                className={
-                  archId === "flux2" || archId === "ideogram4"
-                    ? "grid gap-2.5"
-                    : "grid gap-2.5 sm:grid-cols-2"
-                }
-              >
-                <div className="flex flex-col gap-1">
-                  <span className={fieldLabel}>Sampler</span>
-                  <Select
-                    items={COMFY_SAMPLER_ITEMS}
-                    value={
-                      COMFY_SAMPLER_ITEMS.find((i) => i.value === sampler) ??
-                      null
-                    }
-                    onValueChange={(item) => {
-                      if (item) setSampler(item.value)
-                    }}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectPopup alignItemWithTrigger={false}>
-                      {COMFY_SAMPLER_ITEMS.map((item) => (
-                        <SelectItem key={item.value} value={item}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                </div>
-                {archId === "flux2" ? (
-                  <p className="text-[11px] leading-snug text-muted-foreground">
-                    Scheduler: Flux2Scheduler (built-in)
-                  </p>
-                ) : archId === "ideogram4" ? (
-                  <p className="text-[11px] leading-snug text-muted-foreground">
-                    Scheduler: Ideogram4Scheduler (built-in)
-                  </p>
-                ) : (
-                  <div className="flex flex-col gap-1">
-                    <span className={fieldLabel}>Scheduler</span>
-                    <Select
-                      items={COMFY_SCHEDULER_ITEMS}
-                      value={
-                        COMFY_SCHEDULER_ITEMS.find(
-                          (i) => i.value === scheduler
-                        ) ?? null
-                      }
-                      onValueChange={(item) => {
-                        if (item) setScheduler(item.value)
-                      }}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectPopup alignItemWithTrigger={false}>
-                        {COMFY_SCHEDULER_ITEMS.map((item) => (
-                          <SelectItem key={item.value} value={item}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectPopup>
-                    </Select>
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <label className="flex min-w-0 flex-col gap-1">
-                  <span className={fieldLabel}>Steps</span>
-                  <NumberField
-                    size="sm"
-                    value={steps}
-                    onValueChange={(v) => setSteps(v ?? 0)}
-                  >
-                    <NumberFieldGroup>
-                      <NumberFieldInput />
-                    </NumberFieldGroup>
-                  </NumberField>
-                </label>
-                {arch.usesGuidance ? (
-                  <label className="flex min-w-0 flex-col gap-1">
-                    <span className={fieldLabel}>Guidance</span>
-                    <NumberField
-                      size="sm"
-                      value={guidance}
-                      onValueChange={(v) => setGuidance(v ?? 0)}
-                    >
-                      <NumberFieldGroup>
-                        <NumberFieldInput />
-                      </NumberFieldGroup>
-                    </NumberField>
-                  </label>
-                ) : (
-                  <label className="flex min-w-0 flex-col gap-1">
-                    <span className={fieldLabel}>CFG</span>
-                    <NumberField
-                      size="sm"
-                      value={cfg}
-                      onValueChange={(v) => setCfg(v ?? 0)}
-                    >
-                      <NumberFieldGroup>
-                        <NumberFieldInput />
-                      </NumberFieldGroup>
-                    </NumberField>
-                  </label>
-                )}
-              </div>
-              {arch.capabilities.negative ? (
-                <label className="flex items-center gap-2 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={allowNegative}
-                    onChange={(e) => setAllowNegative(e.target.checked)}
-                    className="size-4 rounded border-input"
-                  />
-                  <span className="text-muted-foreground">
-                    Negative prompt when CFG &gt; 1
-                  </span>
-                </label>
-              ) : null}
-            </section>
+            <RecipeIdentitySection
+              editing={form.editing}
+              editBlueprintId={editBlueprintId}
+              busy={form.busy}
+              loadingEdit={form.loadingEdit}
+              thumbnailPath={form.thumbnailPath}
+              pendingThumb={form.pendingThumb}
+              setPendingThumb={form.setPendingThumb}
+              setThumbnailPath={form.setThumbnailPath}
+              name={form.name}
+              setName={form.setName}
+              id={form.id}
+              setIdTouched={form.setIdTouched}
+              setIdManual={form.setIdManual}
+              archId={form.archId}
+              applyArch={form.applyArch}
+              description={form.description}
+              setDescription={form.setDescription}
+            />
+            <RecipeModelsSection
+              arch={form.arch}
+              models={form.models}
+              updateModelUrl={form.updateModelUrl}
+              resolveModelRow={form.resolveModelRow}
+            />
+            <RecipeDefaultsSection
+              archId={form.archId}
+              arch={form.arch}
+              sampler={form.sampler}
+              setSampler={form.setSampler}
+              scheduler={form.scheduler}
+              setScheduler={form.setScheduler}
+              steps={form.steps}
+              setSteps={form.setSteps}
+              cfg={form.cfg}
+              setCfg={form.setCfg}
+              guidance={form.guidance}
+              setGuidance={form.setGuidance}
+              allowNegative={form.allowNegative}
+              setAllowNegative={form.setAllowNegative}
+            />
           </StudioPanelColumn>
         </div>
       </ScrollArea>
 
       <StudioPanelFooter>
         <p className="min-w-0 truncate text-xs text-muted-foreground">
-          {loadingEdit
+          {form.loadingEdit
             ? "Loading blueprint…"
-            : editing
-              ? `Editing · ${footerStatus}`
-              : footerStatus}
+            : form.editing
+              ? `Editing · ${form.footerStatus}`
+              : form.footerStatus}
         </p>
         <div className="flex shrink-0 items-center gap-2">
-          {editing && onDelete ? (
+          {form.editing && onDelete ? (
             <Button
               type="button"
               size="sm"
               variant="outline"
-              disabled={busy || loadingEdit}
+              disabled={form.busy || form.loadingEdit}
               className="text-destructive"
               onClick={onDelete}
             >
@@ -781,10 +107,14 @@ export function RecipeBlueprintForm({
           <Button
             type="button"
             size="sm"
-            disabled={busy || loadingEdit}
-            onClick={() => void handleSave()}
+            disabled={form.busy || form.loadingEdit}
+            onClick={() => void form.handleSave()}
           >
-            {busy ? "Saving…" : editing ? "Save changes" : "Save recipe"}
+            {form.busy
+              ? "Saving…"
+              : form.editing
+                ? "Save changes"
+                : "Save recipe"}
           </Button>
         </div>
       </StudioPanelFooter>

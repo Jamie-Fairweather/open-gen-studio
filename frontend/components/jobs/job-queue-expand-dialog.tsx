@@ -10,7 +10,6 @@ import {
 } from "@dnd-kit/core"
 import {
   SortableContext,
-  arrayMove,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
@@ -36,14 +35,16 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsList, TabsTab } from "@/components/ui/tabs"
 import { HistoryDetail, HistoryRow } from "@/components/jobs/history-ui"
 import { SortableActiveRow } from "@/components/jobs/sortable-active-row"
+import {
+  runningStepLabel,
+  useJobQueueActions,
+} from "@/components/jobs/use-job-queue-actions"
 import { useStudioStore } from "@/components/studio/store"
 import {
   clearJobHistory,
-  clearJobQueue,
   deleteJobHistoryItem,
   listJobHistory,
   onJobHistory,
-  reorderJobQueue,
   type JobHistoryItem,
 } from "@/lib/host"
 import { notifyError, notifySuccess } from "@/lib/notify"
@@ -51,10 +52,8 @@ import { notifyError, notifySuccess } from "@/lib/notify"
 export function JobQueueExpandDialog() {
   const open = useStudioStore((s) => s.queueExpandOpen)
   const setOpen = useStudioStore((s) => s.setQueueExpandOpen)
-  const jobQueue = useStudioStore((s) => s.jobQueue)
-  const setJobQueue = useStudioStore((s) => s.setJobQueue)
-  const setGenerating = useStudioStore((s) => s.setGenerating)
-  const setActiveJobId = useStudioStore((s) => s.setActiveJobId)
+  const { jobQueue, waitingIds, clearQueue, reorderWaiting } =
+    useJobQueueActions()
   const genStep = useStudioStore((s) => s.genStep)
   const [history, setHistory] = useState<JobHistoryItem[]>([])
   const [tab, setTab] = useState<"active" | "history">("active")
@@ -110,8 +109,6 @@ export function JobQueueExpandDialog() {
     }
   }, [open])
 
-  const waiting = jobQueue.filter((i) => i.status === "queued")
-  const waitingIds = waiting.map((w) => w.jobId)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, {
@@ -119,19 +116,7 @@ export function JobQueueExpandDialog() {
     })
   )
 
-  const runningStep = (() => {
-    const running = jobQueue.find((i) => i.status === "running")
-    if (
-      running &&
-      running.kind === "generate" &&
-      genStep &&
-      genStep.jobId === running.jobId &&
-      genStep.max > 0
-    ) {
-      return `${genStep.step}/${genStep.max}`
-    }
-    return null
-  })()
+  const runningStep = runningStepLabel(jobQueue, genStep)
 
   const selected = history.find((h) => h.jobId === selectedId) ?? null
   const purgeableCount = history.filter(
@@ -207,18 +192,7 @@ export function JobQueueExpandDialog() {
                     variant="ghost"
                     className="h-8 text-muted-foreground"
                     disabled={jobQueue.length === 0}
-                    onClick={() => {
-                      setJobQueue([])
-                      setGenerating(false)
-                      setActiveJobId(null)
-                      void clearJobQueue()
-                        .then(() => notifySuccess("Queue cleared"))
-                        .catch((e) =>
-                          notifyError(
-                            e instanceof Error ? e.message : String(e)
-                          )
-                        )
-                    }}
+                    onClick={clearQueue}
                   >
                     Clear
                   </Button>
@@ -238,21 +212,7 @@ export function JobQueueExpandDialog() {
                   <DndContext
                     sensors={sensors}
                     collisionDetection={closestCenter}
-                    onDragEnd={(event) => {
-                      const { active, over } = event
-                      if (!over || active.id === over.id) return
-                      const oldIndex = waitingIds.indexOf(String(active.id))
-                      const newIndex = waitingIds.indexOf(String(over.id))
-                      if (oldIndex < 0 || newIndex < 0) return
-                      const nextWaiting = arrayMove(waiting, oldIndex, newIndex)
-                      const head = jobQueue.filter((i) => i.status !== "queued")
-                      setJobQueue([...head, ...nextWaiting])
-                      void reorderJobQueue(
-                        nextWaiting.map((i) => i.jobId)
-                      ).catch((e) =>
-                        notifyError(e instanceof Error ? e.message : String(e))
-                      )
-                    }}
+                    onDragEnd={reorderWaiting}
                   >
                     <SortableContext
                       items={waitingIds}

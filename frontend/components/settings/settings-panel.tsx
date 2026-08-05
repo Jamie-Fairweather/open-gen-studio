@@ -1,6 +1,5 @@
 "use client"
 
-import { HardDriveIcon } from "lucide-react"
 import { useEffect, useState } from "react"
 import {
   GpuVendorDialog,
@@ -11,19 +10,13 @@ import {
   StudioPanelBody,
   StudioPanelHeader,
 } from "@/components/shell"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { SettingsComfyCard } from "@/components/settings/settings-comfy-card"
+import { SettingsGpuCard } from "@/components/settings/settings-gpu-card"
+import { SettingsModelsCard } from "@/components/settings/settings-models-card"
+import { SettingsTokenCard } from "@/components/settings/settings-token-card"
 import {
   isTauri,
   listSettings,
-  openExternalUrl,
   runtimePinsStatus,
   setSetting,
   type GpuInfo,
@@ -37,30 +30,6 @@ import {
   SETTING_GPU_VENDOR,
   SETTING_NVIDIA_PORTABLE_OVERRIDE,
 } from "@/components/studio/slices/helpers"
-
-const VENDOR_LABEL: Record<GpuVendor, string> = {
-  nvidia: "NVIDIA",
-  amd: "AMD",
-  intel: "Intel",
-}
-
-type NvidiaOverrideItem = {
-  value: "auto" | NvidiaVariant
-  label: string
-}
-
-const NVIDIA_OVERRIDE_ITEMS: NvidiaOverrideItem[] = [
-  { value: "auto", label: "Auto (recommended)" },
-  { value: "modern", label: "Force modern (CUDA 13)" },
-  { value: "cu126", label: "Force cu126" },
-]
-
-function nvidiaOverrideItem(value: "" | NvidiaVariant): NvidiaOverrideItem {
-  return (
-    NVIDIA_OVERRIDE_ITEMS.find((item) => item.value === (value || "auto")) ??
-    NVIDIA_OVERRIDE_ITEMS[0]
-  )
-}
 
 type SettingsPanelProps = {
   onBrowseModels: () => void
@@ -184,324 +153,75 @@ export function SettingsPanel({
           description="Runtime and host preferences for this machine."
         />
         <StudioPanelBody className="gap-4 text-sm">
-          <div className="rounded-xl border p-4">
-            <p className="font-medium">GPU</p>
-            {gpu?.available && activeAdapter ? (
-              <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                <p>
-                  Vendor:{" "}
-                  <span className="text-foreground">
-                    {activeVendor ? VENDOR_LABEL[activeVendor] : "Unknown"}
-                  </span>
-                </p>
-                <p className="text-foreground">{activeAdapter.name}</p>
-                {activeAdapter.memoryTotal ? (
-                  <p>VRAM: {activeAdapter.memoryTotal}</p>
-                ) : null}
-                {activeAdapter.driverVersion ? (
-                  <p>Driver: {activeAdapter.driverVersion}</p>
-                ) : null}
-                {activeVendor === "nvidia" ? (
-                  <p>
-                    Portable:{" "}
-                    <span className="text-foreground">
-                      {effectiveVariant === "cu126"
-                        ? "NVIDIA cu126"
-                        : "NVIDIA modern"}
-                    </span>
-                    {nvidiaOverride ? " (override)" : ""}
-                  </p>
-                ) : activeVendor ? (
-                  <p>
-                    Portable:{" "}
-                    <span className="text-foreground">
-                      {VENDOR_LABEL[activeVendor]}
-                    </span>
-                  </p>
-                ) : null}
-              </div>
-            ) : (
-              <p className="mt-2 text-xs text-muted-foreground">
-                {gpu?.error ?? "No supported GPU detected"}
-              </p>
-            )}
-            <div className="mt-3 flex flex-wrap gap-2">
-              {canChangeVendor ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setChangeGpuOpen(true)}
-                >
-                  Change GPU…
-                </Button>
-              ) : null}
-            </div>
-            {activeVendor === "nvidia" ? (
-              <div className="mt-3 flex flex-col gap-1.5 text-xs">
-                <span className="text-muted-foreground">
-                  NVIDIA portable override
-                </span>
-                <Select
-                  items={NVIDIA_OVERRIDE_ITEMS}
-                  value={nvidiaOverrideItem(nvidiaOverride)}
-                  onValueChange={(item) => {
-                    if (!item) return
-                    void saveNvidiaOverride(
-                      item.value === "auto" ? "" : item.value
-                    )
-                  }}
-                  disabled={overrideBusy}
-                >
-                  <SelectTrigger size="sm" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectPopup alignItemWithTrigger={false}>
-                    {NVIDIA_OVERRIDE_ITEMS.map((item) => (
-                      <SelectItem key={item.value} value={item}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
-                <span className="text-[11px] text-muted-foreground">
-                  Changing vendor or portable may require Reinstall under
-                  ComfyUI.
-                </span>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="rounded-xl border p-4">
-            <p className="font-medium">Models</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Shared weights library used by every blueprint.
-            </p>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="mt-3"
-              onClick={onBrowseModels}
-            >
-              <HardDriveIcon />
-              Browse models
-            </Button>
-          </div>
-
-          <div className="rounded-xl border p-4">
-            <p className="font-medium">ComfyUI</p>
-            <div className="mt-2 space-y-1 font-mono text-xs text-muted-foreground">
-              <p>status: {comfy?.status ?? "-"}</p>
-              <p>healthy: {comfyHealthy ? "yes" : "no"}</p>
-              <p>port: {comfy?.port ?? "-"}</p>
-              <p>
-                expected: {pins?.comfy.expected ?? "-"}
-                {pins && !pins.comfy.matches ? " · update pending" : ""}
-              </p>
-              <p>installed: {pins?.comfy.installed ?? comfy?.version ?? "-"}</p>
-              <p className="truncate">path: {comfy?.installPath || "-"}</p>
-              {pins?.nodes.map((node) => (
-                <p key={node.id}>
-                  {node.id}: {node.installed ?? "-"}
-                  {node.matches ? "" : ` (app expects ${node.expected})`}
-                </p>
-              ))}
-            </div>
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              Engine and managed nodes are pinned by the app. Reinstall installs
-              the pinned ComfyUI build; node pins apply on first use.
-            </p>
-            {runtimeMessage ? (
-              <p className="mt-2 text-xs text-muted-foreground">
-                {runtimeMessage}
-              </p>
-            ) : null}
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={runtimeBusy}
-                onClick={onInstallComfy}
-              >
-                Reinstall
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={
-                  runtimeBusy ||
-                  !comfy?.installPath ||
-                  comfy.status === "installing" ||
-                  comfy.status === "starting" ||
-                  comfy.status === "running"
-                }
-                onClick={onStartComfy}
-              >
-                Start
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={
-                  runtimeBusy ||
-                  (comfy?.status !== "running" && comfy?.status !== "starting")
-                }
-                onClick={onStopComfy}
-              >
-                Stop
-              </Button>
-            </div>
-          </div>
-
-          <div className="rounded-xl border p-4">
-            <p className="font-medium">Hugging Face</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Access token for gated models (e.g. Black Forest Labs). Accept the
-              model license on Hugging Face first, then paste a token with read
-              access. Tokens are stored in the OS credential store, not in app
-              files.
-            </p>
-            <p className="mt-2 text-xs">
-              {hasHfToken ? (
-                <span className="text-foreground">
-                  Token saved on this device
-                </span>
-              ) : (
-                <span className="text-muted-foreground">Not set</span>
-              )}
-            </p>
-            <label className="mt-3 flex flex-col gap-1.5 text-xs">
-              <span className="text-muted-foreground">Access token</span>
-              <Input
-                type="password"
-                autoComplete="off"
-                spellCheck={false}
-                placeholder={
-                  hasHfToken ? "Enter new token to replace…" : "hf_…"
-                }
-                value={hfToken}
-                onChange={(e) => onHfTokenChange(e.target.value)}
-                className="font-mono text-xs"
-              />
-            </label>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                disabled={hfTokenSaving || !hfTokenDirty || !hfToken.trim()}
-                onClick={onSaveHfToken}
-              >
-                {hfTokenSaving ? "Saving…" : "Save token"}
-              </Button>
-              {hasHfToken ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={hfTokenSaving}
-                  onClick={onClearHfToken}
-                >
-                  Clear
-                </Button>
-              ) : null}
-              <button
-                type="button"
-                className="text-xs text-primary underline-offset-2 hover:underline"
-                onClick={() => {
-                  void openExternalUrl(
-                    "https://huggingface.co/settings/tokens/new?preset=read-only"
-                  ).catch((e) =>
-                    notifyError(
-                      e instanceof Error ? e.message : String(e),
-                      "Could not open browser"
-                    )
-                  )
-                }}
-              >
-                Get a token
-              </button>
-            </div>
-          </div>
-
-          <div className="rounded-xl border p-4">
-            <p className="font-medium">CivitAI</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              API key for model downloads. On your account page, scroll to{" "}
-              <span className="font-medium text-foreground">API Keys</span>,
-              create a key, then paste it here. Keys are stored in the OS
-              credential store, not in app files.
-            </p>
-            <p className="mt-2 text-xs">
-              {hasCivitaiToken ? (
-                <span className="text-foreground">
-                  API key saved on this device
-                </span>
-              ) : (
-                <span className="text-muted-foreground">Not set</span>
-              )}
-            </p>
-            <label className="mt-3 flex flex-col gap-1.5 text-xs">
-              <span className="text-muted-foreground">API key</span>
-              <Input
-                type="password"
-                autoComplete="off"
-                spellCheck={false}
-                placeholder={
-                  hasCivitaiToken
-                    ? "Enter new key to replace…"
-                    : "Paste API key…"
-                }
-                value={civitaiToken}
-                onChange={(e) => onCivitaiTokenChange(e.target.value)}
-                className="font-mono text-xs"
-              />
-            </label>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                disabled={
-                  civitaiTokenSaving ||
-                  !civitaiTokenDirty ||
-                  !civitaiToken.trim()
-                }
-                onClick={onSaveCivitaiToken}
-              >
-                {civitaiTokenSaving ? "Saving…" : "Save key"}
-              </Button>
-              {hasCivitaiToken ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={civitaiTokenSaving}
-                  onClick={onClearCivitaiToken}
-                >
-                  Clear
-                </Button>
-              ) : null}
-              <button
-                type="button"
-                className="text-xs text-primary underline-offset-2 hover:underline"
-                onClick={() => {
-                  void openExternalUrl(
-                    "https://civitai.com/user/account"
-                  ).catch((e) =>
-                    notifyError(
-                      e instanceof Error ? e.message : String(e),
-                      "Could not open browser"
-                    )
-                  )
-                }}
-              >
-                Open account settings
-              </button>
-            </div>
-          </div>
+          <SettingsGpuCard
+            gpu={gpu}
+            activeVendor={activeVendor}
+            activeAdapter={activeAdapter}
+            effectiveVariant={effectiveVariant}
+            nvidiaOverride={nvidiaOverride}
+            canChangeVendor={canChangeVendor}
+            overrideBusy={overrideBusy}
+            onChangeGpu={() => setChangeGpuOpen(true)}
+            onSaveNvidiaOverride={(next) => {
+              void saveNvidiaOverride(next)
+            }}
+          />
+          <SettingsModelsCard onBrowseModels={onBrowseModels} />
+          <SettingsComfyCard
+            comfy={comfy}
+            comfyHealthy={comfyHealthy}
+            runtimeMessage={runtimeMessage}
+            runtimeBusy={runtimeBusy}
+            pins={pins}
+            onInstallComfy={onInstallComfy}
+            onStartComfy={onStartComfy}
+            onStopComfy={onStopComfy}
+          />
+          <SettingsTokenCard
+            title="Hugging Face"
+            description="Access token for gated models (e.g. Black Forest Labs). Accept the model license on Hugging Face first, then paste a token with read access. Tokens are stored in the OS credential store, not in app files."
+            savedLabel="Token saved on this device"
+            hasToken={hasHfToken}
+            token={hfToken}
+            onTokenChange={onHfTokenChange}
+            dirty={hfTokenDirty}
+            saving={hfTokenSaving}
+            onSave={onSaveHfToken}
+            onClear={onClearHfToken}
+            fieldLabel="Access token"
+            placeholderUnset="hf_…"
+            placeholderReplace="Enter new token to replace…"
+            saveLabel="Save token"
+            savingLabel="Saving…"
+            externalLabel="Get a token"
+            externalUrl="https://huggingface.co/settings/tokens/new?preset=read-only"
+          />
+          <SettingsTokenCard
+            title="CivitAI"
+            description={
+              <>
+                API key for model downloads. On your account page, scroll to{" "}
+                <span className="font-medium text-foreground">API Keys</span>,
+                create a key, then paste it here. Keys are stored in the OS
+                credential store, not in app files.
+              </>
+            }
+            savedLabel="API key saved on this device"
+            hasToken={hasCivitaiToken}
+            token={civitaiToken}
+            onTokenChange={onCivitaiTokenChange}
+            dirty={civitaiTokenDirty}
+            saving={civitaiTokenSaving}
+            onSave={onSaveCivitaiToken}
+            onClear={onClearCivitaiToken}
+            fieldLabel="API key"
+            placeholderUnset="Paste API key…"
+            placeholderReplace="Enter new key to replace…"
+            saveLabel="Save key"
+            savingLabel="Saving…"
+            externalLabel="Open account settings"
+            externalUrl="https://civitai.com/user/account"
+          />
         </StudioPanelBody>
       </StudioPanel>
 

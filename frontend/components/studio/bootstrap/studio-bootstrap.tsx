@@ -8,26 +8,13 @@ import {
 } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { getOfficialBlueprint, isTauri } from "@/lib/host"
-import {
-  applyReuseAllSettings,
-  lorasFromRecipe,
-  upscaleFromRecipe,
-} from "@/lib/blueprint-helpers"
-import {
-  SIDE_LENGTH_DEFAULT,
-  sizeFromAspectAndSide,
-  syncSizeControls,
-} from "@/lib/image-size"
 import { notifyError } from "@/lib/notify"
-import {
-  flushPersistSession,
-  overlayControlValues,
-  overlaySessionControls,
-} from "@/components/studio/slices/session-persist"
+import { flushPersistSession } from "@/components/studio/slices/session-persist"
 import { selectActiveSelectedId } from "@/components/studio/selectors"
 import { useStudioSelector, useStudioStore } from "@/components/studio/store"
 import { studioRefs } from "@/components/studio/studio-refs"
 import { tabFromPath } from "@/components/studio/studio-tabs"
+import { applyLoadedBlueprintDetail } from "@/components/studio/bootstrap/bootstrap-helpers"
 import {
   cleanupHostListeners,
   registerHostListeners,
@@ -105,109 +92,7 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
     void detailPromise
       .then((d) => {
         if (cancelled) return
-        const store = useStudioStore.getState()
-        const prevDetailId = store.detail?.id ?? null
-        const prevControlValues = store.controlValues
-        // Snapshot leaving blueprint so image↔video/audio round-trips keep seed/etc.
-        if (prevDetailId && prevDetailId !== d.id) {
-          studioRefs.controlValuesByBlueprintId[prevDetailId] = {
-            ...prevControlValues,
-          }
-        }
-        store.setDetail(d)
-        const recipe = studioRefs.pendingRecipe
-        studioRefs.pendingRecipe = null
-        // Recipe (user reuse) wins over restored session for this detail load.
-        const session = recipe ? null : studioRefs.pendingSession
-        if (recipe || session) {
-          studioRefs.pendingSession = null
-        }
-        const controlIds = d.controls.map((c) => c.id)
-        const next: Record<string, unknown> = {}
-        for (const c of d.controls) {
-          if (c.default !== undefined) {
-            next[c.id] = c.default
-          }
-        }
-        let values = recipe ? applyReuseAllSettings(next, recipe) : next
-        let restoredControls = false
-        if (recipe) {
-          store.setLoraStack(lorasFromRecipe(recipe, studioRefs.loraPacks))
-          const up = upscaleFromRecipe(recipe, d.arch)
-          store.setUpscaleEnabled(up.enabled)
-          store.setUpscaleModelId(up.modelId)
-          store.setUsduEnabled(up.usduEnabled)
-          store.setUsduScale(up.usduScale)
-          store.setUsduSteps(up.usduSteps)
-          store.setUsduDenoise(up.usduDenoise)
-        } else if (session) {
-          values = overlaySessionControls(next, session, controlIds)
-          studioRefs.aspectId = session.aspectId
-          studioRefs.sideLength = session.sideLength
-          store.setAspectId(session.aspectId)
-          store.setSideLength(session.sideLength)
-          restoredControls = true
-        } else if (prevDetailId === d.id) {
-          // Same blueprint re-load (e.g. effect re-run) — keep live values.
-          values = overlayControlValues(next, prevControlValues, controlIds)
-          restoredControls = true
-        } else {
-          const stashed = studioRefs.controlValuesByBlueprintId[d.id]
-          if (stashed) {
-            values = overlayControlValues(next, stashed, controlIds)
-            restoredControls = true
-          }
-        }
-        const hasW = d.controls.some((c) => c.id === "width")
-        const hasH = d.controls.some((c) => c.id === "height")
-        if (hasW && hasH) {
-          if (recipe) {
-            const width = Number(values.width)
-            const height = Number(values.height)
-            if (Number.isFinite(width) && Number.isFinite(height)) {
-              const synced = syncSizeControls(width, height)
-              store.setAspectId(synced.aspectId)
-              store.setSideLength(synced.sideLength)
-            }
-          } else if (restoredControls) {
-            const width = Number(values.width)
-            const height = Number(values.height)
-            if (Number.isFinite(width) && Number.isFinite(height)) {
-              const synced = syncSizeControls(width, height)
-              studioRefs.aspectId = synced.aspectId
-              studioRefs.sideLength = synced.sideLength
-              store.setAspectId(synced.aspectId)
-              store.setSideLength(synced.sideLength)
-              values = { ...values, width, height }
-            } else if (session) {
-              const sized = sizeFromAspectAndSide(
-                session.aspectId,
-                session.sideLength || SIDE_LENGTH_DEFAULT
-              )
-              values = { ...values, ...sized }
-            } else {
-              const { width: w, height: h } = sizeFromAspectAndSide(
-                studioRefs.aspectId,
-                studioRefs.sideLength || SIDE_LENGTH_DEFAULT
-              )
-              values = { ...values, width: w, height: h }
-            }
-          } else {
-            const { width, height } = sizeFromAspectAndSide(
-              studioRefs.aspectId,
-              studioRefs.sideLength || SIDE_LENGTH_DEFAULT
-            )
-            values = { ...values, width, height }
-          }
-        }
-        store.setControlValues(values)
-        if (recipe?.prompt) {
-          store.setPrompt(recipe.prompt)
-        }
-        const hadSession = Boolean(session)
-        studioRefs.suppressSessionPersist = false
-        tryMarkStartupHydrated()
-        if (hadSession) flushPersistSession()
+        applyLoadedBlueprintDetail(d)
       })
       .catch((e) => {
         if (!cancelled) {

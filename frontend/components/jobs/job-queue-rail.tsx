@@ -7,11 +7,9 @@ import {
   closestCenter,
   useSensor,
   useSensors,
-  type DragEndEvent,
 } from "@dnd-kit/core"
 import {
   SortableContext,
-  arrayMove,
   horizontalListSortingStrategy,
   sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable"
@@ -23,23 +21,19 @@ import {
   labelSlotCh,
   statusSlotCh,
 } from "@/components/jobs/sortable-chip"
+import {
+  runningStepLabel,
+  useJobQueueActions,
+} from "@/components/jobs/use-job-queue-actions"
 import { Button } from "@/components/ui/button"
 import { WithTooltip } from "@/components/ui/tooltip"
 import { useStudioStore } from "@/components/studio/store"
-import {
-  cancelJob,
-  clearJobQueue,
-  pauseJob,
-  reorderJobQueue,
-  resumeJob,
-} from "@/lib/host"
-import { notifyError, notifySuccess } from "@/lib/notify"
+import { cancelJob, pauseJob, resumeJob } from "@/lib/host"
+import { notifyError } from "@/lib/notify"
 
 export function JobQueueRail() {
-  const jobQueue = useStudioStore((s) => s.jobQueue)
-  const setJobQueue = useStudioStore((s) => s.setJobQueue)
-  const setGenerating = useStudioStore((s) => s.setGenerating)
-  const setActiveJobId = useStudioStore((s) => s.setActiveJobId)
+  const { jobQueue, waitingIds, clearQueue, reorderWaiting } =
+    useJobQueueActions()
   const setQueueExpandOpen = useStudioStore((s) => s.setQueueExpandOpen)
   const lastQueuedJobId = useStudioStore((s) => s.lastQueuedJobId)
   const genStep = useStudioStore((s) => s.genStep)
@@ -47,8 +41,6 @@ export function JobQueueRail() {
   const stripRef = useRef<HTMLDivElement>(null)
   const [visibleCount, setVisibleCount] = useState(jobQueue.length)
 
-  const running = jobQueue.find((i) => i.status === "running")
-  const waiting = jobQueue.filter((i) => i.status === "queued")
   const maxSteps = (() => {
     if (genStep && genStep.max > 0) return genStep.max
     const fromControls = Number(controlValues.steps)
@@ -59,14 +51,7 @@ export function JobQueueRail() {
   const statusCh = statusSlotCh(maxSteps)
   const labelCh = labelSlotCh(jobQueue.map((i) => i.label))
   const chipWidth = chipWidthPx(labelCh, statusCh)
-  const runningStep =
-    running &&
-    running.kind === "generate" &&
-    genStep &&
-    genStep.jobId === running.jobId &&
-    genStep.max > 0
-      ? `${genStep.step}/${genStep.max}`
-      : null
+  const runningStep = runningStepLabel(jobQueue, genStep)
 
   const measure = useEffectEvent(() => {
     const el = stripRef.current
@@ -96,22 +81,6 @@ export function JobQueueRail() {
 
   const visible = jobQueue.slice(0, visibleCount)
   const overflow = Math.max(0, jobQueue.length - visible.length)
-  const waitingIds = waiting.map((w) => w.jobId)
-
-  const onDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    const oldIndex = waitingIds.indexOf(String(active.id))
-    const newIndex = waitingIds.indexOf(String(over.id))
-    if (oldIndex < 0 || newIndex < 0) return
-    const nextWaiting = arrayMove(waiting, oldIndex, newIndex)
-    const head = jobQueue.filter((i) => i.status !== "queued")
-    const next = [...head, ...nextWaiting]
-    setJobQueue(next)
-    void reorderJobQueue(nextWaiting.map((i) => i.jobId)).catch((e) =>
-      notifyError(e instanceof Error ? e.message : String(e))
-    )
-  }
 
   return (
     <div
@@ -145,7 +114,7 @@ export function JobQueueRail() {
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
-                onDragEnd={onDragEnd}
+                onDragEnd={reorderWaiting}
               >
                 <SortableContext
                   items={waitingIds}
@@ -155,9 +124,7 @@ export function JobQueueRail() {
                     <SortableChip
                       key={item.jobId}
                       item={item}
-                      stepLabel={
-                        item.jobId === running?.jobId ? runningStep : null
-                      }
+                      stepLabel={item.status === "running" ? runningStep : null}
                       chipWidth={chipWidth}
                       statusCh={statusCh}
                       labelCh={labelCh}
@@ -207,16 +174,7 @@ export function JobQueueRail() {
                 variant="ghost"
                 className="size-7"
                 aria-label="Clear queue"
-                onClick={() => {
-                  setJobQueue([])
-                  setGenerating(false)
-                  setActiveJobId(null)
-                  void clearJobQueue()
-                    .then(() => notifySuccess("Queue cleared"))
-                    .catch((e) =>
-                      notifyError(e instanceof Error ? e.message : String(e))
-                    )
-                }}
+                onClick={clearQueue}
               >
                 <Trash2Icon className="size-3.5" />
               </Button>

@@ -1,23 +1,18 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { DownloadIcon, PauseIcon, PlayIcon, XIcon } from "lucide-react"
-import type { DownloadJobView, DownloadSnapshot } from "@/lib/host"
+import { DownloadIcon } from "lucide-react"
+import type { DownloadSnapshot } from "@/lib/host"
 import {
   StudioPanel,
   StudioPanelBody,
   StudioPanelHeader,
 } from "@/components/shell"
 import { Button } from "@/components/ui/button"
-import {
-  Progress,
-  ProgressIndicator,
-  ProgressTrack,
-} from "@/components/ui/progress"
-import { Spinner } from "@/components/ui/spinner"
-import { WithTooltip } from "@/components/ui/tooltip"
-import { formatBytes, formatEta } from "@/lib/format"
-import { cn } from "@/lib/utils"
+import { DownloadActiveJob } from "./download-active-job"
+import { DownloadHistoryList } from "./download-history-list"
+import { DownloadQueueList } from "./download-queue-list"
+import { TransferRail } from "./transfer-rail"
 
 type DownloadsPanelProps = {
   snapshot: DownloadSnapshot
@@ -31,76 +26,6 @@ type DownloadsPanelProps = {
   onResume: (jobId: string) => void
   onCancel: (jobId: string) => void
   onOpenBlueprints?: () => void
-}
-
-function statusLabel(status: string): string {
-  if (status === "done") return "Ready"
-  if (status === "error") return "Failed"
-  if (status === "cancelled") return "Cancelled"
-  if (status === "paused") return "Paused"
-  if (status === "running") return "Running"
-  return "Waiting"
-}
-
-function TransferRail({ value, idle }: { value: number; idle?: boolean }) {
-  return (
-    <div className="relative">
-      <Progress value={idle ? 0 : value} className="gap-0">
-        <ProgressTrack
-          className={cn(
-            "h-3 rounded-full bg-white/[0.06]",
-            idle && "border border-white/[0.06]"
-          )}
-        >
-          <ProgressIndicator
-            className={cn("rounded-full", idle ? "opacity-0" : "duration-300")}
-          />
-        </ProgressTrack>
-      </Progress>
-      {idle ? (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 left-[12%] w-px bg-primary/35"
-        />
-      ) : null}
-    </div>
-  )
-}
-
-function jobPct(job: DownloadJobView): number | null {
-  const active = job.steps.find(
-    (s) => s.status === "running" || s.status === "paused"
-  )
-  // Non-transfer steps (extract/configure/extensions) stay indeterminate —
-  // don't keep showing the finished download %.
-  if (active && active.stepKind !== "http") return null
-  if (job.total != null && job.total > 0) {
-    return Math.min(100, (job.downloaded / job.total) * 100)
-  }
-  if (active?.bytesTotal && active.bytesTotal > 0) {
-    return Math.min(100, (active.bytesDone / active.bytesTotal) * 100)
-  }
-  return null
-}
-
-function formatPct(pct: number): string {
-  return `${Math.min(100, pct).toFixed(2)}%`
-}
-
-/** Parse "Extracting… 20%" style progress from the live status line. */
-function detailPct(detail: string | null | undefined): number | null {
-  if (!detail) return null
-  const m = detail.match(/(\d+(?:\.\d+)?)\s*%/)
-  if (!m) return null
-  const n = Number(m[1])
-  return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : null
-}
-
-function stepStatusIcon(status: string) {
-  if (status === "done") return "✓"
-  if (status === "error") return "!"
-  if (status === "running" || status === "paused") return "●"
-  return "○"
 }
 
 export function DownloadsPanel({
@@ -123,29 +48,6 @@ export function DownloadsPanel({
     (s) => s.status === "running" || s.status === "paused"
   )
   const isTransfer = activeStep?.stepKind === "http"
-  const pct = isTransfer
-    ? active
-      ? jobPct(active)
-      : null
-    : detailPct(activeDetail)
-  const bytesDone = isTransfer
-    ? active?.total != null
-      ? active.downloaded
-      : (activeStep?.bytesDone ?? 0)
-    : 0
-  const bytesTotal = isTransfer
-    ? (active?.total ?? activeStep?.bytesTotal ?? null)
-    : null
-  const remain =
-    bytesTotal != null && bytesTotal > bytesDone ? bytesTotal - bytesDone : 0
-  const showEta =
-    active?.status === "running" &&
-    isTransfer &&
-    speedBps > 8 * 1024 &&
-    remain > 0
-  const etaLabel = showEta
-    ? ` · ${formatBytes(speedBps)}/s · ETA ${formatEta(remain / speedBps)}`
-    : ""
   const workLabel =
     activeDetail?.trim() ||
     (activeStep ? `${activeStep.label}…` : null) ||
@@ -226,236 +128,22 @@ export function DownloadsPanel({
         ) : (
           <ul className="flex flex-col gap-3 pb-4">
             {active ? (
-              <li className="overflow-hidden rounded-2xl border border-primary/30 bg-card/80">
-                <div className="space-y-4 p-4 md:p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="flex items-center gap-1.5 truncate font-mono text-sm font-medium">
-                        {active.status === "paused" ? (
-                          <PauseIcon className="size-3.5 shrink-0 text-primary" />
-                        ) : (
-                          <Spinner className="size-3.5 shrink-0 text-primary" />
-                        )}
-                        {active.title}
-                        {pendingCount > 1
-                          ? ` · ${pendingCount} jobs in queue`
-                          : null}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 gap-2">
-                      {active.status === "paused" ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="rounded-full before:hidden"
-                          onClick={() => onResume(active.id)}
-                        >
-                          <PlayIcon />
-                          Resume
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="rounded-full before:hidden"
-                          onClick={() => onPause(active.id)}
-                        >
-                          <PauseIcon />
-                          Pause
-                        </Button>
-                      )}
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="rounded-full before:hidden"
-                        onClick={() => onCancel(active.id)}
-                      >
-                        <XIcon />
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <TransferRail value={pct ?? 0} />
-                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 font-mono text-[11px] text-muted-foreground tabular-nums">
-                      <span>
-                        {isTransfer && bytesTotal != null
-                          ? `${formatBytes(bytesDone)} / ${formatBytes(bytesTotal)}${etaLabel}`
-                          : isTransfer && bytesDone > 0
-                            ? `${formatBytes(bytesDone)}${etaLabel}`
-                            : isTransfer
-                              ? "Preparing…"
-                              : pct != null
-                                ? activeDetail
-                                    ?.replace(/\s*\d+(?:\.\d+)?\s*%\s*$/, "")
-                                    .trim() ||
-                                  (activeStep
-                                    ? `${activeStep.label}…`
-                                    : "Working…")
-                                : workLabel}
-                      </span>
-                      <span className="text-foreground/85">
-                        {pct != null ? formatPct(pct) : "-"}
-                      </span>
-                    </div>
-                  </div>
-
-                  {active.steps.length > 1 ? (
-                    <ul className="space-y-1.5 border-t border-border/50 pt-3">
-                      {active.steps.map((step) => {
-                        const isActive =
-                          step.status === "running" || step.status === "paused"
-                        const stepPct =
-                          step.bytesTotal &&
-                          step.bytesTotal > 0 &&
-                          (isActive ||
-                            step.status === "done" ||
-                            step.bytesDone > 0)
-                            ? Math.min(
-                                100,
-                                (step.bytesDone / step.bytesTotal) * 100
-                              )
-                            : null
-                        const livePct =
-                          isActive && step.stepKind !== "http"
-                            ? detailPct(activeDetail)
-                            : null
-                        const rightPct = stepPct ?? livePct
-                        return (
-                          <li
-                            key={step.id}
-                            className={cn(
-                              "flex items-center justify-between gap-3 font-mono text-[11px]",
-                              isActive
-                                ? "text-foreground"
-                                : step.status === "done"
-                                  ? "text-muted-foreground"
-                                  : "text-muted-foreground/70"
-                            )}
-                          >
-                            <span className="min-w-0 truncate">
-                              <span className="mr-2 inline-block w-3 text-center">
-                                {stepStatusIcon(step.status)}
-                              </span>
-                              {step.label}
-                            </span>
-                            <span className="shrink-0 tabular-nums">
-                              {step.bytesTotal != null && step.bytesTotal > 0
-                                ? isActive || step.bytesDone > 0
-                                  ? `${formatBytes(step.bytesDone)} / ${formatBytes(step.bytesTotal)}`
-                                  : formatBytes(step.bytesTotal)
-                                : null}
-                              {step.bytesTotal != null && step.bytesTotal > 0
-                                ? " · "
-                                : null}
-                              {rightPct != null
-                                ? formatPct(rightPct)
-                                : statusLabel(step.status)}
-                            </span>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  ) : null}
-                </div>
-              </li>
+              <DownloadActiveJob
+                active={active}
+                pendingCount={pendingCount}
+                speedBps={speedBps}
+                activeDetail={activeDetail}
+                onPause={onPause}
+                onResume={onResume}
+                onCancel={onCancel}
+              />
             ) : null}
-
-            {queued.length > 0 ? (
-              <li className="pt-2">
-                <p className="mb-2 font-mono text-[11px] tracking-wide text-muted-foreground uppercase">
-                  Queue
-                </p>
-                <ul className="divide-y divide-border/50 rounded-2xl border border-border/60 bg-card/40">
-                  {queued.map((job) => (
-                    <li
-                      key={job.id}
-                      className="flex items-center justify-between gap-3 px-4 py-3.5 md:px-5"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-mono text-sm font-medium">
-                          {job.title}
-                        </p>
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {job.steps.length} step
-                          {job.steps.length === 1 ? "" : "s"}
-                          {job.status === "paused" ? " · paused" : ""}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 gap-2">
-                        {job.status === "paused" ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="rounded-full before:hidden"
-                            onClick={() => onResume(job.id)}
-                          >
-                            <PlayIcon />
-                            Resume
-                          </Button>
-                        ) : null}
-                        <WithTooltip label="Remove from queue">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="rounded-full before:hidden"
-                            onClick={() => onCancel(job.id)}
-                          >
-                            <XIcon />
-                            Remove
-                          </Button>
-                        </WithTooltip>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ) : null}
-
-            {history.length > 0 ? (
-              <li className="pt-2">
-                <p className="mb-2 font-mono text-[11px] tracking-wide text-muted-foreground uppercase">
-                  Recent
-                </p>
-                <ul className="divide-y divide-border/50 rounded-2xl border border-border/60 bg-card/40">
-                  {history.map((job) => (
-                    <li
-                      key={job.id}
-                      className="flex items-center justify-between gap-3 px-4 py-3.5 md:px-5"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">
-                          {job.title}
-                        </p>
-                        <WithTooltip label={job.error ?? job.status}>
-                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                            {job.error ?? statusLabel(job.status)}
-                          </p>
-                        </WithTooltip>
-                      </div>
-                      <span
-                        className={cn(
-                          "shrink-0 text-xs font-medium",
-                          job.status === "done" && "text-primary",
-                          job.status === "error" && "text-destructive",
-                          (job.status === "cancelled" ||
-                            job.status === "paused") &&
-                            "text-muted-foreground"
-                        )}
-                      >
-                        {statusLabel(job.status)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ) : null}
+            <DownloadQueueList
+              queued={queued}
+              onResume={onResume}
+              onCancel={onCancel}
+            />
+            <DownloadHistoryList history={history} />
           </ul>
         )}
       </StudioPanelBody>

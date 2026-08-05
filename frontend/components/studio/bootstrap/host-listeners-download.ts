@@ -1,0 +1,52 @@
+import { onDownloadManager, onDownloadProgress } from "@/lib/host"
+import { formatBytes, formatEta } from "@/lib/format"
+import {
+  createDownloadSpeedTracker,
+  type DownloadProgressPayload,
+} from "@/components/studio/bootstrap/download-speed"
+import type {
+  GetStore,
+  HostListenerHandles,
+} from "@/components/studio/bootstrap/host-listeners-shared"
+
+export function registerDownloadListeners(
+  handles: HostListenerHandles,
+  getStore: GetStore
+) {
+  const speedTracker = createDownloadSpeedTracker((bps) => {
+    getStore().setDownloadSpeedBps(bps)
+  })
+
+  void onDownloadManager((snap) => {
+    getStore().setDownloadSnapshot(snap)
+  }).then((u) => {
+    handles.unlistenDownloadManager = u
+  })
+
+  void onDownloadProgress((p: DownloadProgressPayload) => {
+    speedTracker.update(p)
+
+    const total = p.total ? ` / ${formatBytes(p.total)}` : ""
+    const pct =
+      p.total && p.total > 0
+        ? ` (${Math.min(100, Math.round((p.downloaded / p.total) * 100))}%)`
+        : ""
+    const emaSpeed = speedTracker.getEmaSpeed()
+    let etaSuffix = ""
+    if (
+      !p.done &&
+      p.total != null &&
+      p.total > p.downloaded &&
+      emaSpeed > 8 * 1024
+    ) {
+      const remain = p.total - p.downloaded
+      etaSuffix = ` · ${formatBytes(emaSpeed)}/s · ETA ${formatEta(remain / emaSpeed)}`
+    }
+    const msg = p.done
+      ? "Download complete"
+      : `${formatBytes(p.downloaded)}${total}${pct}${etaSuffix}`
+    getStore().setRuntimeMessage(p.done ? msg : `Downloading… ${msg}`)
+  }).then((u) => {
+    handles.unlistenDownload = u
+  })
+}

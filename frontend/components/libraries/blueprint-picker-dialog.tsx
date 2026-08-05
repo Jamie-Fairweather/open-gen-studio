@@ -133,82 +133,93 @@ export function BlueprintPickerDialog({
             </p>
           ) : (
             <div className="flex flex-col gap-8 pb-6">
-              {mine.length > 0 ? (
-                <section className="flex flex-col gap-3">
-                  <h3 className="text-sm font-medium text-muted-foreground">
-                    My blueprints
-                  </h3>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                    {mine.map((bp) => (
-                      <BlueprintCard
-                        key={`user-${bp.id}`}
-                        bp={bp}
-                        selected={selectedId === bp.id}
-                        installing={installingId === bp.id}
-                        queued={queuedIds.includes(bp.id)}
-                        sizesProbing={sizesProbing}
-                        onSelect={() => {
-                          onSelect(bp.id)
-                          onOpenChange(false)
-                        }}
-                        onInstall={() => onInstall(bp.id)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {officialInstalled.length > 0 ? (
-                <section className="flex flex-col gap-3">
-                  <h3 className="text-sm font-medium text-muted-foreground">
-                    Official · Installed
-                  </h3>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                    {officialInstalled.map((bp) => (
-                      <BlueprintCard
-                        key={`official-${bp.id}`}
-                        bp={bp}
-                        selected={selectedId === bp.id}
-                        installing={installingId === bp.id}
-                        queued={queuedIds.includes(bp.id)}
-                        sizesProbing={sizesProbing}
-                        onSelect={() => {
-                          onSelect(bp.id)
-                          onOpenChange(false)
-                        }}
-                        onInstall={() => onInstall(bp.id)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {officialAvailable.length > 0 ? (
-                <section className="flex flex-col gap-3">
-                  <h3 className="text-sm font-medium text-muted-foreground">
-                    Official · Available
-                  </h3>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                    {officialAvailable.map((bp) => (
-                      <BlueprintCard
-                        key={`official-${bp.id}`}
-                        bp={bp}
-                        selected={selectedId === bp.id}
-                        installing={installingId === bp.id}
-                        queued={queuedIds.includes(bp.id)}
-                        sizesProbing={sizesProbing}
-                        onSelect={() => onSelect(bp.id)}
-                        onInstall={() => onInstall(bp.id)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
+              <BlueprintGridSection
+                title="My blueprints"
+                items={mine}
+                keyPrefix="user"
+                selectedId={selectedId}
+                installingId={installingId}
+                queuedIds={queuedIds}
+                sizesProbing={sizesProbing}
+                onSelect={(id) => {
+                  onSelect(id)
+                  onOpenChange(false)
+                }}
+                onInstall={onInstall}
+              />
+              <BlueprintGridSection
+                title="Official · Installed"
+                items={officialInstalled}
+                keyPrefix="official"
+                selectedId={selectedId}
+                installingId={installingId}
+                queuedIds={queuedIds}
+                sizesProbing={sizesProbing}
+                onSelect={(id) => {
+                  onSelect(id)
+                  onOpenChange(false)
+                }}
+                onInstall={onInstall}
+              />
+              <BlueprintGridSection
+                title="Official · Available"
+                items={officialAvailable}
+                keyPrefix="official"
+                selectedId={selectedId}
+                installingId={installingId}
+                queuedIds={queuedIds}
+                sizesProbing={sizesProbing}
+                onSelect={onSelect}
+                onInstall={onInstall}
+              />
             </div>
           )}
         </DialogPanel>
       </DialogPopup>
     </Dialog>
+  )
+}
+
+function BlueprintGridSection({
+  title,
+  items,
+  keyPrefix,
+  selectedId,
+  installingId,
+  queuedIds,
+  sizesProbing,
+  onSelect,
+  onInstall,
+}: {
+  title: string
+  items: Blueprint[]
+  keyPrefix: string
+  selectedId: string | null
+  installingId: string | null
+  queuedIds: string[]
+  sizesProbing: boolean
+  onSelect: (id: string) => void
+  onInstall: (id: string) => void
+}) {
+  if (items.length === 0) return null
+  return (
+    <section className="flex flex-col gap-3">
+      <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        {items.map((bp) => (
+          <BlueprintCard
+            key={`${keyPrefix}-${bp.id}`}
+            bp={bp}
+            selected={selectedId === bp.id}
+            installing={installingId === bp.id}
+            queued={queuedIds.includes(bp.id)}
+            sizesProbing={sizesProbing}
+            onSelect={() => onSelect(bp.id)}
+            onInstall={() => onInstall(bp.id)}
+          />
+        ))}
+      </div>
+    </section>
   )
 }
 

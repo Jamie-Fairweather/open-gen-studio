@@ -114,94 +114,106 @@ export function LoraPickerDialog({
             </p>
           ) : (
             <div className="flex flex-col gap-8 pb-6">
-              {mine.length > 0 ? (
-                <section className="flex flex-col gap-3">
-                  <h3 className="text-sm font-medium text-muted-foreground">
-                    My LoRAs
-                  </h3>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {mine.map((pack) => (
-                      <LoraCard
-                        key={`user-${pack.id}`}
-                        pack={pack}
-                        arch={arch}
-                        selected={selectedIds.includes(pack.id)}
-                        installing={installingKey === `${pack.id}:${arch}`}
-                        queued={queuedKeys.includes(`${pack.id}:${arch}`)}
-                        onSelect={() => {
-                          onSelect(pack.id)
-                          onOpenChange(false)
-                        }}
-                        onInstall={() => {
-                          const a = arch ?? pack.arches[0]
-                          if (a && isRecipeArch(a)) onInstall(pack.id, a)
-                        }}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {officialReady.length > 0 ? (
-                <section className="flex flex-col gap-3">
-                  <h3 className="text-sm font-medium text-muted-foreground">
-                    Official · Ready
-                  </h3>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {officialReady.map((pack) => (
-                      <LoraCard
-                        key={`official-${pack.id}`}
-                        pack={pack}
-                        arch={arch}
-                        selected={selectedIds.includes(pack.id)}
-                        installing={false}
-                        queued={queuedKeys.includes(`${pack.id}:${arch}`)}
-                        onSelect={() => {
-                          onSelect(pack.id)
-                          onOpenChange(false)
-                        }}
-                        onInstall={() => {
-                          const a = arch ?? pack.arches[0]
-                          if (a && isRecipeArch(a)) onInstall(pack.id, a)
-                        }}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {officialAvailable.length > 0 ? (
-                <section className="flex flex-col gap-3">
-                  <h3 className="text-sm font-medium text-muted-foreground">
-                    Official · Available
-                  </h3>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {officialAvailable.map((pack) => (
-                      <LoraCard
-                        key={`official-${pack.id}`}
-                        pack={pack}
-                        arch={arch}
-                        selected={selectedIds.includes(pack.id)}
-                        installing={installingKey === `${pack.id}:${arch}`}
-                        queued={queuedKeys.includes(`${pack.id}:${arch}`)}
-                        onSelect={() => {
-                          onSelect(pack.id)
-                          onOpenChange(false)
-                        }}
-                        onInstall={() => {
-                          const a = arch ?? pack.arches[0]
-                          if (a && isRecipeArch(a)) onInstall(pack.id, a)
-                        }}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
+              <LoraGridSection
+                title="My LoRAs"
+                items={mine}
+                keyPrefix="user"
+                arch={arch}
+                selectedIds={selectedIds}
+                installingKey={installingKey}
+                queuedKeys={queuedKeys}
+                onSelect={(id) => {
+                  onSelect(id)
+                  onOpenChange(false)
+                }}
+                onInstall={onInstall}
+              />
+              <LoraGridSection
+                title="Official · Ready"
+                items={officialReady}
+                keyPrefix="official"
+                arch={arch}
+                selectedIds={selectedIds}
+                installingKey={null}
+                queuedKeys={queuedKeys}
+                forceInstallingFalse
+                onSelect={(id) => {
+                  onSelect(id)
+                  onOpenChange(false)
+                }}
+                onInstall={onInstall}
+              />
+              <LoraGridSection
+                title="Official · Available"
+                items={officialAvailable}
+                keyPrefix="official"
+                arch={arch}
+                selectedIds={selectedIds}
+                installingKey={installingKey}
+                queuedKeys={queuedKeys}
+                onSelect={(id) => {
+                  onSelect(id)
+                  onOpenChange(false)
+                }}
+                onInstall={onInstall}
+              />
             </div>
           )}
         </DialogPanel>
       </DialogPopup>
     </Dialog>
+  )
+}
+
+function LoraGridSection({
+  title,
+  items,
+  keyPrefix,
+  arch,
+  selectedIds,
+  installingKey,
+  queuedKeys,
+  forceInstallingFalse,
+  onSelect,
+  onInstall,
+}: {
+  title: string
+  items: LoraPack[]
+  keyPrefix: string
+  arch?: string | null
+  selectedIds: string[]
+  installingKey?: string | null
+  queuedKeys: string[]
+  forceInstallingFalse?: boolean
+  onSelect: (id: string) => void
+  onInstall: (id: string, arch: RecipeArch) => void
+}) {
+  if (items.length === 0) return null
+  return (
+    <section className="flex flex-col gap-3">
+      <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {items.map((pack) => (
+          <LoraCard
+            key={`${keyPrefix}-${pack.id}`}
+            pack={pack}
+            arch={arch}
+            selected={selectedIds.includes(pack.id)}
+            installing={
+              forceInstallingFalse
+                ? false
+                : installingKey === `${pack.id}:${arch}`
+            }
+            queued={queuedKeys.includes(`${pack.id}:${arch}`)}
+            onSelect={() => onSelect(pack.id)}
+            onInstall={() => {
+              const a = arch ?? pack.arches[0]
+              if (a && isRecipeArch(a)) onInstall(pack.id, a)
+            }}
+          />
+        ))}
+      </div>
+    </section>
   )
 }
 

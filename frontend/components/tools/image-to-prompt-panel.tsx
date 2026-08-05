@@ -1,32 +1,21 @@
 "use client"
 
 import {
-  ArrowLeftIcon,
   ClipboardPasteIcon,
   ImageIcon,
   ImagesIcon,
   UploadIcon,
   XIcon,
 } from "lucide-react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useEffect, useRef, type ChangeEvent, type DragEvent } from "react"
-import {
-  selectActiveArch,
-  selectHasNegativePrompt,
-} from "@/components/studio/selectors"
+import { selectActiveArch } from "@/components/studio/selectors"
 import { useStudioSelector, useStudioStore } from "@/components/studio/store"
 import {
   displayImageToPrompt,
   emptyStructuredFields,
 } from "@/components/studio/slices/tools"
-import {
-  StudioPanel,
-  StudioPanelBody,
-  StudioPanelHeader,
-} from "@/components/shell"
-import { applyPromptToStudio } from "@/components/tools/apply-prompt-to-studio"
 import { ToolModelGate } from "@/components/tools/tool-model-gate"
+import { ToolPanelChrome } from "@/components/tools/tool-panel-chrome"
 import { ToolResultActions } from "@/components/tools/tool-result-actions"
 import { ToolRunBar } from "@/components/tools/tool-run-bar"
 import {
@@ -35,6 +24,7 @@ import {
   ToolSurface,
   ToolSurfaceHeader,
 } from "@/components/tools/tool-shell"
+import { useToolStudioBridge } from "@/components/tools/use-tool-studio-bridge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
@@ -66,17 +56,14 @@ async function bytesFromFile(
 }
 
 export function ImageToPromptPanel() {
-  const router = useRouter()
   const gallery = useStudioStore((s) => s.gallery)
   const consumeToolsHandoff = useStudioStore((s) => s.consumeToolsHandoff)
-  const setPrompt = useStudioStore((s) => s.setPrompt)
-  const setControlValues = useStudioStore((s) => s.setControlValues)
   const state = useStudioStore((s) => s.imageToPrompt)
   const patch = useStudioStore((s) => s.patchImageToPrompt)
   const run = useStudioStore((s) => s.runImageToPromptTool)
   const cancel = useStudioStore((s) => s.cancelImageToPromptTool)
   const activeArch = useStudioSelector(selectActiveArch)
-  const hasNegativePrompt = useStudioSelector(selectHasNegativePrompt)
+  const { sendToStudio } = useToolStudioBridge()
   const fileRef = useRef<HTMLInputElement>(null)
 
   const {
@@ -179,247 +166,222 @@ export function ImageToPromptPanel() {
   )
   const hasResult = Boolean(result.trim() || (fields && showStructured))
 
-  const useInStudio = () => {
-    applyPromptToStudio({
-      prompt: displayPrompt,
-      negative,
-      hasNegativePrompt,
-      setPrompt,
-      setControlValues,
-      router,
-    })
-  }
-
   const pickGallery = (item: GalleryItem) => {
     patch({ galleryOpen: false })
     applyImagePath(item.path)
   }
 
   return (
-    <StudioPanel className="min-h-0 flex-1">
-      <StudioPanelHeader
-        title="Image to Prompt"
-        description="Caption a reference for your target model."
-        action={
-          <Button
-            render={<Link href="/tools" />}
-            variant="ghost"
-            size="sm"
-            className="gap-1.5"
-          >
-            <ArrowLeftIcon className="size-3.5" />
-            Tools
-          </Button>
-        }
-      />
-      <StudioPanelBody className="gap-4">
-        <ToolModelGate providerId="qwenvl" toolLabel="Image to Prompt">
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="sr-only"
-            onChange={onFileChange}
-          />
+    <ToolPanelChrome
+      title="Image to Prompt"
+      description="Caption a reference for your target model."
+    >
+      <ToolModelGate providerId="qwenvl" toolLabel="Image to Prompt">
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="sr-only"
+          onChange={onFileChange}
+        />
 
-          <ToolSurface>
-            <div className="flex flex-col gap-4 p-4">
-              <div className="flex flex-col gap-2">
-                <ToolFieldLabel>Source</ToolFieldLabel>
-                <div
-                  onDragOver={(e) => {
-                    e.preventDefault()
-                  }}
-                  onDrop={onDrop}
-                  className={cn(
-                    "relative overflow-hidden rounded-lg border bg-muted/20 transition-colors",
-                    "border-border",
-                    previewUrl ? "aspect-[16/9]" : "min-h-40"
-                  )}
-                >
-                  {previewUrl ? (
-                    <>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={previewUrl}
-                        alt="Reference"
-                        className="size-full object-contain"
-                      />
-                      <button
-                        type="button"
-                        onClick={clearImage}
-                        disabled={busy}
-                        className="absolute top-2 right-2 inline-flex size-8 items-center justify-center rounded-md border border-border/80 bg-background/90 text-foreground backdrop-blur-sm transition-colors hover:bg-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                        aria-label="Clear image"
-                      >
-                        <XIcon className="size-3.5" />
-                      </button>
-                    </>
-                  ) : (
-                    <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 px-4 text-center">
-                      <ImageIcon className="size-6 text-muted-foreground/60" />
-                      <p className="text-sm text-muted-foreground">
-                        Drop, paste, upload, or pick from gallery
-                      </p>
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="min-h-9 gap-1.5"
-                    onClick={() => fileRef.current?.click()}
-                    disabled={busy}
-                  >
-                    <UploadIcon className="size-3.5" />
-                    Upload
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={galleryOpen ? "default" : "secondary"}
-                    className="min-h-9 gap-1.5"
-                    onClick={() => patch({ galleryOpen: !galleryOpen })}
-                    disabled={busy}
-                  >
-                    <ImagesIcon className="size-3.5" />
-                    Gallery
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="min-h-9 gap-1.5"
-                    disabled={busy}
-                    onClick={() =>
-                      notifySuccess("Press Ctrl+V to paste an image")
-                    }
-                  >
-                    <ClipboardPasteIcon className="size-3.5" />
-                    Paste
-                  </Button>
-                </div>
+        <ToolSurface>
+          <div className="flex flex-col gap-4 p-4">
+            <div className="flex flex-col gap-2">
+              <ToolFieldLabel>Source</ToolFieldLabel>
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault()
+                }}
+                onDrop={onDrop}
+                className={cn(
+                  "relative overflow-hidden rounded-lg border bg-muted/20 transition-colors",
+                  "border-border",
+                  previewUrl ? "aspect-[16/9]" : "min-h-40"
+                )}
+              >
+                {previewUrl ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={previewUrl}
+                      alt="Reference"
+                      className="size-full object-contain"
+                    />
+                    <button
+                      type="button"
+                      onClick={clearImage}
+                      disabled={busy}
+                      className="absolute top-2 right-2 inline-flex size-8 items-center justify-center rounded-md border border-border/80 bg-background/90 text-foreground backdrop-blur-sm transition-colors hover:bg-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                      aria-label="Clear image"
+                    >
+                      <XIcon className="size-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 px-4 text-center">
+                    <ImageIcon className="size-6 text-muted-foreground/60" />
+                    <p className="text-sm text-muted-foreground">
+                      Drop, paste, upload, or pick from gallery
+                    </p>
+                  </div>
+                )}
               </div>
-
-              {galleryOpen ? (
-                <div className="h-40 rounded-lg border border-border">
-                  <ScrollArea className="h-full" scrollbarGutter>
-                    <div className="p-1.5">
-                      {imageGallery.length === 0 ? (
-                        <p className="p-2 text-sm text-muted-foreground">
-                          No gallery images yet.
-                        </p>
-                      ) : (
-                        <ul className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
-                          {imageGallery.slice(0, 24).map((item) => (
-                            <li key={item.id}>
-                              <button
-                                type="button"
-                                className="aspect-square w-full overflow-hidden rounded-md bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                onClick={() => pickGallery(item)}
-                              >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  src={gallerySrc(
-                                    item.thumbnailPath || item.path
-                                  )}
-                                  alt=""
-                                  className="size-full object-cover"
-                                />
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </div>
-              ) : null}
-
-              <ToolChipRow
-                label="Format"
-                options={PROMPT_FORMATS}
-                value={format}
-                onChange={(v) => patch({ format: v })}
-                disabled={busy}
-              />
-              <ToolChipRow
-                label="Target"
-                options={PROMPT_TARGETS}
-                value={target}
-                onChange={(v) => patch({ target: v })}
-                disabled={busy}
-              />
-
-              <ToolRunBar
-                label="Generate"
-                busy={busy}
-                disabled={!imagePath}
-                jobId={jobId}
-                status={status}
-                error={error}
-                onRun={() => void run()}
-                onCancel={() => void cancel()}
-              />
-            </div>
-          </ToolSurface>
-
-          <ToolSurface>
-            <ToolSurfaceHeader
-              title="Prompt"
-              actions={
-                <ToolResultActions
-                  copyText={displayPrompt}
-                  copyDisabled={!displayPrompt.trim()}
-                  useInStudioDisabled={!displayPrompt.trim()}
-                  onUseInStudio={useInStudio}
-                />
-              }
-            />
-            <div className="p-4">
-              {!hasResult && !busy ? (
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Generated prompts appear here. Edit freely before sending to
-                  Image Studio.
-                </p>
-              ) : fields && showStructured ? (
-                <div className="flex flex-col gap-3">
-                  {STRUCTURED_FIELDS.map((key) => (
-                    <label key={key} className="flex flex-col gap-1.5">
-                      <ToolFieldLabel>{key}</ToolFieldLabel>
-                      <Textarea
-                        value={fields[key]}
-                        onChange={(e) =>
-                          patch({
-                            fields: {
-                              ...(fields ?? emptyStructuredFields()),
-                              [key]: e.target.value,
-                            },
-                          })
-                        }
-                        rows={2}
-                        className="min-h-16 resize-y"
-                      />
-                    </label>
-                  ))}
-                </div>
-              ) : (
-                <Textarea
-                  value={result}
-                  onChange={(e) =>
-                    patch({ result: e.target.value, fields: null })
+              <div className="flex flex-wrap gap-1.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="min-h-9 gap-1.5"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={busy}
+                >
+                  <UploadIcon className="size-3.5" />
+                  Upload
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={galleryOpen ? "default" : "secondary"}
+                  className="min-h-9 gap-1.5"
+                  onClick={() => patch({ galleryOpen: !galleryOpen })}
+                  disabled={busy}
+                >
+                  <ImagesIcon className="size-3.5" />
+                  Gallery
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="min-h-9 gap-1.5"
+                  disabled={busy}
+                  onClick={() =>
+                    notifySuccess("Press Ctrl+V to paste an image")
                   }
-                  placeholder={busy ? "Working…" : "Prompt output"}
-                  rows={10}
-                  className="min-h-48 resize-y"
-                />
-              )}
+                >
+                  <ClipboardPasteIcon className="size-3.5" />
+                  Paste
+                </Button>
+              </div>
             </div>
-          </ToolSurface>
-        </ToolModelGate>
-      </StudioPanelBody>
-    </StudioPanel>
+
+            {galleryOpen ? (
+              <div className="h-40 rounded-lg border border-border">
+                <ScrollArea className="h-full" scrollbarGutter>
+                  <div className="p-1.5">
+                    {imageGallery.length === 0 ? (
+                      <p className="p-2 text-sm text-muted-foreground">
+                        No gallery images yet.
+                      </p>
+                    ) : (
+                      <ul className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
+                        {imageGallery.slice(0, 24).map((item) => (
+                          <li key={item.id}>
+                            <button
+                              type="button"
+                              className="aspect-square w-full overflow-hidden rounded-md bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              onClick={() => pickGallery(item)}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={gallerySrc(
+                                  item.thumbnailPath || item.path
+                                )}
+                                alt=""
+                                className="size-full object-cover"
+                              />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            ) : null}
+
+            <ToolChipRow
+              label="Format"
+              options={PROMPT_FORMATS}
+              value={format}
+              onChange={(v) => patch({ format: v })}
+              disabled={busy}
+            />
+            <ToolChipRow
+              label="Target"
+              options={PROMPT_TARGETS}
+              value={target}
+              onChange={(v) => patch({ target: v })}
+              disabled={busy}
+            />
+
+            <ToolRunBar
+              label="Generate"
+              busy={busy}
+              disabled={!imagePath}
+              jobId={jobId}
+              status={status}
+              error={error}
+              onRun={() => void run()}
+              onCancel={() => void cancel()}
+            />
+          </div>
+        </ToolSurface>
+
+        <ToolSurface>
+          <ToolSurfaceHeader
+            title="Prompt"
+            actions={
+              <ToolResultActions
+                copyText={displayPrompt}
+                copyDisabled={!displayPrompt.trim()}
+                useInStudioDisabled={!displayPrompt.trim()}
+                onUseInStudio={() => sendToStudio(displayPrompt, negative)}
+              />
+            }
+          />
+          <div className="p-4">
+            {!hasResult && !busy ? (
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Generated prompts appear here. Edit freely before sending to
+                Image Studio.
+              </p>
+            ) : fields && showStructured ? (
+              <div className="flex flex-col gap-3">
+                {STRUCTURED_FIELDS.map((key) => (
+                  <label key={key} className="flex flex-col gap-1.5">
+                    <ToolFieldLabel>{key}</ToolFieldLabel>
+                    <Textarea
+                      value={fields[key]}
+                      onChange={(e) =>
+                        patch({
+                          fields: {
+                            ...(fields ?? emptyStructuredFields()),
+                            [key]: e.target.value,
+                          },
+                        })
+                      }
+                      rows={2}
+                      className="min-h-16 resize-y"
+                    />
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <Textarea
+                value={result}
+                onChange={(e) =>
+                  patch({ result: e.target.value, fields: null })
+                }
+                placeholder={busy ? "Working…" : "Prompt output"}
+                rows={10}
+                className="min-h-48 resize-y"
+              />
+            )}
+          </div>
+        </ToolSurface>
+      </ToolModelGate>
+    </ToolPanelChrome>
   )
 }

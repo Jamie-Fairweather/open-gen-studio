@@ -64,9 +64,7 @@ export function parseHistoryItem(item: JobHistoryItem): HistoryParsed {
       isEnhance =
         typeof params.prompt === "string" &&
         !inputImagePath &&
-        (params.result?.format === "enhance" ||
-          params.mode != null ||
-          params.format == null)
+        (params.result?.format === "enhance" || params.mode != null)
       if (isEnhance) {
         inputPrompt = params.prompt?.trim() ? params.prompt : null
         outputPrompt = resultPrompt

@@ -24,6 +24,7 @@ export const PROMPT_TARGETS: {
   { id: "flux", label: "Flux" },
   { id: "stableDiffusion", label: "Stable Diffusion" },
   { id: "ideogram", label: "Ideogram" },
+  { id: "qwenImage", label: "Qwen Image" },
   { id: "zImageKrea", label: "Z-Image / Krea" },
 ]
 
@@ -140,22 +141,13 @@ export function flattenStructuredFields(fields: StructuredFields): string {
     .join("\n")
 }
 
-/** Soft UX hint for unusual Format × Target mixes. */
-export function formatTargetHint(
-  format: PromptFormatId,
-  target: PromptTargetId
-): string | null {
-  void format
-  void target
-  return null
-}
-
 export function targetFromArch(arch?: string | null): PromptTargetId {
   if (!arch || !isRecipeArch(arch)) {
     const a = (arch ?? "").toLowerCase()
     if (a === "sd") return "stableDiffusion"
     if (a === "ideogram") return "ideogram"
     if (a === "krea") return "zImageKrea"
+    if (a === "qwen" || a === "qwen-image") return "qwenImage"
     return "auto"
   }
   switch (arch) {
@@ -170,8 +162,9 @@ export function targetFromArch(arch?: string | null): PromptTargetId {
     case "sd3.5":
       return "stableDiffusion"
     case "ideogram4":
-    case "qwen-image":
       return "ideogram"
+    case "qwen-image":
+      return "qwenImage"
     case "z-image":
     case "krea2":
       return "zImageKrea"

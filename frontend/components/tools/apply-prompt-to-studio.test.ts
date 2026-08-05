@@ -1,7 +1,17 @@
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+
+const notifyInfo = vi.hoisted(() => vi.fn())
+vi.mock("@/lib/notify", () => ({
+  notifyInfo: (...a: unknown[]) => notifyInfo(...a),
+}))
+
 import { applyPromptToStudio } from "./apply-prompt-to-studio"
 
 describe("applyPromptToStudio", () => {
+  beforeEach(() => {
+    notifyInfo.mockReset()
+  })
+
   it("writes prompt/negative and navigates when prompt is non-empty", () => {
     const setPrompt = vi.fn()
     const setControlValues = vi.fn()
@@ -15,6 +25,11 @@ describe("applyPromptToStudio", () => {
       router: { push },
     })
     expect(setPrompt).not.toHaveBeenCalled()
+    expect(notifyInfo).toHaveBeenCalledWith(
+      "Prompt required",
+      "Enter a prompt first.",
+      "generate"
+    )
 
     applyPromptToStudio({
       prompt: "  hello  ",

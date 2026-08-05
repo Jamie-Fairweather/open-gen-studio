@@ -552,7 +552,7 @@ export type PinStatus = {
 export type PromptFormat = "general" | "structured" | "graphicDesign" | "json"
 
 export type PromptTarget =
-  "auto" | "flux" | "stableDiffusion" | "ideogram" | "zImageKrea"
+  "auto" | "flux" | "stableDiffusion" | "ideogram" | "zImageKrea" | "qwenImage"
 
 export type PromptToolResult = {
   prompt: string

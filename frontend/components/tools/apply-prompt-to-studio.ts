@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from "react"
+import { notifyInfo } from "@/lib/notify"
 
 /** Write a tool result into Image Studio and navigate there. */
 export function applyPromptToStudio(opts: {
@@ -10,7 +11,10 @@ export function applyPromptToStudio(opts: {
   router: { push: (href: string) => void }
 }) {
   const prompt = opts.prompt.trim()
-  if (!prompt) return
+  if (!prompt) {
+    notifyInfo("Prompt required", "Enter a prompt first.", "generate")
+    return
+  }
   opts.setPrompt(prompt)
   if (opts.negative && opts.hasNegativePrompt) {
     opts.setControlValues((prev) => ({ ...prev, negative: opts.negative }))

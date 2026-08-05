@@ -14,6 +14,10 @@ pub(crate) fn target_dialect_hint(target: PromptTarget) -> &'static str {
         PromptTarget::Ideogram => {
             " Optimize for Ideogram: clear subject and style; note any text that should appear in the image."
         }
+        PromptTarget::QwenImage => {
+            " Optimize for Qwen-Image: natural-language description with clear subject, style, \
+composition, and lighting; avoid SD quality-tag spam (masterpiece, 8k, best quality)."
+        }
         PromptTarget::ZImageKrea => {
             " Optimize for Z-Image / Krea turbo models: concise medium-length prose with strong \
 subject focus; keep depth order (foreground vs behind) and distinctive lighting/capture feel \

@@ -143,7 +143,7 @@ describe("PromptEnhancerPanel", () => {
     await user.click(screen.getByRole("button", { name: /Use in Studio/i }))
   })
 
-  it("seeds handoff prompt, keeps existing input, and uses input in studio", async () => {
+  it("seeds handoff prompt, keeps existing input, and disables Use in Studio without result", async () => {
     useStudioStore.getState().setToolsHandoff({ prompt: "  handoff prompt  " })
     useStudioStore.setState({
       prompt: "",
@@ -185,10 +185,9 @@ describe("PromptEnhancerPanel", () => {
         input: "fallback only",
       },
     })
-    const user = userEvent.setup()
-    await user.click(
-      screen.getAllByRole("button", { name: /Use in Studio/i })[0]!
-    )
+    expect(
+      screen.getAllByRole("button", { name: /Use in Studio/i })[0]
+    ).toBeDisabled()
   })
 
   it("seeded path consumes handoff; busy path marks seeded", async () => {

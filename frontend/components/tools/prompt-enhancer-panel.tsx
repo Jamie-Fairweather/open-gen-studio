@@ -139,8 +139,8 @@ export function PromptEnhancerPanel() {
               <ToolResultActions
                 copyText={result}
                 copyDisabled={!result.trim()}
-                useInStudioDisabled={!result.trim() && !input.trim()}
-                onUseInStudio={() => sendToStudio(result || input, negative)}
+                useInStudioDisabled={!result.trim()}
+                onUseInStudio={() => sendToStudio(result, negative)}
               />
             }
           />

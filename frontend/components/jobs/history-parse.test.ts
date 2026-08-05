@@ -181,7 +181,8 @@ describe("parseHistoryItem", () => {
         }),
       })
     )
-    expect(enhanceFormatNull.isEnhance).toBe(true)
+    // No mode and no result.format=enhance → not classified as enhance.
+    expect(enhanceFormatNull.isEnhance).toBe(false)
 
     const badResultType = parseHistoryItem(
       item({

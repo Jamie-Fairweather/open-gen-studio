@@ -32,7 +32,11 @@ fn reject_model_error_text(text: &str) -> Result<String, String> {
             "QwenVL failed to load: {t}. Dependencies were installed - if this persists, restart ComfyUI from Settings and retry."
         ));
     }
-    Ok(strip_meta_tail(t))
+    let cleaned = strip_meta_tail(t);
+    if cleaned.is_empty() {
+        return Err("No prompt returned".into());
+    }
+    Ok(cleaned)
 }
 
 /// Drop trailing model chatter (Notes / disclaimers) that sometimes follows the real prompt.
@@ -148,14 +152,7 @@ pub fn run_image_to_prompt(
         negative: suggest_negative(target, format),
         provider: provider.id().into(),
         format: format.as_str().into(),
-        target: match target {
-            PromptTarget::Auto => "auto",
-            PromptTarget::Flux => "flux",
-            PromptTarget::StableDiffusion => "stableDiffusion",
-            PromptTarget::Ideogram => "ideogram",
-            PromptTarget::ZImageKrea => "zImageKrea",
-        }
-        .into(),
+        target: target.as_str().into(),
     })
 }
 
@@ -226,13 +223,6 @@ pub fn run_prompt_enhance(
         negative: suggest_negative(target, PromptFormat::General),
         provider: Provider::QwenVl.id().into(),
         format: "enhance".into(),
-        target: match target {
-            PromptTarget::Auto => "auto",
-            PromptTarget::Flux => "flux",
-            PromptTarget::StableDiffusion => "stableDiffusion",
-            PromptTarget::Ideogram => "ideogram",
-            PromptTarget::ZImageKrea => "zImageKrea",
-        }
-        .into(),
+        target: target.as_str().into(),
     })
 }

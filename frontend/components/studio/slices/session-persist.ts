@@ -29,6 +29,7 @@ const PROMPT_TARGETS = new Set<string>([
   "flux",
   "stableDiffusion",
   "ideogram",
+  "qwenImage",
   "zImageKrea",
 ])
 

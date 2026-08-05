@@ -3,7 +3,6 @@ import {
   emptyStructuredFields,
   enhanceModePayload,
   flattenStructuredFields,
-  formatTargetHint,
   parseStructuredPrompt,
   targetFromArch,
 } from "./prompt-tools"
@@ -42,13 +41,13 @@ describe("structured fields", () => {
   })
 })
 
-describe("formatTargetHint / targetFromArch", () => {
-  it("always null hint; maps arches and loose aliases", () => {
-    expect(formatTargetHint("general", "auto")).toBeNull()
+describe("targetFromArch", () => {
+  it("maps arches and loose aliases", () => {
     expect(targetFromArch(null)).toBe("auto")
     expect(targetFromArch("sd")).toBe("stableDiffusion")
     expect(targetFromArch("ideogram")).toBe("ideogram")
     expect(targetFromArch("krea")).toBe("zImageKrea")
+    expect(targetFromArch("qwen")).toBe("qwenImage")
     expect(targetFromArch("flux")).toBe("flux")
     expect(targetFromArch("flux2")).toBe("flux")
     expect(targetFromArch("chroma")).toBe("flux")
@@ -58,7 +57,7 @@ describe("formatTargetHint / targetFromArch", () => {
     expect(targetFromArch("illustrious")).toBe("stableDiffusion")
     expect(targetFromArch("sd3.5")).toBe("stableDiffusion")
     expect(targetFromArch("ideogram4")).toBe("ideogram")
-    expect(targetFromArch("qwen-image")).toBe("ideogram")
+    expect(targetFromArch("qwen-image")).toBe("qwenImage")
     expect(targetFromArch("z-image")).toBe("zImageKrea")
     expect(targetFromArch("krea2")).toBe("zImageKrea")
   })

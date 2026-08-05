@@ -69,9 +69,22 @@ pub enum PromptTarget {
     Ideogram,
     #[serde(rename = "zImageKrea")]
     ZImageKrea,
+    #[serde(rename = "qwenImage")]
+    QwenImage,
 }
 
 impl PromptTarget {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Flux => "flux",
+            Self::StableDiffusion => "stableDiffusion",
+            Self::Ideogram => "ideogram",
+            Self::ZImageKrea => "zImageKrea",
+            Self::QwenImage => "qwenImage",
+        }
+    }
+
     pub(crate) fn from_str(s: &str) -> Result<Self, String> {
         match s {
             "auto" => Ok(Self::Auto),
@@ -79,8 +92,9 @@ impl PromptTarget {
             "stableDiffusion" | "sd" | "sdxl" | "sd15" | "pony" | "illustrious" => {
                 Ok(Self::StableDiffusion)
             }
-            "ideogram" | "qwen-image" => Ok(Self::Ideogram),
+            "ideogram" => Ok(Self::Ideogram),
             "zImageKrea" | "z-image" | "krea" | "krea2" => Ok(Self::ZImageKrea),
+            "qwenImage" | "qwen-image" | "qwen" => Ok(Self::QwenImage),
             other => Err(format!("unknown prompt target: {other}")),
         }
     }
@@ -95,13 +109,15 @@ impl PromptTarget {
             Some(
                 RecipeArch::Sdxl | RecipeArch::Sd15 | RecipeArch::Pony | RecipeArch::Illustrious,
             ) => PromptTarget::StableDiffusion,
-            Some(RecipeArch::Ideogram4 | RecipeArch::QwenImage) => PromptTarget::Ideogram,
+            Some(RecipeArch::Ideogram4) => PromptTarget::Ideogram,
+            Some(RecipeArch::QwenImage) => PromptTarget::QwenImage,
             Some(RecipeArch::ZImage | RecipeArch::Krea2) => PromptTarget::ZImageKrea,
             Some(RecipeArch::Sd35) => PromptTarget::StableDiffusion,
             None => match s.as_str() {
                 "sd" => PromptTarget::StableDiffusion,
                 "ideogram" => PromptTarget::Ideogram,
                 "krea" => PromptTarget::ZImageKrea,
+                "qwen" | "qwen-image" => PromptTarget::QwenImage,
                 _ => PromptTarget::Flux,
             },
         }

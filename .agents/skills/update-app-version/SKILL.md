@@ -9,8 +9,9 @@ description: >
 
 # Update App Version
 
-Keep these four sources in sync. They are the only places that define the
-**app** version (not dependency versions).
+Keep these sources in sync. They define the **app** version (not dependency
+versions). Desktop About uses Tauri `getVersion()` in production; the fallback
+constant is only for non-Tauri / test UI.
 
 | File                      | Field                            | Notes                                  |
 | ------------------------- | -------------------------------- | -------------------------------------- |
@@ -18,11 +19,12 @@ Keep these four sources in sync. They are the only places that define the
 | `backend/tauri.conf.json` | `"version"`                      | Shown in installers / Tauri            |
 | `backend/Cargo.toml`      | `[package] version`              | Rust crate `app`                       |
 | `backend/Cargo.lock`      | `name = "app"` package `version` | Only the `[[package]]` block for `app` |
+| `frontend/lib/legal.ts`   | `APP_VERSION_FALLBACK`           | Settings → About fallback string       |
 
 ## Workflow
 
 1. **Confirm target version** — Use the version the user gave (e.g. `0.2.0`). If they said "bump patch/minor/major" without a number, read the current version from `backend/tauri.conf.json` and compute the next semver.
-2. **Update all four files** to that exact version string (no `v` prefix).
+2. **Update all listed files** to that exact version string (no `v` prefix).
 3. **Cargo.lock care** — Change only the `app` package entry:
 
    ```

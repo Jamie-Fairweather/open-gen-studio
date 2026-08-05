@@ -10,6 +10,7 @@ import {
   StudioPanelBody,
   StudioPanelHeader,
 } from "@/components/shell"
+import { SettingsAboutCard } from "@/components/settings/settings-about-card"
 import { SettingsComfyCard } from "@/components/settings/settings-comfy-card"
 import { SettingsGpuCard } from "@/components/settings/settings-gpu-card"
 import { SettingsModelsCard } from "@/components/settings/settings-models-card"
@@ -222,6 +223,7 @@ export function SettingsPanel({
             externalLabel="Open account settings"
             externalUrl="https://civitai.com/user/account"
           />
+          <SettingsAboutCard />
         </StudioPanelBody>
       </StudioPanel>
 

@@ -10,10 +10,7 @@ import {
 import { useEffect, useRef, type ChangeEvent, type DragEvent } from "react"
 import { selectActiveArch } from "@/components/studio/selectors"
 import { useStudioSelector, useStudioStore } from "@/components/studio/store"
-import {
-  displayImageToPrompt,
-  emptyStructuredFields,
-} from "@/components/studio/slices/tools"
+import { displayImageToPrompt } from "@/components/studio/slices/tools"
 import { ToolModelGate } from "@/components/tools/tool-model-gate"
 import { ToolPanelChrome } from "@/components/tools/tool-panel-chrome"
 import { ToolResultActions } from "@/components/tools/tool-result-actions"
@@ -357,7 +354,7 @@ export function ImageToPromptPanel() {
                       onChange={(e) =>
                         patch({
                           fields: {
-                            ...(fields ?? emptyStructuredFields()),
+                            ...fields,
                             [key]: e.target.value,
                           },
                         })

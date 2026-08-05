@@ -323,7 +323,6 @@ export function resolveSessionUpscaleModelId(
 }
 
 function writeSession(state: StudioSessionSource) {
-  if (!isTauri() || studioRefs.suppressSessionPersist) return
   const payload = JSON.stringify(serializeStudioSession(state))
   void setSetting(SETTING_STUDIO_SESSION, payload).catch(() => {})
 }

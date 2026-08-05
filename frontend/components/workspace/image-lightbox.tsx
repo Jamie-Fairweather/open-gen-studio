@@ -103,7 +103,7 @@ export function ImageLightbox({
     const ro = new ResizeObserver(() => measureViewport())
     ro.observe(el)
     return () => ro.disconnect()
-  }, [open, measureViewport])
+  }, [open, measureViewport, src])
 
   const fitScale = natural ? fitScaleFor(viewportSize, natural) : 1
   const maxViewZoom = MAX_PIXEL_ZOOM / Math.max(fitScale, 0.0001)
@@ -159,7 +159,7 @@ export function ImageLightbox({
       MAX_PIXEL_ZOOM
     )
     const nextView = nextPixel / Math.max(fs, 0.0001)
-    if (!viewport) {
+    if (!viewport?.isConnected) {
       setViewZoom(nextView)
       if (nextView <= MIN_VIEW_ZOOM) setPan({ x: 0, y: 0 })
       return

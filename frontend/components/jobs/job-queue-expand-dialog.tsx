@@ -125,7 +125,7 @@ export function JobQueueExpandDialog() {
 
   const deleteHistory = async (id: string, shiftKey: boolean) => {
     const row = history.find((h) => h.jobId === id)
-    const hasGallery = (row?.galleryItems.length ?? 0) > 0
+    const hasGallery = Boolean(row?.galleryItems.length)
     if (hasGallery && !shiftKey) {
       setConfirmDelete({ id })
       return
@@ -134,7 +134,8 @@ export function JobQueueExpandDialog() {
       await deleteJobHistoryItem(id, hasGallery)
       setHistory((prev) => {
         const next = prev.filter((h) => h.jobId !== id)
-        if (selectedId === id) setSelectedId(next[0]?.jobId ?? null)
+        if (selectedId !== id) return next
+        setSelectedId(next[0]?.jobId ?? null)
         return next
       })
       notifySuccess("Removed from history")
@@ -277,13 +278,7 @@ export function JobQueueExpandDialog() {
                   className="h-full min-h-0 border-t border-border/50 pt-4 md:border-t-0 md:border-l md:ps-5 md:pt-0"
                   scrollFade
                 >
-                  {selected ? (
-                    <HistoryDetail item={selected} />
-                  ) : (
-                    <p className="py-16 text-center text-sm text-muted-foreground">
-                      Select a job.
-                    </p>
-                  )}
+                  {selected && <HistoryDetail item={selected} />}
                 </ScrollArea>
               </div>
             )}
@@ -293,8 +288,8 @@ export function JobQueueExpandDialog() {
 
       <AlertDialog
         open={confirmDelete != null}
-        onOpenChange={(o) => {
-          if (!o) setConfirmDelete(null)
+        onOpenChange={(open) => {
+          if (!open) setConfirmDelete(null)
         }}
       >
         <AlertDialogPopup>
@@ -317,9 +312,8 @@ export function JobQueueExpandDialog() {
             <AlertDialogClose
               render={<Button variant="destructive" />}
               onClick={() => {
-                const target = confirmDelete
+                const target = confirmDelete!
                 setConfirmDelete(null)
-                if (!target) return
                 void (async () => {
                   try {
                     if (target.clearAll) {

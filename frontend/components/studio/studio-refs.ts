@@ -7,6 +7,10 @@ import type {
 } from "@/lib/host"
 import type { StudioSessionV1 } from "./slices/session-persist"
 
+/** Default noops replaced by bootstrap once navigation is wired. */
+export const defaultNavigateTab: (tab: StudioTab) => void = () => {}
+export const defaultPushPath: (path: string) => void = () => {}
+
 /** Non-reactive refs used by store actions + bootstrap (module-scoped). */
 export const studioRefs = {
   preferredBlueprintId: null as string | null,
@@ -41,6 +45,6 @@ export const studioRefs = {
   aspectId: "1:1",
   sideLength: 1024,
   loraPacks: [] as LoraPack[],
-  navigateTab: (() => {}) as (tab: StudioTab) => void,
-  pushPath: (() => {}) as (path: string) => void,
+  navigateTab: defaultNavigateTab as (tab: StudioTab) => void,
+  pushPath: defaultPushPath as (path: string) => void,
 }

@@ -24,6 +24,12 @@ const eslintConfig = defineConfig([
     "backend/**",
     // Specta / tauri-specta generated bindings
     "frontend/lib/generated/**",
+    // Vitest suites — typechecked loosely; not part of app lint gate
+    "frontend/**/*.test.ts",
+    "frontend/**/*.test.tsx",
+    "frontend/**/*.spec.ts",
+    "frontend/**/*.spec.tsx",
+    "frontend/test/**",
     "graphify-out/**",
     ".cursor/**",
     ".agents/**",

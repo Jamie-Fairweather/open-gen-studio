@@ -21,6 +21,7 @@ import {
   type DownloadJobView,
   type PromptToolWeightInfo,
 } from "@/lib/host"
+import { MIN_ETA_SPEED_BPS } from "@/lib/download-thresholds"
 import { formatBytes, formatEta } from "@/lib/format"
 import { notifyError } from "@/lib/notify"
 import { cn } from "@/lib/utils"
@@ -278,7 +279,7 @@ function PromptToolsDownloadCard({
   const remain =
     bytesTotal != null && speedBps > 0 ? (bytesTotal - bytesDone) / speedBps : 0
   const etaLabel =
-    job.status === "running" && speedBps > 8 * 1024 && remain > 0
+    job.status === "running" && speedBps > MIN_ETA_SPEED_BPS && remain > 0
       ? ` · ${formatEta(remain)}`
       : ""
 

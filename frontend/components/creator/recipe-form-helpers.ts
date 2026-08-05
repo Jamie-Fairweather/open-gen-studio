@@ -25,7 +25,7 @@ export function filenameFromUrl(url: string): string {
     const segment = parsed.pathname.split("/").filter(Boolean).pop() ?? ""
     return decodeURIComponent(segment)
   } catch {
-    const noQuery = trimmed.split(/[?#]/)[0] ?? ""
+    const noQuery = trimmed.split(/[?#]/)[0]
     const segment = noQuery.split("/").filter(Boolean).pop() ?? ""
     try {
       return decodeURIComponent(segment)

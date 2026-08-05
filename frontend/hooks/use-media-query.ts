@@ -59,6 +59,23 @@ function getServerSnapshot(): boolean {
   return false
 }
 
+/** Exported for SSR-branch coverage; used by useMediaQuery. */
+export function subscribeMediaQuery(
+  mediaQuery: string,
+  callback: () => void
+): () => void {
+  if (typeof window === "undefined") return () => {}
+  const mql = window.matchMedia(mediaQuery)
+  mql.addEventListener("change", callback)
+  return () => mql.removeEventListener("change", callback)
+}
+
+/** Exported for SSR-branch coverage; used by useMediaQuery. */
+export function getMediaQuerySnapshot(mediaQuery: string): boolean {
+  if (typeof window === "undefined") return false
+  return window.matchMedia(mediaQuery).matches
+}
+
 export type MediaQueryInput = {
   min?: Breakpoint | number
   max?: Breakpoint | number
@@ -72,19 +89,14 @@ export function useMediaQuery(
   const mediaQuery = parseQuery(query)
 
   const subscribe = useCallback(
-    (callback: () => void) => {
-      if (typeof window === "undefined") return () => {}
-      const mql = window.matchMedia(mediaQuery)
-      mql.addEventListener("change", callback)
-      return () => mql.removeEventListener("change", callback)
-    },
+    (callback: () => void) => subscribeMediaQuery(mediaQuery, callback),
     [mediaQuery]
   )
 
-  const getSnapshot = useCallback(() => {
-    if (typeof window === "undefined") return false
-    return window.matchMedia(mediaQuery).matches
-  }, [mediaQuery])
+  const getSnapshot = useCallback(
+    () => getMediaQuerySnapshot(mediaQuery),
+    [mediaQuery]
+  )
 
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
 }

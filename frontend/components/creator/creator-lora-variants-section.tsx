@@ -115,7 +115,7 @@ export function CreatorLoraVariantsSection({
           busy ||
           loadingEdit ||
           expanding ||
-          variants.length >= RECIPE_ARCHES.length
+          (RECIPE_ARCHES.length > 0 && variants.length >= RECIPE_ARCHES.length)
         }
         onClick={() => {
           const nextArch =

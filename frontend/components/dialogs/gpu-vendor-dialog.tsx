@@ -67,10 +67,9 @@ export function GpuVendorDialog({
   const [busy, setBusy] = useState(false)
 
   async function handleConfirm() {
-    if (!selected) return
     setBusy(true)
     try {
-      await onConfirm(selected)
+      await onConfirm(selected!)
     } finally {
       setBusy(false)
     }

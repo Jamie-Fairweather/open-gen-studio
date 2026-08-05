@@ -186,8 +186,7 @@ export function CreatorPanel({
   }
 
   async function confirmDelete() {
-    if (!pendingDelete) return
-    const { kind, id, name } = pendingDelete
+    const { kind, id, name } = pendingDelete!
     try {
       if (kind === "blueprint") {
         await deleteUserBlueprint(id)

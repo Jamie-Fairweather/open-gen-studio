@@ -15,7 +15,7 @@ async function bytesFromFile(
   const bytes = Array.from(new Uint8Array(buf))
   const name = file.name.toLowerCase()
   const ext = name.includes(".")
-    ? (name.split(".").pop() ?? "png")
+    ? name.split(".").pop() || "png"
     : file.type === "image/jpeg"
       ? "jpg"
       : file.type === "image/webp"

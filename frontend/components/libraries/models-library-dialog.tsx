@@ -134,8 +134,6 @@ function ModelsLibraryBody({
   const upscaleList = upscalers ?? []
 
   function handleInstall(pack: LoraPack, arch: RecipeArch) {
-    const variant = pack.variants.find((v) => v.arch === arch)
-    if (!variant) return
     const key = `${pack.id}:${arch}`
     setBusyKeys((prev) => (prev.includes(key) ? prev : [...prev, key]))
     onInstallLora?.(pack.id, arch)

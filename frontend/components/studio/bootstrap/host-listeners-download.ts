@@ -1,4 +1,5 @@
 import { onDownloadManager, onDownloadProgress } from "@/lib/host"
+import { MIN_ETA_SPEED_BPS } from "@/lib/download-thresholds"
 import { formatBytes, formatEta } from "@/lib/format"
 import {
   createDownloadSpeedTracker,
@@ -37,7 +38,7 @@ export function registerDownloadListeners(
       !p.done &&
       p.total != null &&
       p.total > p.downloaded &&
-      emaSpeed > 8 * 1024
+      emaSpeed > MIN_ETA_SPEED_BPS
     ) {
       const remain = p.total - p.downloaded
       etaSuffix = ` · ${formatBytes(emaSpeed)}/s · ETA ${formatEta(remain / emaSpeed)}`

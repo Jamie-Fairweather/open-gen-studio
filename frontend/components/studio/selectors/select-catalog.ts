@@ -50,9 +50,10 @@ export function selectPreviewItem(s: StudioStore): GalleryItem | null {
 
 export function selectHasSizeControls(s: StudioStore): boolean {
   const detail = selectActiveDetail(s)
+  const controls = detail?.controls ?? []
   return (
-    (detail?.controls ?? []).some((c) => c.id === "width") &&
-    (detail?.controls ?? []).some((c) => c.id === "height")
+    controls.some((c) => c.id === "width") &&
+    controls.some((c) => c.id === "height")
   )
 }
 
@@ -94,13 +95,13 @@ export function selectAdvancedControls(
 ): NonNullable<BlueprintDetail["controls"]> {
   const detail = selectActiveDetail(s)
   const hasSize = selectHasSizeControls(s)
-  return (detail?.controls ?? []).filter(
-    (c) =>
-      (c.group === "advanced" || c.group === "core") &&
-      c.id !== "prompt" &&
-      c.id !== "negative" &&
-      !(hasSize && (c.id === "width" || c.id === "height"))
-  )
+  return (detail?.controls ?? []).filter((c) => {
+    if (c.group !== "advanced" && c.group !== "core") return false
+    if (c.id === "prompt" || c.id === "negative") return false
+    if (hasSize && c.id === "width") return false
+    if (hasSize && c.id === "height") return false
+    return true
+  })
 }
 
 export function selectLatestGallerySeed(s: StudioStore): number | null {

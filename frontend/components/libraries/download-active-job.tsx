@@ -4,6 +4,7 @@ import { PauseIcon, PlayIcon, XIcon } from "lucide-react"
 import type { DownloadJobView } from "@/lib/host"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
+import { MIN_ETA_SPEED_BPS } from "@/lib/download-thresholds"
 import { formatBytes, formatEta } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import {
@@ -52,7 +53,7 @@ export function DownloadActiveJob({
   const showEta =
     active.status === "running" &&
     isTransfer &&
-    speedBps > 8 * 1024 &&
+    speedBps > MIN_ETA_SPEED_BPS &&
     remain > 0
   const etaLabel = showEta
     ? ` · ${formatBytes(speedBps)}/s · ETA ${formatEta(remain / speedBps)}`

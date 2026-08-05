@@ -25,7 +25,7 @@ import type {
   LoraStackEntry,
   UpscaleModelInfo,
 } from "@/lib/host"
-import { notifyInfo, notifySuccess } from "@/lib/notify"
+import { notifySuccess } from "@/lib/notify"
 import { cn } from "@/lib/utils"
 
 type AdvancedControlsProps = {
@@ -188,13 +188,9 @@ export function AdvancedControls({
                 aria-label="Use seed from last gallery image"
                 disabled={latestGallerySeed == null}
                 onClick={() => {
-                  if (latestGallerySeed == null) {
-                    notifyInfo("No seed", "Generate an image first.", "seed")
-                    return
-                  }
                   setControlValues((prev) => ({
                     ...prev,
-                    seed: latestGallerySeed,
+                    seed: latestGallerySeed!,
                   }))
                   notifySuccess("Seed loaded", String(latestGallerySeed))
                 }}

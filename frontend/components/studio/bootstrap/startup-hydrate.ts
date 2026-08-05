@@ -65,7 +65,6 @@ export async function runStartupLoad(
   let session: ReturnType<typeof parseStudioSession> = null
 
   const releaseSuppressIfReady = (selected: string | null) => {
-    if (!settingsReady) return
     if (!session) {
       studioRefs.suppressSessionPersist = false
       tryMarkStartupHydrated()

@@ -5,9 +5,10 @@
 ### **Local image generation that feels like a product, not a science project.**
 
 <p>
-  <img src="https://img.shields.io/badge/status-0.1.0-orange?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/status-0.2.0-orange?style=for-the-badge" />
   <img src="https://img.shields.io/badge/platform-Windows-blue?style=for-the-badge" />
   <img src="https://img.shields.io/badge/GPU-NVIDIA-success?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/coverage-100%25%20lines-brightgreen?style=for-the-badge" />
   <img src="https://img.shields.io/badge/Built%20with-Tauri%202-7C3AED?style=for-the-badge" />
   <img src="https://img.shields.io/badge/license-Elastic%202.0-lightgrey?style=for-the-badge" />
 </p>
@@ -93,7 +94,8 @@ bun run desktop          # Tauri + Next (http://localhost:3000)
 
 ```bash
 bun run check            # typecheck + lint
-bun run check:full       # + recipe Rust tests (skipped on Windows; see contributing)
+bun run test             # frontend Vitest (pure helpers)
+bun run check:full       # check + recipe Rust tests + Vitest (Rust skipped on Windows; see contributing)
 bun run ipc:types        # regenerate Specta bindings
 bun run ipc:check        # fail if frontend/lib/generated/ drifts
 bun run desktop:build    # production desktop build
@@ -106,6 +108,8 @@ bun run desktop:build    # production desktop build
 | Doc                                                                            | Purpose                         |
 | ------------------------------------------------------------------------------ | ------------------------------- |
 | [Contributing](docs/contributing/README.md)                                    | How-tos + local quality gates   |
+| [Desktop development](docs/contributing/desktop-dev.md)                        | Run/debug Tauri + Next locally  |
+| [Release version bumps](docs/contributing/release-version.md)                  | Sync app version across files   |
 | [Coding standards](docs/contributing/coding-standards.md)                      | IPC: Rust → Specta → TypeScript |
 | [Adding a model architecture](docs/contributing/adding-model-architectures.md) | New `RecipeArch` end-to-end     |
 | [Product plan](docs/PLAN.md)                                                   | Vision, architecture, roadmap   |

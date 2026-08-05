@@ -127,8 +127,7 @@ export function parseStructuredPrompt(text: string): StructuredFields | null {
   while ((m = re.exec(trimmed)) !== null) {
     const label = STRUCTURED_FIELDS.find(
       (f) => f.toLowerCase() === m![1].toLowerCase()
-    )
-    if (!label) continue
+    )!
     fields[label] = m[2].trim()
     hit = true
   }

@@ -38,6 +38,12 @@ const cbs = vi.hoisted(() => {
     listUpscalers: vi.fn(async () => [{ id: "u1" }]),
     usduNodeReady: vi.fn(async () => true),
     listJobQueue: vi.fn(async () => ({ items: [] })),
+    startComfyui: vi.fn(async () => ({
+      id: "r1",
+      engine: "comfyui",
+      status: "starting",
+      installPath: "C:/comfy",
+    })),
   }
 })
 
@@ -67,6 +73,7 @@ vi.mock("@/lib/host", async () => {
     listUpscalers: cbs.listUpscalers,
     usduNodeReady: cbs.usduNodeReady,
     listJobQueue: cbs.listJobQueue,
+    startComfyui: cbs.startComfyui,
   })
 })
 
@@ -340,5 +347,45 @@ describe("registerHostListeners", () => {
       true
     )
     cleanupHostListeners(handles2)
+  })
+
+  it("auto-starts Comfy when download snapshot clears a finished runtime job", async () => {
+    const store = createTestStudioStore()
+    store.setState({
+      runtimes: [
+        {
+          id: "r1",
+          engine: "comfyui",
+          status: "ready",
+          installPath: "C:/comfy",
+          version: "v1",
+          port: 8188,
+          error: null,
+          createdAt: 0,
+          updatedAt: 0,
+        },
+      ],
+      downloadSnapshot: {
+        active: { kind: "runtime", jobKey: "runtime:comfyui" } as never,
+        queued: [],
+        history: [],
+      },
+    })
+    const handles = registerHostListeners(() => store.getState())
+    await vi.waitFor(() => expect(cbs.dlManager.get()).toBeTruthy())
+    await vi.waitFor(() => expect(cbs.rtProgress.get()).toBeTruthy())
+
+    // Mimic the old race: install "done" while the UI still sees a runtime job.
+    cbs.rtProgress.emit({ stage: "done", message: "ComfyUI installed" })
+    expect(cbs.startComfyui).not.toHaveBeenCalled()
+
+    // Snapshot clears the runtime job (or advances to blueprint) — warm-start.
+    cbs.dlManager.emit({
+      active: { kind: "blueprint", jobKey: "blueprint:krea2-turbo" },
+      queued: [],
+      history: [],
+    })
+    await vi.waitFor(() => expect(cbs.startComfyui).toHaveBeenCalled())
+    cleanupHostListeners(handles)
   })
 })

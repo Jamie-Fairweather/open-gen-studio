@@ -6,12 +6,46 @@ import {
   useEffectEvent,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react"
 import { createPortal, flushSync } from "react-dom"
 import { isTauri } from "@/lib/host"
 import { notifyError } from "@/lib/notify"
 import { cn } from "@/lib/utils"
+
+/** Shared across every Titlebar mount (studio + onboarding overlay). */
+let sharedFullscreen = false
+const fullscreenListeners = new Set<() => void>()
+const f11Callbacks = new Set<() => void>()
+
+function subscribeFullscreen(onStoreChange: () => void) {
+  fullscreenListeners.add(onStoreChange)
+  return () => {
+    fullscreenListeners.delete(onStoreChange)
+  }
+}
+
+function getFullscreenSnapshot() {
+  return sharedFullscreen
+}
+
+function setSharedFullscreen(next: boolean) {
+  if (sharedFullscreen === next) return
+  sharedFullscreen = next
+  for (const listener of fullscreenListeners) listener()
+}
+
+/** @internal vitest */
+export function resetTitlebarFullscreenForTests() {
+  setSharedFullscreen(false)
+}
+
+function onF11KeyDown(event: KeyboardEvent) {
+  if (event.key !== "F11") return
+  event.preventDefault()
+  f11Callbacks.values().next().value?.()
+}
 
 function CaptionButton({
   label,
@@ -67,11 +101,14 @@ type TitlebarProps = {
  */
 export function Titlebar({ leading, children, trailing }: TitlebarProps) {
   const [maximized, setMaximized] = useState(false)
-  const [fullscreen, setFullscreen] = useState(false)
+  const fullscreen = useSyncExternalStore(
+    subscribeFullscreen,
+    getFullscreenSnapshot,
+    () => false
+  )
   const [fsCover, setFsCover] = useState<"hidden" | "opaque" | "fading">(
     "hidden"
   )
-  const fullscreenRef = useRef(false)
   const wasMaximizedRef = useRef(false)
 
   useEffect(() => {
@@ -95,7 +132,7 @@ export function Titlebar({ leading, children, trailing }: TitlebarProps) {
 
   async function toggleFullscreen() {
     const win = getCurrentWindow()
-    const next = !fullscreenRef.current
+    const next = !getFullscreenSnapshot()
 
     try {
       // Instant opaque cover so the unmaximize↔fullscreen reflow isn't visible.
@@ -118,8 +155,7 @@ export function Titlebar({ leading, children, trailing }: TitlebarProps) {
         }
       }
 
-      fullscreenRef.current = next
-      setFullscreen(next)
+      setSharedFullscreen(next)
     } catch (e) {
       notifyError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -136,14 +172,16 @@ export function Titlebar({ leading, children, trailing }: TitlebarProps) {
   })
 
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "F11") return
-      event.preventDefault()
-      onToggleFullscreen()
+    const cb = () => onToggleFullscreen()
+    const wasEmpty = f11Callbacks.size === 0
+    f11Callbacks.add(cb)
+    if (wasEmpty) window.addEventListener("keydown", onF11KeyDown)
+    return () => {
+      f11Callbacks.delete(cb)
+      if (f11Callbacks.size === 0) {
+        window.removeEventListener("keydown", onF11KeyDown)
+      }
     }
-
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
   }, [])
 
   const win = () => getCurrentWindow()
@@ -168,7 +206,8 @@ export function Titlebar({ leading, children, trailing }: TitlebarProps) {
           <div className="flex shrink-0 items-center pr-2 pl-3">{leading}</div>
         ) : null}
         <div
-          {...(!fullscreen ? { "data-tauri-drag-region": true } : {})}
+          // Explicit false while fullscreen — required for Tauri + app-region CSS.
+          data-tauri-drag-region={!fullscreen}
           className="min-w-0 flex-1"
         />
       </div>
@@ -176,10 +215,7 @@ export function Titlebar({ leading, children, trailing }: TitlebarProps) {
       <div className="flex min-w-0 items-center px-1">{children}</div>
 
       <div className="flex min-w-0">
-        <div
-          {...(!fullscreen ? { "data-tauri-drag-region": true } : {})}
-          className="min-w-0 flex-1"
-        />
+        <div data-tauri-drag-region={!fullscreen} className="min-w-0 flex-1" />
         {trailing ? (
           <div className="flex shrink-0 items-center pr-1">{trailing}</div>
         ) : null}

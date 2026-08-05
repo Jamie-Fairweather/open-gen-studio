@@ -4,6 +4,8 @@ import { LayersIcon } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { useStudioStore } from "@/components/studio/store"
 import { useMediaQuery } from "@/hooks/use-media-query"
+import { isTauri } from "@/lib/host"
+import { needsOnboarding } from "@/lib/onboarding"
 import { cn } from "@/lib/utils"
 
 const MIN_MS = 500
@@ -13,11 +15,41 @@ const EXIT_MS = 350
 
 type Phase = "enter" | "run" | "exit" | "gone"
 
+/** Keep covering until hydrate is done — and until onboarding owns the screen if needed. */
+export function canDismissStartupOverlay(opts: {
+  startupHydrated: boolean
+  blueprintsLoaded: boolean
+  onboardingCoverReady: boolean
+  needsOnboarding: boolean
+  tauri: boolean
+}): boolean {
+  if (!opts.startupHydrated) return false
+  if (!opts.tauri) return true
+  // Catalog still loading — we don't know yet whether onboarding is required.
+  if (!opts.blueprintsLoaded) return false
+  if (opts.needsOnboarding) return opts.onboardingCoverReady
+  return true
+}
+
 export function StartupOverlay() {
   const [phase, setPhase] = useState<Phase>("enter")
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)")
   const startupHydrated = useStudioStore((s) => s.startupHydrated)
+  const blueprintsLoaded = useStudioStore((s) => s.blueprintsLoaded)
+  const onboardingCoverReady = useStudioStore((s) => s.onboardingCoverReady)
+  const runtimes = useStudioStore((s) => s.runtimes)
+  const blueprints = useStudioStore((s) => s.blueprints)
   const dismissRef = useRef<(() => void) | null>(null)
+
+  const tauri = isTauri()
+  const mustOnboard = tauri && needsOnboarding(runtimes, blueprints)
+  const canDismiss = canDismissStartupOverlay({
+    startupHydrated,
+    blueprintsLoaded,
+    onboardingCoverReady,
+    needsOnboarding: mustOnboard,
+    tauri,
+  })
 
   useEffect(() => {
     const skipExit = window.matchMedia(
@@ -57,8 +89,8 @@ export function StartupOverlay() {
   }, [])
 
   useEffect(() => {
-    if (startupHydrated) dismissRef.current?.()
-  }, [startupHydrated])
+    if (canDismiss) dismissRef.current?.()
+  }, [canDismiss])
 
   if (phase === "gone") return null
 

@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 import { act, render, screen, waitFor } from "@testing-library/react"
+import { renderToString } from "react-dom/server"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -44,10 +45,11 @@ vi.mock("@/lib/notify", () => ({
   notifyDismiss: vi.fn(),
 }))
 
-import { Titlebar } from "./titlebar"
+import { resetTitlebarFullscreenForTests, Titlebar } from "./titlebar"
 
 describe("Titlebar", () => {
   beforeEach(() => {
+    resetTitlebarFullscreenForTests()
     isTauri.mockReset().mockReturnValue(false)
     notifyError.mockReset()
     win.isMaximized.mockReset().mockResolvedValue(false)
@@ -58,6 +60,11 @@ describe("Titlebar", () => {
     win.toggleMaximize.mockReset().mockResolvedValue(undefined)
     win.close.mockReset().mockResolvedValue(undefined)
     win.onResized.mockClear()
+  })
+
+  it("uses the SSR fullscreen snapshot", () => {
+    const html = renderToString(<Titlebar />)
+    expect(html).toContain("Fullscreen")
   })
 
   it("renders slots and window controls without Tauri hydrate", async () => {
@@ -111,6 +118,13 @@ describe("Titlebar", () => {
         screen.getAllByRole("button", { name: "Exit fullscreen" }).length
       ).toBe(2)
     )
+    // Drag must be explicitly disabled (Tauri + app-region CSS).
+    expect(
+      document.querySelectorAll('[data-tauri-drag-region="false"]').length
+    ).toBeGreaterThan(0)
+    expect(
+      document.querySelectorAll('[data-tauri-drag-region="true"]').length
+    ).toBe(0)
 
     // Exit via the caption maximize/restore control (also labeled Exit fullscreen)
     const exitButtons = screen.getAllByRole("button", {

@@ -200,12 +200,22 @@ pub fn ensure_pinned_node(app: &AppHandle, pin_id: &str) -> Result<(), String> {
     ensure_pinned_custom_node(app, pin)
 }
 
+fn node_progress_label(pin: &NodePin) -> &str {
+    match pin.id {
+        "usdu" => "Ultimate SD Upscale",
+        "supir" => "SUPIR",
+        "qwenvl" => "Prompt Tools",
+        _ => pin.folder,
+    }
+}
+
 /// Clone (if needed) and check out the pinned commit for a managed custom node.
 pub fn ensure_pinned_custom_node(app: &AppHandle, pin: &NodePin) -> Result<(), String> {
     let custom_dir = custom_nodes_dir(app)?;
     fs::create_dir_all(&custom_dir).map_err(|e| e.to_string())?;
     let dest = custom_dir.join(pin.folder);
     let short = pins::short_sha(pin.commit);
+    let label = node_progress_label(pin);
 
     if node_at_pin(app, pin) {
         return Ok(());
@@ -216,10 +226,7 @@ pub fn ensure_pinned_custom_node(app: &AppHandle, pin: &NodePin) -> Result<(), S
         UpscaleProgress {
             model_id: pin.id.into(),
             stage: "download".into(),
-            message: format!(
-                "Updating {} to pin {short} (required by this app version)…",
-                pin.folder
-            ),
+            message: format!("Installing {label}…"),
             filename: None,
         },
     );
@@ -295,10 +302,7 @@ pub fn ensure_pinned_custom_node(app: &AppHandle, pin: &NodePin) -> Result<(), S
         UpscaleProgress {
             model_id: pin.id.into(),
             stage: "done".into(),
-            message: format!(
-                "{} ready at {short} - restart ComfyUI if it was already running",
-                pin.folder
-            ),
+            message: format!("{label} ready"),
             filename: None,
         },
     );
@@ -331,7 +335,7 @@ pub(crate) fn install_supir_python_deps(app: &AppHandle) -> Result<(), String> {
         UpscaleProgress {
             model_id: "supir".into(),
             stage: "download".into(),
-            message: "Installing SUPIR Python dependencies…".into(),
+            message: "Installing Python dependencies…".into(),
             filename: None,
         },
     );

@@ -24,6 +24,12 @@ export const studioRefs = {
    */
   controlValuesByBlueprintId: {} as Record<string, Record<string, unknown>>,
   /**
+   * Next `applyLoadedBlueprintDetail` should use blueprint defaults (skip
+   * stash / same-id keep). Set by explicit `selectBlueprint` (picker /
+   * onboarding) so steps/CFG match the chosen pack.
+   */
+  forceBlueprintDefaults: false,
+  /**
    * Prefetch of blueprint detail started during bootstrap before selectedId
    * is set — reused by the detail-load effect to avoid a second round-trip.
    */

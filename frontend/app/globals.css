@@ -319,14 +319,15 @@
   pre {
     font-family: var(--font-mono);
   }
-  /* Tauri frameless window: make drag regions work with pen/touch too */
-  [data-tauri-drag-region] {
+  /* Tauri frameless window: make drag regions work with pen/touch too.
+     Exclude data-tauri-drag-region="false" (used while fullscreen). */
+  [data-tauri-drag-region]:not([data-tauri-drag-region="false"]) {
     app-region: drag;
     -webkit-app-region: drag;
   }
-  [data-tauri-drag-region] button,
-  [data-tauri-drag-region] a,
-  [data-tauri-drag-region] input {
+  [data-tauri-drag-region]:not([data-tauri-drag-region="false"]) button,
+  [data-tauri-drag-region]:not([data-tauri-drag-region="false"]) a,
+  [data-tauri-drag-region]:not([data-tauri-drag-region="false"]) input {
     app-region: no-drag;
     -webkit-app-region: no-drag;
   }

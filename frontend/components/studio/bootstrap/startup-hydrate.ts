@@ -258,9 +258,8 @@ export async function runStartupLoad(
       const vendors = [...new Set(gpuInfo.adapters.map((a) => a.vendor))]
       if (vendors.length === 1 && !savedVendor) {
         void setSetting(SETTING_GPU_VENDOR, vendors[0]).catch(() => {})
-      } else if (gpuInfo.needsVendorChoice && !savedVendor) {
-        s.setGpuVendorDialogOpen(true)
       }
+      // Mixed vendors: OnboardingOverlay owns first-run GPU pick (not GpuVendorDialog).
     }
   })
 
@@ -293,7 +292,10 @@ export async function runStartupLoad(
           ver ? `Installing ComfyUI ${ver}` : "Installing ComfyUI…",
           "runtime-install"
         )
+        return
       }
+      // Warm the runtime on launch so Generate isn't the first cold start.
+      s.maybeAutoStartComfy()
     })
     .catch(() => {})
 

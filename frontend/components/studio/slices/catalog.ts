@@ -21,6 +21,11 @@ export type CatalogSlice = {
   blueprintsLoaded: boolean
   selectedId: string | null
   detail: BlueprintDetail | null
+  /**
+   * Bumped by `selectBlueprint` so the bootstrap detail-load effect re-runs
+   * even when the selected id is unchanged (force defaults re-apply).
+   */
+  detailReloadToken: number
   loraPacks: LoraPack[]
   upscaleModels: UpscaleModelInfo[]
   usduReady: boolean
@@ -53,13 +58,22 @@ export const createCatalogSlice: StateCreator<
   blueprintsLoaded: false,
   selectedId: null,
   detail: null,
+  detailReloadToken: 0,
   loraPacks: [],
   upscaleModels: [],
   usduReady: false,
   sizesProbing: false,
 
   selectBlueprint: (id) => {
-    set({ selectedId: id })
+    // Picker / onboarding picks should load that pack's defaults (steps, CFG),
+    // not a stale in-session stash from an earlier visit.
+    delete studioRefs.controlValuesByBlueprintId[id]
+    studioRefs.forceBlueprintDefaults = true
+    set((s) => ({
+      selectedId: id,
+      // Bump so the detail-load effect re-runs even when id is unchanged.
+      detailReloadToken: s.detailReloadToken + 1,
+    }))
     studioRefs.preferredBlueprintId = id
     void setSetting(SETTING_SELECTED_BLUEPRINT, id).catch(() => {})
   },

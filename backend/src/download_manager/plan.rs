@@ -155,13 +155,13 @@ pub(crate) fn plan_steps(
             let mut steps = vec![
                 PlannedStep {
                     step_kind: "git_node".into(),
-                    label: "ComfyUI-QwenVL custom node".into(),
+                    label: "Prompt Tools".into(),
                     spec: json!({ "pinId": "qwenvl" }),
                     bytes_total: None,
                 },
                 PlannedStep {
                     step_kind: "pip".into(),
-                    label: "QwenVL Python dependencies".into(),
+                    label: "Python dependencies".into(),
                     spec: json!({ "action": "qwenvl_deps" }),
                     bytes_total: None,
                 },

@@ -1,5 +1,42 @@
 import type { DownloadJobView } from "@/lib/host"
 
+/**
+ * Soften technical install status lines (git SHAs, repo folder names) for UI.
+ * Keeps already-plain messages unchanged.
+ */
+export function friendlyInstallStatus(
+  message: string | null | undefined
+): string | null {
+  if (message == null) return null
+  const m = message.trim()
+  if (!m) return null
+  // Drop power-user restart advice (noise on first-run / mid-install).
+  if (/restart\s+ComfyUI/i.test(m)) {
+    const cleaned = m
+      .replace(/\s*[—\-]\s*restart\s+ComfyUI.*$/i, "")
+      .replace(/\s+ready at\s+[0-9a-f]{7,40}\b/i, " ready")
+      .trim()
+    return cleaned || "Extensions ready"
+  }
+  if (/to pin\s+[0-9a-f]/i.test(m) || /Updating\s+ComfyUI-/i.test(m)) {
+    return "Installing extensions…"
+  }
+  if (/Python dependencies/i.test(m)) {
+    return "Installing Python dependencies…"
+  }
+  if (
+    /Ensuring\s+ComfyUI-/i.test(m) ||
+    /ComfyUI-Manager/i.test(m) ||
+    /custom node/i.test(m)
+  ) {
+    return /ready/i.test(m) ? "Extensions ready" : "Installing extensions…"
+  }
+  // "ComfyUI-Foo ready at abc1234" → drop the hash noise
+  const withoutSha = m.replace(/\s+ready at\s+[0-9a-f]{7,40}\b/i, " ready")
+  if (withoutSha !== m) return withoutSha
+  return m
+}
+
 export function statusLabel(status: string): string {
   if (status === "done") return "Ready"
   if (status === "error") return "Failed"

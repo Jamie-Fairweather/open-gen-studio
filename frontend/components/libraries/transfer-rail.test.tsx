@@ -3,10 +3,13 @@ import { render } from "@testing-library/react"
 import { TransferRail } from "./transfer-rail"
 
 describe("TransferRail", () => {
-  it("renders progress and idle marker", () => {
+  it("hides the fill when idle", () => {
     const { rerender, container } = render(<TransferRail value={40} />)
-    expect(container.querySelector("[aria-hidden]")).toBeNull()
+    const indicator = () =>
+      container.querySelector('[data-slot="progress-indicator"]')
+
+    expect(indicator()?.className).not.toMatch(/opacity-0/)
     rerender(<TransferRail value={0} idle />)
-    expect(container.querySelector("[aria-hidden]")).toBeTruthy()
+    expect(indicator()?.className).toMatch(/opacity-0/)
   })
 })

@@ -31,6 +31,9 @@ vi.mock("@/components/shell", () => ({
 vi.mock("@/components/shell/startup-overlay", () => ({
   StartupOverlay: () => <div>startup</div>,
 }))
+vi.mock("@/components/shell/onboarding-overlay", () => ({
+  OnboardingOverlay: () => null,
+}))
 vi.mock("@/components/ui/toast", () => ({
   ToastProvider: ({ children }: { children: React.ReactNode }) => children,
   AnchoredToastProvider: ({ children }: { children: React.ReactNode }) =>

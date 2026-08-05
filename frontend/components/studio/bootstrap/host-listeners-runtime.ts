@@ -49,6 +49,8 @@ export function registerRuntimeListeners(
     if (p.stage === "done") {
       getStore().setRuntimeBusy(false)
       notifySuccess("Runtime Installed", p.message)
+      // Fresh install lands as status "ready" — start it so the studio is warm.
+      getStore().maybeAutoStartComfy()
     } else if (p.stage === "ready") {
       getStore().setRuntimeBusy(false)
       getStore().setComfyHealthy(true)

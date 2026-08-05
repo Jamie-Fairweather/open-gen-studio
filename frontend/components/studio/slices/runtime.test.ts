@@ -18,10 +18,68 @@ vi.mock("@/lib/notify", async () => {
   return createNotifyMock()
 })
 
-import { notifyError, notifyInfo } from "@/lib/notify"
+import { notifyError, notifyInfo, notifyProgress } from "@/lib/notify"
 import { createTestStudioStore } from "@/test/create-test-store"
+import { canAutoStartComfy } from "./runtime"
 
 beforeEach(() => vi.clearAllMocks())
+
+describe("canAutoStartComfy", () => {
+  it("requires installed ready runtime and no runtime download job", () => {
+    expect(canAutoStartComfy([])).toBe(false)
+    expect(
+      canAutoStartComfy([
+        {
+          engine: "comfyui",
+          status: "ready",
+          installPath: "",
+        } as never,
+      ])
+    ).toBe(false)
+    expect(
+      canAutoStartComfy([
+        {
+          engine: "comfyui",
+          status: "running",
+          installPath: "C:/comfy",
+        } as never,
+      ])
+    ).toBe(false)
+    expect(
+      canAutoStartComfy([
+        {
+          engine: "comfyui",
+          status: "ready",
+          installPath: "C:/comfy",
+        } as never,
+      ])
+    ).toBe(true)
+    expect(
+      canAutoStartComfy(
+        [
+          {
+            engine: "comfyui",
+            status: "ready",
+            installPath: "C:/comfy",
+          } as never,
+        ],
+        { active: { kind: "runtime" }, queued: [] }
+      )
+    ).toBe(false)
+    expect(
+      canAutoStartComfy(
+        [
+          {
+            engine: "comfyui",
+            status: "ready",
+            installPath: "C:/comfy",
+          } as never,
+        ],
+        { active: null, queued: [{ kind: "runtime" }] }
+      )
+    ).toBe(false)
+  })
+})
 
 describe("createRuntimeSlice", () => {
   it("install/start/stop and setters cover success and error paths", async () => {
@@ -84,11 +142,29 @@ describe("createRuntimeSlice", () => {
     await store.getState().handleInstallComfy()
 
     await store.getState().handleStartComfy()
+    expect(notifyProgress).toHaveBeenCalled()
+    vi.mocked(notifyProgress).mockClear()
+    await store.getState().handleStartComfy({ quiet: true })
+    expect(notifyProgress).not.toHaveBeenCalled()
     host.startComfyui.mockRejectedValueOnce(new Error("bad"))
     await store.getState().handleStartComfy()
     expect(store.getState().comfyHealthy).toBe(false)
     host.startComfyui.mockRejectedValueOnce("plain-start")
     await store.getState().handleStartComfy()
+
+    store.setState({
+      runtimes: [
+        {
+          engine: "comfyui",
+          status: "ready",
+          installPath: "C:/comfy",
+        } as never,
+      ],
+      downloadSnapshot: { active: null, queued: [], history: [] },
+    })
+    host.startComfyui.mockClear()
+    store.getState().maybeAutoStartComfy()
+    await vi.waitFor(() => expect(host.startComfyui).toHaveBeenCalled())
 
     await store.getState().handleStopComfy()
     expect(store.getState().comfyHealthy).toBe(false)

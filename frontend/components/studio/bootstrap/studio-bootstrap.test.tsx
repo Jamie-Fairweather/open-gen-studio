@@ -100,6 +100,7 @@ describe("StudioBootstrap", () => {
       selectedGalleryId: "gone",
       gallery: [{ id: "kept", path: "/a.png" }],
       galleryLoaded: true,
+      detailReloadToken: 0,
       setDesktop: vi.fn(),
       setStudioTab: vi.fn(),
       setSelectedGalleryId: vi.fn(),

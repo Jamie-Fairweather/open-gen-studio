@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { TriangleAlertIcon } from "lucide-react"
 import { DownloadsPanel } from "@/components/libraries"
+import { friendlyInstallStatus } from "@/components/libraries/download-progress"
 import { useStudioStore } from "@/components/studio/store"
 import {
   Alert,
@@ -46,7 +47,7 @@ export default function DownloadsStudioPage() {
         (s.status === "running" || s.status === "paused") &&
         s.stepKind !== "http"
     )
-      ? runtimeMessage
+      ? friendlyInstallStatus(runtimeMessage)
       : null
 
   const missingHf = !hasHfToken

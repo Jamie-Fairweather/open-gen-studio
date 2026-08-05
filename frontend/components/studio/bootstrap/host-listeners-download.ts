@@ -20,6 +20,8 @@ export function registerDownloadListeners(
 
   void onDownloadManager((snap) => {
     getStore().setDownloadSnapshot(snap)
+    // Retry warm-start after runtime install: "done" can race the snapshot clear.
+    getStore().maybeAutoStartComfy()
   }).then((u) => {
     handles.unlistenDownloadManager = u
   })

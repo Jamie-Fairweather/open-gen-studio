@@ -18,7 +18,7 @@ pub(crate) fn ensure_comfy_manager(app: &AppHandle, root: &Path) -> Result<(), S
     }
 
     let reqs = root.join("ComfyUI").join("manager_requirements.txt");
-    super::paths::emit_progress(app, "configure", "Installing ComfyUI-Manager…");
+    super::paths::emit_progress(app, "configure", "Installing extensions…");
 
     let output = if reqs.is_file() {
         process_cmd::new(&python)
@@ -69,6 +69,6 @@ pub(crate) fn ensure_comfy_manager(app: &AppHandle, root: &Path) -> Result<(), S
     }
 
     fs::write(&marker, b"ok").map_err(|e| e.to_string())?;
-    super::paths::emit_progress(app, "configure", "ComfyUI-Manager ready");
+    super::paths::emit_progress(app, "configure", "Extensions ready");
     Ok(())
 }

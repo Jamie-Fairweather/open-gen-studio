@@ -61,6 +61,7 @@ vi.mock(
 import {
   applyLoadedBlueprintDetail,
   applySyncedSizeFromValues,
+  defaultsFromBlueprintDetail,
 } from "./bootstrap-helpers"
 
 function detail(partial: Partial<BlueprintDetail> = {}): BlueprintDetail {
@@ -103,6 +104,7 @@ beforeEach(() => {
   studioRefs.pendingRecipe = null
   studioRefs.pendingSession = null
   studioRefs.controlValuesByBlueprintId = {}
+  studioRefs.forceBlueprintDefaults = false
   studioRefs.aspectId = "1:1"
   studioRefs.sideLength = 1024
   studioRefs.loraPacks = []
@@ -296,6 +298,39 @@ describe("applyLoadedBlueprintDetail", () => {
     )
     expect(setControlValues).toHaveBeenCalledWith(
       expect.objectContaining({ width: 1024, height: 1024 })
+    )
+  })
+
+  it("merges pack defaults for steps/cfg and honors forceBlueprintDefaults", () => {
+    const withSampling = detail({
+      id: "krea",
+      defaults: { steps: 8, cfg: 1, clipType: "krea2" },
+      controls: [
+        {
+          id: "steps",
+          type: "number",
+          nodeId: "1",
+          input: "steps",
+          default: 8,
+        },
+        { id: "cfg", type: "number", nodeId: "1", input: "cfg", default: 1 },
+        { id: "seed", type: "number", nodeId: "1", input: "seed", default: 0 },
+      ],
+    })
+    expect(defaultsFromBlueprintDetail(withSampling)).toEqual({
+      steps: 8,
+      cfg: 1,
+      seed: 0,
+    })
+
+    studioRefs.controlValuesByBlueprintId.krea = { steps: 40, cfg: 7, seed: 9 }
+    state.detail = detail({ id: "other" })
+    state.controlValues = { seed: 1 }
+    studioRefs.forceBlueprintDefaults = true
+    applyLoadedBlueprintDetail(withSampling)
+    expect(studioRefs.forceBlueprintDefaults).toBe(false)
+    expect(setControlValues).toHaveBeenCalledWith(
+      expect.objectContaining({ steps: 8, cfg: 1, seed: 0 })
     )
   })
 })

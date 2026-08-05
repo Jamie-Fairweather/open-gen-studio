@@ -75,8 +75,9 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
     }
   }, [selectedGalleryId, gallery, galleryLoaded])
 
-  // Load blueprint detail when selection changes.
+  // Load blueprint detail when selection changes (or picker re-selects).
   const activeSelectedId = useStudioSelector(selectActiveSelectedId)
+  const detailReloadToken = useStudioStore((s) => s.detailReloadToken)
 
   useEffect(() => {
     if (!activeSelectedId || !isTauri()) return
@@ -105,7 +106,7 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [activeSelectedId, desktop])
+  }, [activeSelectedId, desktop, detailReloadToken])
 
   // Settings page: refresh token status when opened (secrets never leave Rust).
   useEffect(() => {

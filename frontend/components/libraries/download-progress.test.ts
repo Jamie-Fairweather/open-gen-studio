@@ -3,10 +3,47 @@ import type { DownloadJobView, DownloadStepView } from "@/lib/host"
 import {
   detailPct,
   formatPct,
+  friendlyInstallStatus,
   jobPct,
   statusLabel,
   stepStatusIcon,
 } from "./download-progress"
+
+describe("friendlyInstallStatus", () => {
+  it("simplifies extension pin / restart messages", () => {
+    expect(
+      friendlyInstallStatus(
+        "ComfyUI-QwenVL ready at c522c43 - restart ComfyUI if it was already running"
+      )
+    ).toBe("ComfyUI-QwenVL ready")
+    expect(
+      friendlyInstallStatus(
+        "Prompt Tools ready — restart ComfyUI if it was already running"
+      )
+    ).toBe("Prompt Tools ready")
+    expect(
+      friendlyInstallStatus(
+        "Updating ComfyUI-QwenVL to pin c522c43 (required by this app version)…"
+      )
+    ).toBe("Installing extensions…")
+    expect(
+      friendlyInstallStatus("Installing ComfyUI-QwenVL Python dependencies…")
+    ).toBe("Installing Python dependencies…")
+    expect(friendlyInstallStatus("Ensuring ComfyUI-Manager…")).toBe(
+      "Installing extensions…"
+    )
+    expect(friendlyInstallStatus("custom node ready")).toBe("Extensions ready")
+  })
+
+  it("leaves plain messages alone", () => {
+    expect(friendlyInstallStatus("Installing extensions…")).toBe(
+      "Installing extensions…"
+    )
+    expect(friendlyInstallStatus("Extracting ComfyUI…")).toBe(
+      "Extracting ComfyUI…"
+    )
+  })
+})
 
 function step(partial: Partial<DownloadStepView>): DownloadStepView {
   return {

@@ -85,6 +85,26 @@ function resolveSizeControls(
   return { ...values, width, height }
 }
 
+/** Build control-value defaults from manifest defaults + per-control defaults. */
+export function defaultsFromBlueprintDetail(
+  detail: BlueprintDetail
+): Record<string, unknown> {
+  const controlIds = new Set(detail.controls.map((c) => c.id))
+  const next: Record<string, unknown> = {}
+  const packDefaults = detail.defaults
+  if (packDefaults && typeof packDefaults === "object") {
+    for (const [key, value] of Object.entries(packDefaults)) {
+      if (controlIds.has(key)) next[key] = value
+    }
+  }
+  for (const c of detail.controls) {
+    if (c.default !== undefined) {
+      next[c.id] = c.default
+    }
+  }
+  return next
+}
+
 /**
  * Apply a freshly loaded blueprint detail into the studio store, resolving
  * recipe reuse, pending session, or stashed control values.
@@ -93,6 +113,8 @@ export function applyLoadedBlueprintDetail(detail: BlueprintDetail): void {
   const store = useStudioStore.getState()
   const prevDetailId = store.detail?.id ?? null
   const prevControlValues = store.controlValues
+  const forceDefaults = studioRefs.forceBlueprintDefaults
+  studioRefs.forceBlueprintDefaults = false
   // Snapshot leaving blueprint so image↔video/audio round-trips keep seed/etc.
   if (prevDetailId && prevDetailId !== detail.id) {
     studioRefs.controlValuesByBlueprintId[prevDetailId] = {
@@ -108,12 +130,7 @@ export function applyLoadedBlueprintDetail(detail: BlueprintDetail): void {
     studioRefs.pendingSession = null
   }
   const controlIds = detail.controls.map((c) => c.id)
-  const next: Record<string, unknown> = {}
-  for (const c of detail.controls) {
-    if (c.default !== undefined) {
-      next[c.id] = c.default
-    }
-  }
+  const next = defaultsFromBlueprintDetail(detail)
   let values = recipe ? applyReuseAllSettings(next, recipe) : next
   let restoredControls = false
   if (recipe) {
@@ -132,11 +149,11 @@ export function applyLoadedBlueprintDetail(detail: BlueprintDetail): void {
     store.setAspectId(session.aspectId)
     store.setSideLength(session.sideLength)
     restoredControls = true
-  } else if (prevDetailId === detail.id) {
+  } else if (!forceDefaults && prevDetailId === detail.id) {
     // Same blueprint re-load (e.g. effect re-run) — keep live values.
     values = overlayControlValues(next, prevControlValues, controlIds)
     restoredControls = true
-  } else {
+  } else if (!forceDefaults) {
     const stashed = studioRefs.controlValuesByBlueprintId[detail.id]
     if (stashed) {
       values = overlayControlValues(next, stashed, controlIds)

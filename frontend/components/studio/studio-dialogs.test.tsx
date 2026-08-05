@@ -172,7 +172,15 @@ function resetState(extra: Record<string, unknown> = {}) {
     hfTokenDialogOpen: false,
     civitaiTokenDialogOpen: false,
     pendingInstallId: "bp1",
-    blueprints: [{ id: "bp1", name: "BP" }],
+    blueprints: [
+      {
+        id: "bp1",
+        name: "BP",
+        source: "official",
+        modelCount: 1,
+        modelsReady: 1,
+      },
+    ],
     gatedTermsAcked: false,
     setGatedModelDialogOpen: vi.fn(),
     setHfTokenDialogOpen: vi.fn(),
@@ -182,6 +190,13 @@ function resetState(extra: Record<string, unknown> = {}) {
     handleHfTokenDialogConfirm: vi.fn(),
     handleCivitaiTokenDialogConfirm: vi.fn(),
     gpu: { adapters: [{ vendor: "nvidia" }] },
+    runtimes: [
+      {
+        engine: "comfyui",
+        status: "ready",
+        installPath: "C:/comfy",
+      },
+    ],
     gpuVendorDialogOpen: true,
     setGpuVendorDialogOpen: vi.fn(),
     handleInstallComfy: vi.fn(async () => {}),

@@ -30,6 +30,22 @@ async function comfyInstallVersion(
   }
 }
 
+/** Installed + idle — safe to warm on app launch (not mid-install / already up). */
+export function canAutoStartComfy(
+  runtimes: RuntimeInstall[],
+  downloadSnapshot?: {
+    active: { kind: string } | null
+    queued: { kind: string }[]
+  }
+): boolean {
+  const comfy = runtimes.find((r) => r.engine === "comfyui")
+  if (!comfy?.installPath?.trim()) return false
+  if (comfy.status !== "ready") return false
+  if (downloadSnapshot?.active?.kind === "runtime") return false
+  if (downloadSnapshot?.queued.some((j) => j.kind === "runtime")) return false
+  return true
+}
+
 export type RuntimeSlice = {
   runtimes: RuntimeInstall[]
   gpu: GpuInfo | null
@@ -42,8 +58,10 @@ export type RuntimeSlice = {
   setRuntimeMessage: Dispatch<SetStateAction<string | null>>
   setComfyHealthy: Dispatch<SetStateAction<boolean>>
   handleInstallComfy: () => Promise<void>
-  handleStartComfy: () => Promise<void>
+  handleStartComfy: (opts?: { quiet?: boolean }) => Promise<void>
   handleStopComfy: () => Promise<void>
+  /** Warm ComfyUI when installed and idle (app start / post-install). */
+  maybeAutoStartComfy: () => void
 }
 
 export const createRuntimeSlice: StateCreator<
@@ -104,11 +122,13 @@ export const createRuntimeSlice: StateCreator<
     }
   },
 
-  handleStartComfy: async () => {
+  handleStartComfy: async (opts) => {
     const s = get()
     s.setRuntimeBusy(true)
     s.setRuntimeMessage("Starting runtime…")
-    notifyProgress("runtime", "Starting runtime")
+    if (!opts?.quiet) {
+      notifyProgress("runtime", "Starting runtime")
+    }
     try {
       await startComfyui()
     } catch (e) {
@@ -137,5 +157,11 @@ export const createRuntimeSlice: StateCreator<
     } finally {
       s.setRuntimeBusy(false)
     }
+  },
+
+  maybeAutoStartComfy: () => {
+    const s = get()
+    if (!canAutoStartComfy(s.runtimes, s.downloadSnapshot)) return
+    void s.handleStartComfy({ quiet: true })
   },
 })

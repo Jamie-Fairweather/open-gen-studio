@@ -155,13 +155,7 @@ pub fn ensure_provider(app: &AppHandle, provider_id: &str) -> Result<EnsureOutco
     match provider_id {
         "qwenvl" | "qwen3-vl-8b" | "enhancer" | "instruct-gguf" | "joycaption" => {
             let was_ready = node_ready(app, "qwenvl");
-            emit_progress(
-                app,
-                "install",
-                "Ensuring ComfyUI-QwenVL custom node…",
-                None,
-                None,
-            );
+            emit_progress(app, "install", "Installing Prompt Tools…", None, None);
             upscale::ensure_pinned_node(app, "qwenvl")?;
             if !was_ready {
                 restart_comfy = true;
@@ -391,7 +385,7 @@ pub fn install_qwenvl_python_deps(app: &AppHandle) -> Result<bool, String> {
     emit_progress(
         app,
         "install",
-        "Installing ComfyUI-QwenVL Python dependencies…",
+        "Installing Python dependencies…",
         None,
         Some("requirements.txt"),
     );

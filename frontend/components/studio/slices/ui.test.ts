@@ -42,6 +42,8 @@ describe("createUiSlice", () => {
     s.setAdvancedOpen(true)
     s.setQueueExpandOpen(true)
     s.setStartupHydrated(true)
+    s.setOnboardingCoverReady(true)
+    expect(store.getState().onboardingCoverReady).toBe(true)
     s.setJobQueue([{ jobId: "j" } as never])
     expect(host.setSetting).toHaveBeenCalled()
     host.setSetting.mockRejectedValueOnce(new Error("x"))

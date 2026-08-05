@@ -28,7 +28,8 @@ pub fn start(
     let mut guard = processes.lock().map_err(|e| e.to_string())?;
     if let Some(child) = guard.child.as_mut() {
         match child.try_wait() {
-            Ok(None) => return Err("ComfyUI is already running".into()),
+            // Already spawned (e.g. app auto-start) — callers wait for health.
+            Ok(None) => return Ok(()),
             Ok(Some(_)) => {
                 guard.child = None;
             }

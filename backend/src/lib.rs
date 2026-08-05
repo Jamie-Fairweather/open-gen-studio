@@ -83,6 +83,11 @@ pub fn run() {
             }
 
             let data_dir = app_paths::app_data_dir(app.handle())?;
+            log::info!(
+                "app data dir ({}): {}",
+                app_paths::APP_DATA_FOLDER,
+                data_dir.display()
+            );
             let db = Db::open(&data_dir)?;
             download::migrate_and_load_provider_tokens(&db);
             app.manage(AppState {

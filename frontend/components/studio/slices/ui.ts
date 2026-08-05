@@ -39,6 +39,11 @@ export type UiSlice = {
    * startup overlay can dismiss without flashing empty defaults.
    */
   startupHydrated: boolean
+  /**
+   * True while OnboardingOverlay is covering the studio. Startup waits for
+   * this when first-run onboarding is required so the core UI never flashes.
+   */
+  onboardingCoverReady: boolean
   /** Bumps on successful enqueue — prompt bar expose feedback. */
   queuePulseToken: number
   /** Job id that just landed on the lane (chip entrance). */
@@ -59,6 +64,7 @@ export type UiSlice = {
   setAdvancedOpen: Dispatch<SetStateAction<boolean>>
   setQueueExpandOpen: Dispatch<SetStateAction<boolean>>
   setStartupHydrated: Dispatch<SetStateAction<boolean>>
+  setOnboardingCoverReady: Dispatch<SetStateAction<boolean>>
   setToolsHandoff: Dispatch<SetStateAction<ToolsHandoff | null>>
   setJobQueue: Dispatch<SetStateAction<JobQueueItem[]>>
   /** Read and clear handoff (call once on tool page mount). */
@@ -86,6 +92,7 @@ export const createUiSlice: StateCreator<StudioStore, [], [], UiSlice> = (
   advancedOpen: false,
   queueExpandOpen: false,
   startupHydrated: false,
+  onboardingCoverReady: false,
   queuePulseToken: 0,
   lastQueuedJobId: null,
   toolsHandoff: null,
@@ -139,6 +146,10 @@ export const createUiSlice: StateCreator<StudioStore, [], [], UiSlice> = (
 
   setStartupHydrated: (next) =>
     set((s) => ({ startupHydrated: applySet(s.startupHydrated, next) })),
+  setOnboardingCoverReady: (next) =>
+    set((s) => ({
+      onboardingCoverReady: applySet(s.onboardingCoverReady, next),
+    })),
 
   setToolsHandoff: (next) =>
     set((s) => {

@@ -289,6 +289,8 @@ pub(crate) fn run_next_job(app: &AppHandle) {
         let _ = db.prune_download_history(HISTORY_KEEP);
     }
     download::clear_transfer_controls();
-    emit_kind_success(app, &job.kind, &job.job_key);
+    // Snapshot first so the UI clears the active runtime job before "done".
+    // Otherwise maybeAutoStartComfy sees active.kind === "runtime" and skips.
     emit_snapshot(app);
+    emit_kind_success(app, &job.kind, &job.job_key);
 }

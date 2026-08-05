@@ -16,6 +16,11 @@ const host = vi.hoisted(() => ({
     queued: [],
     history: [],
   })),
+  startComfyui: vi.fn(async () => ({
+    id: "r1",
+    engine: "comfyui",
+    status: "starting",
+  })),
   comfyuiStatus: vi.fn(async () => ({ healthy: true })),
   detectGpu: vi.fn(async () => ({
     available: false,
@@ -236,8 +241,12 @@ describe("startup-hydrate", () => {
     ])
     await runStartupLoad(router)
     await vi.waitFor(() =>
-      expect(useStudioStore.getState().gpuVendorDialogOpen).toBe(true)
+      expect(useStudioStore.getState().gpu).toMatchObject({
+        needsVendorChoice: true,
+      })
     )
+    // First-run GPU pick is owned by OnboardingOverlay, not GpuVendorDialog.
+    expect(useStudioStore.getState().gpuVendorDialogOpen).toBe(false)
 
     host.listSettings.mockResolvedValueOnce({})
     host.listLoras.mockRejectedValueOnce(new Error("loras-fail"))
@@ -474,6 +483,46 @@ describe("startup-hydrate", () => {
     await runStartupLoadSafe(router)
 
     expect(notifyError).toHaveBeenCalledWith("safe-str")
+  })
+
+  it("auto-starts ComfyUI when installed and idle", async () => {
+    host.listSettings.mockResolvedValue({})
+    host.listBlueprints.mockResolvedValue([])
+    host.listGallery.mockResolvedValue([])
+    host.listLoras.mockResolvedValue([])
+    host.listUpscalers.mockResolvedValue([])
+    host.usduNodeReady.mockResolvedValue(false)
+    host.listRuntimes.mockResolvedValue([
+      {
+        id: "r1",
+        engine: "comfyui",
+        status: "ready",
+        installPath: "C:/comfy",
+        version: "v1",
+      },
+    ])
+    host.listDownloads.mockResolvedValue({
+      active: null,
+      queued: [],
+      history: [],
+    })
+    host.detectGpu.mockResolvedValue({
+      available: false,
+      needsVendorChoice: false,
+      adapters: [],
+    })
+    host.comfyuiStatus.mockResolvedValue({ healthy: false })
+    studioRefs.startupCatalogReady = false
+    studioRefs.suppressSessionPersist = true
+    useStudioStore.setState({
+      startupHydrated: false,
+      blueprintsLoaded: false,
+      galleryLoaded: false,
+      runtimes: [],
+      downloadSnapshot: { active: null, queued: [], history: [] },
+    })
+    await runStartupLoad(router, () => useStudioStore.getState())
+    await vi.waitFor(() => expect(host.startComfyui).toHaveBeenCalled())
   })
 
   it("marks runtime busy from queued runtime download jobs", async () => {

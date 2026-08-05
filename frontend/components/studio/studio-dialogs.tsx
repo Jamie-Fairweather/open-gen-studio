@@ -29,6 +29,7 @@ import {
   selectTabBlueprints,
 } from "@/components/studio/selectors"
 import { useStudioSelector, useStudioStore } from "@/components/studio/store"
+import { needsOnboarding } from "@/lib/onboarding"
 import { notifySuccess } from "@/lib/notify"
 
 /** Store-wired dialogs mounted once under studio chrome. */
@@ -85,10 +86,12 @@ export function StudioDialogs() {
   )
 
   const gpu = useStudioStore((s) => s.gpu)
+  const runtimes = useStudioStore((s) => s.runtimes)
   const gpuVendorDialogOpen = useStudioStore((s) => s.gpuVendorDialogOpen)
   const setGpuVendorDialogOpen = useStudioStore((s) => s.setGpuVendorDialogOpen)
   const handleInstallComfy = useStudioStore((s) => s.handleInstallComfy)
   const gpuVendorOptions = gpu ? vendorOptionsFromAdapters(gpu.adapters) : []
+  const onboardingOwnsGpu = needsOnboarding(runtimes, tokens.blueprints)
 
   return (
     <>
@@ -207,7 +210,7 @@ export function StudioDialogs() {
       />
 
       <GpuVendorDialog
-        open={gpuVendorDialogOpen}
+        open={gpuVendorDialogOpen && !onboardingOwnsGpu}
         dismissible={false}
         onOpenChange={setGpuVendorDialogOpen}
         options={gpuVendorOptions}

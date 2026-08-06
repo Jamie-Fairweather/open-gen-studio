@@ -1,8 +1,9 @@
 "use client"
 
-import { LayersIcon, SettingsIcon } from "lucide-react"
+import { SettingsIcon } from "lucide-react"
 import Link from "next/link"
 import type { ReactNode } from "react"
+import { BrandMark } from "@/components/brand/brand-mark"
 import { JobQueueRail } from "@/components/job-queue-chrome"
 import { StudioDialogs } from "@/components/studio/studio-dialogs"
 import { useStudioStore } from "@/components/studio/store"
@@ -43,7 +44,7 @@ export function StudioChrome({ children }: { children: ReactNode }) {
       <Titlebar
         leading={
           <div className="flex items-center gap-2 text-sm font-medium">
-            <LayersIcon className="size-4 text-primary" />
+            <BrandMark className="size-4" />
             <span className="hidden sm:inline">Open Gen Studio</span>
           </div>
         }

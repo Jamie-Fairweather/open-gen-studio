@@ -1,7 +1,8 @@
 "use client"
 
-import { ImageIcon, LayersIcon } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
+import { ImageIcon } from "lucide-react"
+import { BrandMark } from "@/components/brand/brand-mark"
 import {
   vendorOptionsFromAdapters,
   type GpuVendorOption,
@@ -714,7 +715,7 @@ export function OnboardingOverlay() {
       <Titlebar
         leading={
           <div className="flex items-center gap-2 text-sm font-medium">
-            <LayersIcon className="size-4 text-primary" aria-hidden />
+            <BrandMark className="size-4" />
             <span className="hidden sm:inline">Open Gen Studio</span>
           </div>
         }

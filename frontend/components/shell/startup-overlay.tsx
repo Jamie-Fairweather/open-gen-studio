@@ -1,7 +1,7 @@
 "use client"
 
-import { LayersIcon } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
+import { BrandMark } from "@/components/brand/brand-mark"
 import { useStudioStore } from "@/components/studio/store"
 import { useMediaQuery } from "@/hooks/use-media-query"
 import { isTauri } from "@/lib/host"
@@ -121,7 +121,7 @@ export function StartupOverlay() {
         )}
       >
         <div className="mb-7 flex size-14 items-center justify-center rounded-2xl border border-primary/25 bg-primary/10 shadow-[0_0_40px_-12px] shadow-primary/40">
-          <LayersIcon className="size-7 text-primary" aria-hidden />
+          <BrandMark className="size-7" />
         </div>
 
         <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground uppercase sm:text-4xl">

@@ -7,7 +7,6 @@
 <p>
   <img src="https://img.shields.io/badge/status-0.2.0-orange?style=for-the-badge" />
   <img src="https://img.shields.io/badge/platform-Windows-blue?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/GPU-NVIDIA-success?style=for-the-badge" />
   <img src="https://img.shields.io/badge/coverage-100%25%20lines-brightgreen?style=for-the-badge" />
   <img src="https://img.shields.io/badge/Built%20with-Tauri%202-7C3AED?style=for-the-badge" />
   <img src="https://img.shields.io/badge/license-Elastic%202.0-lightgrey?style=for-the-badge" />

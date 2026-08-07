@@ -10,6 +10,8 @@
     "desktop": "tauri dev",
     "desktop:build": "tauri build",
     "desktop:pack:msix": "powershell -NoProfile -ExecutionPolicy Bypass -File packaging/msix/pack.ps1",
+    "desktop:pack:msix:local": "powershell -NoProfile -ExecutionPolicy Bypass -File packaging/msix/pack-local.ps1",
+    "desktop:pack:msix:local:skip-build": "powershell -NoProfile -ExecutionPolicy Bypass -File packaging/msix/pack-local.ps1 -SkipBuild",
     "lint": "eslint frontend",
     "lint:fix": "eslint --fix frontend",
     "format": "prettier --write \"frontend/**/*.{ts,tsx}\" && cargo fmt --manifest-path backend/Cargo.toml",

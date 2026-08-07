@@ -31,15 +31,8 @@ pub fn official_dir(app: &AppHandle) -> Result<PathBuf, String> {
         candidates.push(resource.join("loras"));
     }
 
-    #[cfg(not(debug_assertions))]
-    {
-        candidates.push(
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("..")
-                .join("content")
-                .join("loras"),
-        );
-    }
+    // Intentionally no release fallback to CARGO_MANIFEST_DIR — that path only
+    // exists on the build machine and masked empty Store packages in certification.
 
     for path in candidates {
         if path.is_dir() {

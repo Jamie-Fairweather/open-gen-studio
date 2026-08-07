@@ -33,6 +33,8 @@ This runs `tauri build`, stages `app.exe` plus `blueprints/`, `loras/`, and Stor
 
 `packaging/msix/out/OpenGenStudio_<version>_x64.msix`
 
+The pack script **refuses to continue** if staged `blueprints/` or `loras/` have no `manifest.json` files (an empty catalog fails Store certification on the first-run Blueprint picker).
+
 Reuse an existing release build:
 
 ```powershell
@@ -47,17 +49,30 @@ powershell -NoProfile -ExecutionPolicy Bypass -File packaging/msix/pack.ps1 -Ski
 
 ## Local sideload test (optional)
 
-Self-sign only for installing on your machine (not for Store):
+Self-sign only for installing on your machine (**not** for Store upload):
+
+```bash
+bun run desktop:pack:msix:local
+```
+
+Reuse an existing release build:
+
+```bash
+bun run desktop:pack:msix:local:skip-build
+```
+
+Same via the wrapper script:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File packaging/msix/pack.ps1 -SkipBuild -SignLocal
+powershell -NoProfile -ExecutionPolicy Bypass -File packaging/msix/pack-local.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File packaging/msix/pack-local.ps1 -SkipBuild
 ```
 
 Then install the generated cert (once) and the package:
 
 ```powershell
 winapp cert install packaging\msix\devcert.pfx
-Add-AppxPackage packaging\msix\out\*.msix
+Add-AppxPackage packaging\msix\out\OpenGenStudio_*_x64.msix
 ```
 
 ## Also available

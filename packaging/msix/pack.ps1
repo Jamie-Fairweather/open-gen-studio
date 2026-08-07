@@ -142,7 +142,45 @@ function Copy-DirectoryContents {
     throw "Required directory not found: $Source"
   }
   New-Item -ItemType Directory -Force -Path $Destination | Out-Null
-  Copy-Item -LiteralPath (Join-Path $Source "*") -Destination $Destination -Recurse -Force
+  # Use Get-ChildItem + Copy-Item (not Copy-Item -LiteralPath ...\*):
+  # -LiteralPath treats "*" as a literal filename, so staging used to ship empty folders.
+  Get-ChildItem -LiteralPath $Source -Force | Copy-Item -Destination $Destination -Recurse -Force
+}
+
+function Assert-StagedCatalog {
+  param(
+    [string]$Dir,
+    [string]$Label,
+    [string]$Filter = "manifest.json"
+  )
+  $count = @(
+    Get-ChildItem -LiteralPath $Dir -Recurse -Filter $Filter -File -ErrorAction SilentlyContinue
+  ).Count
+  if ($count -lt 1) {
+    throw @"
+Staged $Label has no $Filter files under $Dir.
+The Store package would open with an empty catalog (cert failure 10.1.2.10).
+Fix the copy step and re-pack.
+"@
+  }
+  Write-Host "    $Label`: $count $Filter file(s)"
+}
+
+function Resolve-CatalogSource {
+  param(
+    [string]$ReleasePath,
+    [string]$ContentFallback,
+    [string]$Label
+  )
+  if (Test-Path -LiteralPath $ReleasePath) {
+    $hasChildren = @(Get-ChildItem -LiteralPath $ReleasePath -Force -ErrorAction SilentlyContinue).Count -gt 0
+    if ($hasChildren) { return $ReleasePath }
+    Write-Host "    Warning: $Label at $ReleasePath is empty; using content fallback"
+  }
+  if (-not (Test-Path -LiteralPath $ContentFallback)) {
+    throw "Required $Label directory not found: $ContentFallback"
+  }
+  return $ContentFallback
 }
 
 function Ensure-WideLogo {
@@ -243,18 +281,28 @@ New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
 Copy-Item -LiteralPath $exePath -Destination (Join-Path $StagingDir "app.exe") -Force
 
-$blueprintsSrc = Join-Path $ReleaseDir "blueprints"
-if (-not (Test-Path -LiteralPath $blueprintsSrc)) { $blueprintsSrc = $ContentBlueprints }
-$lorasSrc = Join-Path $ReleaseDir "loras"
-if (-not (Test-Path -LiteralPath $lorasSrc)) { $lorasSrc = $ContentLoras }
+$blueprintsSrc = Resolve-CatalogSource `
+  -ReleasePath (Join-Path $ReleaseDir "blueprints") `
+  -ContentFallback $ContentBlueprints `
+  -Label "blueprints"
+$lorasSrc = Resolve-CatalogSource `
+  -ReleasePath (Join-Path $ReleaseDir "loras") `
+  -ContentFallback $ContentLoras `
+  -Label "loras"
 
-Copy-DirectoryContents -Source $blueprintsSrc -Destination (Join-Path $StagingDir "blueprints")
-Copy-DirectoryContents -Source $lorasSrc -Destination (Join-Path $StagingDir "loras")
+$stagedBlueprints = Join-Path $StagingDir "blueprints"
+$stagedLoras = Join-Path $StagingDir "loras"
+Copy-DirectoryContents -Source $blueprintsSrc -Destination $stagedBlueprints
+Copy-DirectoryContents -Source $lorasSrc -Destination $stagedLoras
 
 $resourcesSrc = Join-Path $ReleaseDir "resources"
 if (Test-Path -LiteralPath $resourcesSrc) {
   Copy-DirectoryContents -Source $resourcesSrc -Destination (Join-Path $StagingDir "resources")
 }
+
+Write-Host "==> Validating staged catalogs"
+Assert-StagedCatalog -Dir $stagedBlueprints -Label "blueprints"
+Assert-StagedCatalog -Dir $stagedLoras -Label "loras"
 
 Stage-Assets -AssetsDest (Join-Path $StagingDir "Assets")
 Write-StagedManifest -TemplatePath $ManifestTemplate -DestinationPath (Join-Path $StagingDir "Package.appxmanifest") -Identity $identity

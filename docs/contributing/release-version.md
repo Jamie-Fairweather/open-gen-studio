@@ -1,6 +1,6 @@
 # Release version bumps
 
-Keep these four sources in sync. They are the only places that define the **app** version (not dependency versions).
+Keep these sources in sync. They are the only places that define the **app** version (not dependency versions). Desktop About uses Tauri `getVersion()` in production; the fallback constant is only for non-Tauri / test UI.
 
 | File                      | Field                            | Notes                                  |
 | ------------------------- | -------------------------------- | -------------------------------------- |
@@ -8,12 +8,15 @@ Keep these four sources in sync. They are the only places that define the **app*
 | `backend/tauri.conf.json` | `"version"`                      | Shown in installers / Tauri            |
 | `backend/Cargo.toml`      | `[package] version`              | Rust crate `app`                       |
 | `backend/Cargo.lock`      | `name = "app"` package `version` | Only the `[[package]]` block for `app` |
+| `frontend/lib/legal.ts`   | `APP_VERSION_FALLBACK`           | Settings → About fallback string       |
+| `README.md`               | status badge `0.x.y`             | Shields.io badge near the top          |
 
 ## Manual bump checklist
 
-1. Pick the target semver (no `v` prefix), e.g. `0.2.0`.
-2. Update all four files to that exact string.
-3. In `Cargo.lock`, change **only** the `app` package entry:
+1. Pick the target semver (no `v` prefix), e.g. `0.2.1`.
+2. Update all listed files to that exact string.
+3. In `README.md`, update the status shield URL segment, e.g. `badge/status-0.2.0-orange` → `badge/status-<new>-orange`.
+4. In `Cargo.lock`, change **only** the `app` package entry:
 
    ```
    [[package]]
@@ -23,8 +26,8 @@ Keep these four sources in sync. They are the only places that define the **app*
 
    Do not change other crates that share the old version number.
 
-4. Verify the old app version is gone from those four files (ignore unrelated `0.x.y` in deps, docs, or IPs).
-5. Do not bump dependency versions, skill metadata under `.agents/` / `.cursor/`, or runtime/engine fields as part of an app version bump.
+5. Verify the old app version is gone from the listed files (ignore unrelated `0.x.y` in deps, docs, or IPs).
+6. Do not bump dependency versions, skill metadata under `.agents/` / `.cursor/`, or runtime/engine fields as part of an app version bump.
 
 Quick check:
 
@@ -32,6 +35,8 @@ Quick check:
 rg -n '"version": "[0-9]' package.json backend/tauri.conf.json
 rg -n '^version = "' backend/Cargo.toml
 rg -n -A1 '^name = "app"$' backend/Cargo.lock
+rg -n 'APP_VERSION_FALLBACK' frontend/lib/legal.ts
+rg -n 'badge/status-' README.md
 ```
 
 ## Release-day note

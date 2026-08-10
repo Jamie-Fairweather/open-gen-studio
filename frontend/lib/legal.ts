@@ -16,4 +16,4 @@ export const APP_LEGAL_PRIVACY_URL = `${APP_LEGAL.siteOrigin}${APP_LEGAL.privacy
 export const APP_LEGAL_TERMS_URL = `${APP_LEGAL.siteOrigin}${APP_LEGAL.termsPath}`
 
 /** Shown when Tauri `getVersion` is unavailable (e.g. browser-only tests). */
-export const APP_VERSION_FALLBACK = "0.2.0"
+export const APP_VERSION_FALLBACK = "0.2.1"

@@ -2,9 +2,10 @@
 name: update-app-version
 description: >
   Bumps the Open Gen Studio app version across all canonical version files
-  (package.json, Tauri config, Cargo.toml, Cargo.lock). Use when the user asks
-  to update, bump, or set the app version, release version, or semver
-  (e.g. "update to 0.2.0", "bump version", "set app version").
+  (package.json, Tauri config, Cargo.toml, Cargo.lock, legal fallback, root
+  README badge). Use when the user asks to update, bump, or set the app
+  version, release version, or semver (e.g. "update to 0.2.0", "bump version",
+  "set app version").
 ---
 
 # Update App Version
@@ -20,12 +21,14 @@ constant is only for non-Tauri / test UI.
 | `backend/Cargo.toml`      | `[package] version`              | Rust crate `app`                       |
 | `backend/Cargo.lock`      | `name = "app"` package `version` | Only the `[[package]]` block for `app` |
 | `frontend/lib/legal.ts`   | `APP_VERSION_FALLBACK`           | Settings → About fallback string       |
+| `README.md`               | status badge `0.x.y`             | Shields.io badge near the top          |
 
 ## Workflow
 
 1. **Confirm target version** — Use the version the user gave (e.g. `0.2.0`). If they said "bump patch/minor/major" without a number, read the current version from `backend/tauri.conf.json` and compute the next semver.
 2. **Update all listed files** to that exact version string (no `v` prefix).
-3. **Cargo.lock care** — Change only the `app` package entry:
+3. **README badge** — Update the status shield URL segment, e.g. `badge/status-0.2.0-orange` → `badge/status-<new>-orange`.
+4. **Cargo.lock care** — Change only the `app` package entry:
 
    ```
    [[package]]
@@ -35,9 +38,9 @@ constant is only for non-Tauri / test UI.
 
    Do **not** change other crates that happen to share the old version number.
 
-4. **Verify** — Grep for the old app version in those four files only; confirm none still show it for the app. Ignore unrelated `0.x.y` strings in deps, docs, or IPs.
-5. **Graphify** — After editing, run `graphify update .` from the repo root (project rule).
-6. **Do not commit** unless the user explicitly asks.
+5. **Verify** — Grep for the old app version in the listed files only; confirm none still show it for the app. Ignore unrelated `0.x.y` strings in deps, docs, or IPs.
+6. **Graphify** — After editing, run `graphify update .` from the repo root (project rule).
+7. **Do not commit** unless the user explicitly asks.
 
 ## Do not touch
 
@@ -53,4 +56,6 @@ constant is only for non-Tauri / test UI.
 rg -n '"version": "[0-9]' package.json backend/tauri.conf.json
 rg -n '^version = "' backend/Cargo.toml
 rg -n -A1 '^name = "app"$' backend/Cargo.lock
+rg -n 'APP_VERSION_FALLBACK' frontend/lib/legal.ts
+rg -n 'badge/status-' README.md
 ```

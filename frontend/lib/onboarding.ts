@@ -26,7 +26,7 @@ export const MIN_VRAM_GB = 8
 export const REC_RAM_GB = 32
 export const REC_VRAM_GB = 16
 
-/** Dev/test: `NEXT_PUBLIC_FORCE_ONBOARDING_SPECS=1` in `frontend/.env.local`. */
+/** Dev/test: `NEXT_PUBLIC_FORCE_ONBOARDING_SPECS=1` in `frontend/.env.local` (not used by desktop:build). */
 export function forceOnboardingSpecs(): boolean {
   const v = process.env.NEXT_PUBLIC_FORCE_ONBOARDING_SPECS?.trim().toLowerCase()
   return v === "1" || v === "true" || v === "yes"

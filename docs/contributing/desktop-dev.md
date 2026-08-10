@@ -40,6 +40,8 @@ Machines that meet min specs skip that screen. To force it in dev:
 
 That re-opens onboarding and lands on Hardware even when RAM/VRAM are fine. **Continue anyway** still advances for the session; each app restart shows Hardware again while the flag is on.
 
+`frontend/.env*.local` is ignored by `bun run build` / `bun run desktop:build` so local preview flags are never baked into the packaged app.
+
 ## Related
 
 - [Coding standards](./coding-standards.md) — IPC: Rust → Specta → TypeScript

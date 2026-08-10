@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev frontend",
-    "build": "next build frontend",
+    "build": "bun scripts/build-frontend.mjs",
     "start": "next start frontend",
     "desktop": "tauri dev",
     "desktop:build": "tauri build",

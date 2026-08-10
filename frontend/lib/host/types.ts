@@ -40,6 +40,7 @@ export type {
   RuntimePinsStatus,
   RuntimeProgress,
   SetDataDirResult,
+  SystemSpecs,
   SuggestedControl,
   SuggestedModel,
   UpscaleKind,

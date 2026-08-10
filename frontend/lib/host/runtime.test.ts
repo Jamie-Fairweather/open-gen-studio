@@ -17,6 +17,11 @@ const commands = vi.hoisted(() => ({
     needsVendorChoice: false,
     adapters: [],
   })),
+  getSystemSpecs: vi.fn(async () => ({
+    ramBytes: 32 * 1024 ** 3,
+    vramBytes: 12 * 1024 ** 3,
+    gpuName: "Test GPU",
+  })),
   listRuntimes: vi.fn(async () => []),
   installComfyui: vi.fn(async () => ({ id: "comfy" })),
   startComfyui: vi.fn(async () => ({ id: "comfy" })),
@@ -63,6 +68,7 @@ import {
   creatorSuggestPackaging,
   detectGpu,
   getDataDirInfo,
+  getSystemSpecs,
   installComfyui,
   isDataDirMoving,
   isTauri,
@@ -117,6 +123,12 @@ describe("runtime command wrappers", () => {
     await providerTokenStatus()
     expect(commands.providerTokenStatus).toHaveBeenCalled()
     await detectGpu()
+    await expect(getSystemSpecs()).resolves.toEqual({
+      ramBytes: 32 * 1024 ** 3,
+      vramBytes: 12 * 1024 ** 3,
+      gpuName: "Test GPU",
+    })
+    expect(commands.getSystemSpecs).toHaveBeenCalled()
     await listRuntimes()
     await installComfyui()
     await startComfyui()

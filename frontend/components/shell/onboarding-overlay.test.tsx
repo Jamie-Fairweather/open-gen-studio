@@ -71,6 +71,12 @@ const store = vi.hoisted(() => ({
   requestBlueprintInstall: vi.fn(async () => {}),
   selectBlueprint: vi.fn(),
   refreshProviderTokenStatus: vi.fn(async () => {}),
+  setGpu: vi.fn((next: unknown) => {
+    store.gpu =
+      typeof next === "function"
+        ? (next as (g: typeof store.gpu) => typeof store.gpu)(store.gpu)
+        : (next as typeof store.gpu)
+  }),
   setGpuVendorDialogOpen: vi.fn(),
   setOnboardingCoverReady: vi.fn(),
 }))
@@ -81,6 +87,12 @@ const host = vi.hoisted(() => ({
   setSetting: vi.fn(async () => {}),
   setProviderToken: vi.fn(async () => {}),
   openExternalUrl: vi.fn(async () => {}),
+  getSystemSpecs: vi.fn(async () => ({
+    ramBytes: 32 * 1024 ** 3,
+    vramBytes: 12 * 1024 ** 3,
+    gpuName: "Test GPU",
+  })),
+  detectGpu: vi.fn(async () => null),
   getDataDirInfo: vi.fn(async () => ({
     path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
     isCustom: false,
@@ -108,6 +120,8 @@ vi.mock("@/lib/host", () => ({
   setSetting: (...a: unknown[]) => host.setSetting(...a),
   setProviderToken: (...a: unknown[]) => host.setProviderToken(...a),
   openExternalUrl: (...a: unknown[]) => host.openExternalUrl(...a),
+  getSystemSpecs: (...a: unknown[]) => host.getSystemSpecs(...a),
+  detectGpu: (...a: unknown[]) => host.detectGpu(...a),
   getDataDirInfo: (...a: unknown[]) => host.getDataDirInfo(...a),
   pickDataDir: (...a: unknown[]) => host.pickDataDir(...a),
   setDataDir: (...a: unknown[]) => host.setDataDir(...a),
@@ -159,6 +173,12 @@ describe("OnboardingOverlay", () => {
     host.setSetting.mockResolvedValue(undefined)
     host.setProviderToken.mockResolvedValue(undefined)
     host.openExternalUrl.mockResolvedValue(undefined)
+    host.getSystemSpecs.mockResolvedValue({
+      ramBytes: 32 * 1024 ** 3,
+      vramBytes: 12 * 1024 ** 3,
+      gpuName: "Test GPU",
+    })
+    host.detectGpu.mockResolvedValue(null)
     store.handleInstallComfy.mockResolvedValue(undefined)
     store.requestBlueprintInstall.mockResolvedValue(undefined)
     store.refreshProviderTokenStatus.mockResolvedValue(undefined)
@@ -240,6 +260,103 @@ describe("OnboardingOverlay", () => {
     })
     expect(
       await screen.findByText("Pick your first Blueprint")
+    ).toBeInTheDocument()
+  })
+
+  it("shows hardware warning first when under minimum specs", async () => {
+    const user = userEvent.setup()
+    host.getSystemSpecs.mockResolvedValue({
+      ramBytes: 8 * 1024 ** 3,
+      vramBytes: 2 * 1024 ** 3,
+      gpuName: "Intel Iris Xe",
+    })
+    host.getDataDirInfo.mockResolvedValueOnce({
+      path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      isCustom: false,
+      locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      storageChosen: false,
+    })
+    render(<OnboardingOverlay />)
+    expect(
+      await screen.findByText("This PC may be under-powered")
+    ).toBeInTheDocument()
+    expect(screen.getByText("Setup · Hardware")).toBeInTheDocument()
+    expect(
+      screen.getByText(/Detected GPU:\s*Intel Iris Xe/)
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Continue anyway" }))
+    expect(await screen.findByText("Choose data folder")).toBeInTheDocument()
+    await waitFor(() => {
+      expect(host.setSetting).toHaveBeenCalledWith(
+        "ui_onboarding_v1",
+        expect.stringContaining('"specsBypassed":true')
+      )
+    })
+    await waitForEnabled("Back")
+    await user.click(screen.getByRole("button", { name: "Back" }))
+    expect(
+      await screen.findByText("This PC may be under-powered")
+    ).toBeInTheDocument()
+  })
+
+  it("fills VRAM from detectGpu when getSystemSpecs is denied", async () => {
+    host.getSystemSpecs.mockRejectedValueOnce(new Error("not allowed"))
+    host.detectGpu.mockResolvedValueOnce({
+      available: true,
+      name: "NVIDIA GeForce RTX 4080 SUPER",
+      memoryTotal: "16376 MiB",
+      driverVersion: null,
+      vendor: "nvidia",
+      nvidiaVariant: null,
+      needsVendorChoice: true,
+      adapters: [
+        {
+          vendor: "nvidia",
+          name: "NVIDIA GeForce RTX 4080 SUPER",
+          memoryTotal: "16376 MiB",
+          driverVersion: null,
+          computeCap: null,
+          cudaVersion: null,
+        },
+      ],
+      error: null,
+    })
+    host.getDataDirInfo.mockResolvedValueOnce({
+      path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      isCustom: false,
+      locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      storageChosen: false,
+    })
+    render(<OnboardingOverlay />)
+    // RAM unknown + 16GB VRAM still fails the 16GB RAM floor → hardware step.
+    expect(
+      await screen.findByText("This PC may be under-powered")
+    ).toBeInTheDocument()
+    expect(screen.getByText("15.9 GB")).toBeInTheDocument()
+    expect(
+      screen.getByText(/Detected GPU:\s*NVIDIA GeForce RTX 4080 SUPER/)
+    ).toBeInTheDocument()
+  })
+
+  it("still boots Hardware when detectGpu fails", async () => {
+    host.getSystemSpecs.mockResolvedValueOnce({
+      ramBytes: 8 * 1024 ** 3,
+      vramBytes: 2 * 1024 ** 3,
+      gpuName: "Intel Iris Xe",
+    })
+    host.detectGpu.mockRejectedValueOnce(new Error("gpu probe failed"))
+    host.getDataDirInfo.mockResolvedValueOnce({
+      path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      isCustom: false,
+      locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      storageChosen: false,
+    })
+    render(<OnboardingOverlay />)
+    expect(
+      await screen.findByText("This PC may be under-powered")
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Detected GPU:\s*Intel Iris Xe/)
     ).toBeInTheDocument()
   })
 

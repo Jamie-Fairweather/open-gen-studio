@@ -66,7 +66,14 @@ pub fn run() {
 
     #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
     {
-        tauri_builder = tauri_builder.plugin(tauri_plugin_window_state::Builder::default().build());
+        // Don't persist visibility — `visible: false` in tauri.conf is for splash
+        // handoff; restoring a hidden window makes fresh Store installs look dead.
+        use tauri_plugin_window_state::{Builder as WindowStateBuilder, StateFlags};
+        tauri_builder = tauri_builder.plugin(
+            WindowStateBuilder::default()
+                .with_state_flags(StateFlags::all() & !StateFlags::VISIBLE)
+                .build(),
+        );
     }
 
     tauri_builder
@@ -150,6 +157,12 @@ pub fn run() {
                     let _ = commands::enqueue_comfy_install(&handle, &state, false);
                 }
             });
+
+            // Window starts `visible: false` (splash). Fresh installs (Store cert) have no
+            // window-state file — without an explicit show the process looks crashed.
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show();
+            }
 
             Ok(())
         })

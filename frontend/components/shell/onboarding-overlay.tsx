@@ -19,8 +19,10 @@ import { useMediaQuery } from "@/hooks/use-media-query"
 import { isInstalled } from "@/lib/blueprint-helpers"
 import { beginDataDirMove, endDataDirMove } from "@/lib/data-dir-move"
 import {
+  detectGpu,
   gallerySrc,
   getDataDirInfo,
+  getSystemSpecs,
   isTauri,
   listSettings,
   openExternalUrl,
@@ -32,15 +34,24 @@ import {
   type Blueprint,
   type DataDirInfo,
   type GpuVendor,
+  type SystemSpecs,
 } from "@/lib/host"
 import { notifyError } from "@/lib/notify"
 import {
+  bytesToGb,
+  formatSpecGb,
   isComfyInstalling,
   isComfyReady,
+  meetsMinimumSpecs,
+  mergeSystemSpecs,
+  MIN_RAM_GB,
+  MIN_VRAM_GB,
   needsOnboarding,
   officialBlueprintsForOnboarding,
   parseOnboardingState,
   partitionRecommended,
+  REC_RAM_GB,
+  REC_VRAM_GB,
   recommendedBlurb,
   resolveOnboardingStep,
   serializeOnboardingState,
@@ -59,6 +70,7 @@ const EXIT_MS = 350
 const STAGE_FADE_MS = 100
 
 const STEP_LABEL: Record<OnboardingStep, string> = {
+  specs: "Hardware",
   storage: "Storage",
   gpu: "GPU",
   hf: "Hugging Face",
@@ -89,6 +101,7 @@ export function OnboardingOverlay() {
   const refreshProviderTokenStatus = useStudioStore(
     (s) => s.refreshProviderTokenStatus
   )
+  const setGpu = useStudioStore((s) => s.setGpu)
   const setGpuVendorDialogOpen = useStudioStore((s) => s.setGpuVendorDialogOpen)
   const setOnboardingCoverReady = useStudioStore(
     (s) => s.setOnboardingCoverReady
@@ -98,6 +111,8 @@ export function OnboardingOverlay() {
   const [step, setStep] = useState<OnboardingStep>("hf")
   const [blueprintId, setBlueprintId] = useState<string | null>(null)
   const [hfSkipped, setHfSkipped] = useState(false)
+  const [specsBypassed, setSpecsBypassed] = useState(false)
+  const [systemSpecs, setSystemSpecs] = useState<SystemSpecs | null>(null)
   const [bootstrapped, setBootstrapped] = useState(false)
   const [gpuSelected, setGpuSelected] = useState<GpuVendor | null>(null)
   const [gpuBusy, setGpuBusy] = useState(false)
@@ -130,19 +145,26 @@ export function OnboardingOverlay() {
     }
     let cancelled = false
     void (async () => {
-      const [settings, dataDir] = await Promise.all([
+      const [settings, dataDir, specsRaw, gpuInfo] = await Promise.all([
         listSettings().catch(() => ({}) as Record<string, string>),
         getDataDirInfo().catch(() => null),
+        getSystemSpecs().catch(() => null),
+        detectGpu().catch(() => null),
       ])
       if (cancelled) return
       if (dataDir) setStorageInfo(dataDir)
+      if (gpuInfo) setGpu(gpuInfo)
+      const gpu = gpuInfo ?? useStudioStore.getState().gpu
+      const specs = mergeSystemSpecs(specsRaw, gpu)
+      setSystemSpecs(specs)
       const vendor = settings[SETTING_GPU_VENDOR]?.trim() || ""
       const persisted = parseOnboardingState(settings[SETTING_ONBOARDING])
       const nextStep = resolveOnboardingStep({
         persisted,
-        gpu: useStudioStore.getState().gpu,
+        gpu,
         savedVendor: vendor,
         storageChosen: dataDir?.storageChosen ?? true,
+        specs,
       })
       await refreshProviderTokenStatus()
       if (cancelled) return
@@ -168,6 +190,7 @@ export function OnboardingOverlay() {
       setStageAnim("shown")
       setBlueprintId(blueprintIdNext)
       setHfSkipped(Boolean(persisted?.hfSkipped))
+      setSpecsBypassed(Boolean(persisted?.specsBypassed))
       setBootstrapped(true)
       // First-run GPU pick lives in this overlay — never open the dialog.
       setGpuVendorDialogOpen(false)
@@ -180,6 +203,7 @@ export function OnboardingOverlay() {
     blueprintsLoaded,
     bootstrapped,
     refreshProviderTokenStatus,
+    setGpu,
     setGpuVendorDialogOpen,
   ])
 
@@ -301,13 +325,25 @@ export function OnboardingOverlay() {
       blueprintId:
         next.blueprintId !== undefined ? next.blueprintId : blueprintId,
       hfSkipped: next.hfSkipped !== undefined ? next.hfSkipped : hfSkipped,
+      specsBypassed:
+        next.specsBypassed !== undefined ? next.specsBypassed : specsBypassed,
     }
     setStep(state.step)
     setBlueprintId(state.blueprintId)
     setHfSkipped(state.hfSkipped)
+    setSpecsBypassed(state.specsBypassed)
     await setSetting(SETTING_ONBOARDING, serializeOnboardingState(state)).catch(
       () => {}
     )
+  }
+
+  async function continueFromSpecs(bypass: boolean) {
+    const dataDir = storageInfo
+    const storageChosen = dataDir?.storageChosen ?? true
+    await advance({
+      step: storageChosen ? stepAfterStorage(gpu, undefined) : "storage",
+      specsBypassed: bypass || specsBypassed,
+    })
   }
 
   async function confirmGpu() {
@@ -561,22 +597,45 @@ export function OnboardingOverlay() {
         : "Finishing setup"
 
   const stageTitle =
-    stageStep === "storage"
-      ? "Choose data folder"
-      : stageStep === "gpu"
-        ? "Choose your GPU"
-        : stageStep === "hf"
-          ? "Hugging Face token"
-          : stageStep === "blueprint"
-            ? "Pick your first Blueprint"
-            : installPhaseLabel
+    stageStep === "specs"
+      ? "This PC may be under-powered"
+      : stageStep === "storage"
+        ? "Choose data folder"
+        : stageStep === "gpu"
+          ? "Choose your GPU"
+          : stageStep === "hf"
+            ? "Hugging Face token"
+            : stageStep === "blueprint"
+              ? "Pick your first Blueprint"
+              : installPhaseLabel
 
   const stageBusy = stageAnim === "exit" || stageAnim === "enter"
   // Footer tracks the visible stage so chrome doesn't jump mid-handoff.
   const footerStep = stageStep
+  const detectedRamGb = bytesToGb(systemSpecs?.ramBytes)
+  const detectedVramGb = bytesToGb(systemSpecs?.vramBytes)
+
+  const canReturnToSpecs =
+    systemSpecs != null && !meetsMinimumSpecs(systemSpecs)
 
   const footerBack =
-    footerStep === "gpu" ? (
+    footerStep === "storage" && canReturnToSpecs ? (
+      <Button
+        type="button"
+        variant="ghost"
+        disabled={storageBusy || stageBusy}
+        onClick={() =>
+          void advance({
+            step: "specs",
+            blueprintId,
+            hfSkipped,
+            specsBypassed: false,
+          })
+        }
+      >
+        Back
+      </Button>
+    ) : footerStep === "gpu" ? (
       <Button
         type="button"
         variant="ghost"
@@ -641,7 +700,15 @@ export function OnboardingOverlay() {
     )
 
   const footerPrimary =
-    footerStep === "storage" ? (
+    footerStep === "specs" ? (
+      <Button
+        type="button"
+        disabled={stageBusy}
+        onClick={() => void continueFromSpecs(true)}
+      >
+        Continue anyway
+      </Button>
+    ) : footerStep === "storage" ? (
       <Button
         type="button"
         disabled={
@@ -759,6 +826,82 @@ export function OnboardingOverlay() {
               <h1 className="mb-3 shrink-0 text-center font-heading text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
                 {stageTitle}
               </h1>
+
+              {stageStep === "specs" ? (
+                <div className="flex flex-col gap-4">
+                  <p className="text-center text-sm text-muted-foreground">
+                    Open Gen Studio runs image models locally. This machine
+                    looks short of the recommended hardware — generation may be
+                    slow, fail, or be unavailable.
+                  </p>
+                  <div className="overflow-hidden rounded-lg border border-border">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-muted/40 text-[0.6875rem] font-medium tracking-[0.06em] text-muted-foreground uppercase">
+                        <tr>
+                          <th className="px-3 py-2 font-medium"> </th>
+                          <th className="px-3 py-2 font-medium">This PC</th>
+                          <th className="px-3 py-2 font-medium">Minimum</th>
+                          <th className="px-3 py-2 font-medium">Recommended</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="border-t border-border">
+                          <td className="px-3 py-2.5 font-medium">RAM</td>
+                          <td
+                            className={cn(
+                              "px-3 py-2.5 tabular-nums",
+                              detectedRamGb != null &&
+                                detectedRamGb < MIN_RAM_GB &&
+                                "text-destructive"
+                            )}
+                          >
+                            {formatSpecGb(detectedRamGb)}
+                          </td>
+                          <td className="px-3 py-2.5 text-muted-foreground tabular-nums">
+                            {MIN_RAM_GB} GB
+                          </td>
+                          <td className="px-3 py-2.5 text-muted-foreground tabular-nums">
+                            {REC_RAM_GB} GB
+                          </td>
+                        </tr>
+                        <tr className="border-t border-border">
+                          <td className="px-3 py-2.5 font-medium">GPU VRAM</td>
+                          <td
+                            className={cn(
+                              "px-3 py-2.5 tabular-nums",
+                              (detectedVramGb == null ||
+                                detectedVramGb < MIN_VRAM_GB) &&
+                                "text-destructive"
+                            )}
+                          >
+                            {formatSpecGb(detectedVramGb)}
+                          </td>
+                          <td className="px-3 py-2.5 text-muted-foreground tabular-nums">
+                            {MIN_VRAM_GB} GB
+                          </td>
+                          <td className="px-3 py-2.5 text-muted-foreground tabular-nums">
+                            {REC_VRAM_GB} GB
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  {systemSpecs?.gpuName ? (
+                    <p className="text-center text-xs text-muted-foreground">
+                      Detected GPU: {systemSpecs.gpuName}
+                    </p>
+                  ) : (
+                    <p className="text-center text-xs text-muted-foreground">
+                      No supported discrete GPU was detected. Integrated
+                      graphics usually cannot run these models.
+                    </p>
+                  )}
+                  <p className="text-center text-xs text-muted-foreground">
+                    You can continue anyway — setup will still run, but expect
+                    limited results on this hardware.
+                  </p>
+                </div>
+              ) : null}
 
               {stageStep === "storage" ? (
                 <div className="flex flex-col gap-3">

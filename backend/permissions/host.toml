@@ -29,6 +29,7 @@ commands.allow = [
   "reveal_gallery_item",
   "copy_gallery_image_to_clipboard",
   "detect_gpu",
+  "get_system_specs",
   "spellcheck_suggestions",
   "download_url",
   "ensure_download",

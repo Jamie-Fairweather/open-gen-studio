@@ -59,6 +59,8 @@ export const commands = {
   copyGalleryImageToClipboard: (id: string) =>
     __TAURI_INVOKE<null>("copy_gallery_image_to_clipboard", { id }),
   detectGpu: () => __TAURI_INVOKE<GpuInfo>("detect_gpu"),
+  /**  RAM + VRAM snapshot for first-run hardware gating. */
+  getSystemSpecs: () => __TAURI_INVOKE<SystemSpecs>("get_system_specs"),
   /**  OS spell suggestions for the custom editable context menu (empty if correct / unavailable). */
   spellcheckSuggestions: (word: string) =>
     __TAURI_INVOKE<string[]>("spellcheck_suggestions", { word }),
@@ -744,6 +746,14 @@ export type SuggestedModel = {
   url?: string
   /**  True when the download URL is a gated Hugging Face repo (needs token). */
   gated?: boolean
+}
+
+export type SystemSpecs = {
+  /**  Total physical RAM in bytes, when detectable. */
+  ramBytes: number | null
+  /**  Best-effort VRAM in bytes from the preferred GPU adapter. */
+  vramBytes: number | null
+  gpuName: string | null
 }
 
 export type TokenProvider = "huggingFace" | "civitAi"

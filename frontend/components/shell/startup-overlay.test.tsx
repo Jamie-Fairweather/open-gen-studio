@@ -35,6 +35,12 @@ vi.mock("@/lib/host", () => ({
   isTauri: vi.fn(() => true),
 }))
 
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    show: vi.fn(async () => {}),
+  }),
+}))
+
 import { useMediaQuery } from "@/hooks/use-media-query"
 import { isTauri } from "@/lib/host"
 import { canDismissStartupOverlay, StartupOverlay } from "./startup-overlay"

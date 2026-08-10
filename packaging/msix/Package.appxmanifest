@@ -52,6 +52,8 @@
   </Applications>
 
   <Capabilities>
+    <!-- Classic full-trust app; internetClient is still required for Store network checks. -->
+    <Capability Name="internetClient" />
     <rescap:Capability Name="runFullTrust" />
   </Capabilities>
 </Package>

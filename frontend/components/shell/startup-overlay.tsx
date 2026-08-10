@@ -1,5 +1,6 @@
 "use client"
 
+import { getCurrentWindow } from "@tauri-apps/api/window"
 import { useEffect, useRef, useState } from "react"
 import { BrandMark } from "@/components/brand/brand-mark"
 import { useStudioStore } from "@/components/studio/store"
@@ -52,6 +53,13 @@ export function StartupOverlay() {
   })
 
   useEffect(() => {
+    // Belt-and-suspenders with Rust setup show() — fresh Store installs start hidden.
+    if (isTauri()) {
+      void getCurrentWindow()
+        .show()
+        .catch(() => {})
+    }
+
     const skipExit = window.matchMedia(
       "(prefers-reduced-motion: reduce)"
     ).matches

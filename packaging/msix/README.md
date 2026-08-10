@@ -47,6 +47,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File packaging/msix/pack.ps1 -Ski
 2. Upload the **unsigned** `.msix` from `packaging/msix/out/`
 3. Do **not** sign it yourself before Store upload
 
+## Store certification notes
+
+Policy **10.1.2.10** (“crashes at launch”) often means the process starts with
+**no visible window**. This app boots with `visible: false` for splash handoff;
+Rust setup + the startup overlay both call `show()`, and window-state no longer
+persists visibility (so a fresh Store install cannot restore a hidden window).
+
+Also verify on a **clean** machine / VM (or Surface-class iGPU) via local
+sideload — not only on a developer PC that already has app data / WebView2 warm.
+
+Declare Partner Center system requirements honestly (min ~16GB RAM / 8GB VRAM);
+first-run onboarding warns and can be bypassed when hardware is under-spec.
+
 ## Local sideload test (optional)
 
 Self-sign only for installing on your machine (**not** for Store upload):

@@ -7,6 +7,7 @@ import type {
   PackagingSuggestions,
   RuntimeInstall,
   RuntimePinsStatus,
+  SystemSpecs,
 } from "./types"
 
 export function isTauri(): boolean {
@@ -47,6 +48,10 @@ export async function providerTokenStatus(): Promise<ProviderTokenStatus> {
 
 export async function detectGpu(): Promise<GpuInfo> {
   return commands.detectGpu()
+}
+
+export async function getSystemSpecs(): Promise<SystemSpecs> {
+  return commands.getSystemSpecs()
 }
 
 export async function listRuntimes(): Promise<RuntimeInstall[]> {

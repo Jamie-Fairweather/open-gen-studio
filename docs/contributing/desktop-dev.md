@@ -30,6 +30,16 @@ Pre-commit (husky) already runs lint-fix + typecheck + lint-staged.
 
 HF / CivitAI tokens and paths live in the in-app **Settings** UI and the host credential store — not in `.env` for day-to-day desktop use. If installs fail with gated models, open Settings and set the matching token, then retry the Blueprint or LoRA download.
 
+## Preview the Hardware onboarding step
+
+Machines that meet min specs skip that screen. To force it in dev:
+
+1. Copy `frontend/.env.example` → `frontend/.env.local`
+2. Set `NEXT_PUBLIC_FORCE_ONBOARDING_SPECS=1`
+3. Restart `bun run desktop`
+
+That re-opens onboarding and lands on Hardware even when RAM/VRAM are fine. **Continue anyway** still advances for the session; each app restart shows Hardware again while the flag is on.
+
 ## Related
 
 - [Coding standards](./coding-standards.md) — IPC: Rust → Specta → TypeScript

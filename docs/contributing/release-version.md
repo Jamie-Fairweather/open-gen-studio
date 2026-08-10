@@ -28,6 +28,7 @@ Keep these sources in sync. They are the only places that define the **app** ver
 
 5. Verify the old app version is gone from the listed files (ignore unrelated `0.x.y` in deps, docs, or IPs).
 6. Do not bump dependency versions, skill metadata under `.agents/` / `.cursor/`, or runtime/engine fields as part of an app version bump.
+7. Add release notes at `docs/release-notes/<semver>.md` (see skill `write-release-notes` / existing notes in that folder).
 
 Quick check:
 

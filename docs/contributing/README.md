@@ -7,6 +7,7 @@ Practical how-tos for extending Open Gen Studio. Product/design background lives
 | [Coding standards](./coding-standards.md)                        | House rules - especially **IPC: Rust → Specta → TypeScript**                                       |
 | [Desktop development](./desktop-dev.md)                          | Run/debug Tauri + Next locally; which check/test commands to use                                   |
 | [Release version bumps](./release-version.md)                    | Keep `package.json` / Tauri / Cargo app versions in sync                                           |
+| [Release notes](../release-notes/)                               | Per-version markdown notes (`docs/release-notes/<semver>.md`)                                      |
 | [Adding a model architecture](./adding-model-architectures.md)   | New Comfy graph family (`RecipeArch`): compiler, Creator form, LoRAs, prompt tools, upscale, tests |
 | [Architecture catalog](./architecture-catalog.md)                | Checklist of shipped vs candidate arches (txt2img, edit, video)                                    |
 | [Blueprint thumbnail prompts](../blueprint-thumbnail-prompts.md) | Example prompts (per-model dialect) for Official pack `thumbnail.png` files                        |

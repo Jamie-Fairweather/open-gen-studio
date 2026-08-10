@@ -39,8 +39,9 @@ constant is only for non-Tauri / test UI.
    Do **not** change other crates that happen to share the old version number.
 
 5. **Verify** — Grep for the old app version in the listed files only; confirm none still show it for the app. Ignore unrelated `0.x.y` strings in deps, docs, or IPs.
-6. **Graphify** — After editing, run `graphify update .` from the repo root (project rule).
-7. **Do not commit** unless the user explicitly asks.
+6. **Release notes** — Ensure `docs/release-notes/<new>.md` exists (skill `write-release-notes`). Draft from the previous version tag if missing.
+7. **Graphify** — After editing, run `graphify update .` from the repo root (project rule).
+8. **Do not commit** unless the user explicitly asks.
 
 ## Do not touch
 

@@ -185,7 +185,7 @@ export function RefineUsduControls({
             </>
           ) : (
             <p className="text-[10px] text-muted-foreground">
-              This arch’s USDU reuses the recipe sampler (Advanced → Steps).
+              This arch’s USDU reuses the Blueprint sampler (Advanced → Steps).
               Separate USDU steps/denoise are not available.
             </p>
           )}

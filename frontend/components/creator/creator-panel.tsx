@@ -363,7 +363,7 @@ export function CreatorPanel({
                           </h4>
                           <p className="text-xs text-muted-foreground">
                             {mode === "blueprint"
-                              ? "Author a recipe for My blueprints"
+                              ? "New blueprint. Saves as Mine."
                               : "Add a LoRA pack for your stack"}
                           </p>
                         </div>

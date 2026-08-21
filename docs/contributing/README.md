@@ -1,9 +1,10 @@
 ﻿# Contributing guides
 
-Practical how-tos for extending Open Gen Studio. Product/design background lives in [`docs/PLAN.md`](../PLAN.md) (design history - prefer these guides + `RecipeArch::ALL` / Creator `ARCHES` as source of truth).
+Practical how-tos for extending Open Gen Studio. Product words: [`CONTEXT.md`](../../CONTEXT.md). Design history: [`docs/PLAN.md`](../PLAN.md) (prefer these guides + `RecipeArch::ALL` / Creator `ARCHES` for code). Language cleanup list: [`language-pass.md`](./language-pass.md).
 
 | Guide                                                            | When to use it                                                                                     |
 | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [Language pass](./language-pass.md)                              | What the structure grill changed in docs, and leftover UI                                          |
 | [Coding standards](./coding-standards.md)                        | House rules - especially **IPC: Rust → Specta → TypeScript**                                       |
 | [Desktop development](./desktop-dev.md)                          | Run/debug Tauri + Next locally; which check/test commands to use                                   |
 | [Release version bumps](./release-version.md)                    | Keep `package.json` / Tauri / Cargo app versions in sync                                           |

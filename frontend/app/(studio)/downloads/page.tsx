@@ -33,7 +33,6 @@ export default function DownloadsStudioPage() {
   const pauseDownload = useStudioStore((s) => s.pauseDownload)
   const resumeDownload = useStudioStore((s) => s.resumeDownload)
   const cancelDownload = useStudioStore((s) => s.cancelDownload)
-  const setPickerOpen = useStudioStore((s) => s.setPickerOpen)
   const navigateTab = useStudioStore((s) => s.navigateTab)
   const [keysWarningDismissed, setKeysWarningDismissed] = useState(
     readKeysWarningDismissed
@@ -122,7 +121,6 @@ export default function DownloadsStudioPage() {
             )
           )
         }}
-        onOpenBlueprints={() => setPickerOpen(true)}
       />
     </div>
   )

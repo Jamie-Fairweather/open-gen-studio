@@ -16,25 +16,30 @@ Think **Steam / Docker Desktop for local generative AI**: the app installs runti
 
 1. **The app never performs inference.** It orchestrates: install, start/stop services, queue jobs, unify results.
 2. **Runtimes are plugins.** ComfyUI, Whisper, Kokoro, etc. implement a common interface.
-3. **Publish Blueprints, not workflows.** Image Blueprints are **recipes** (arch + models + sampler + capabilities). The host **compiles** a Comfy API graph at generate time - we do not ship frozen `workflow.api.json` as the product path.
-4. **Two data planes - never mix them.** Local app state (jobs, installs, gallery) vs Blueprint catalog (read-only manifests; Official ships in-repo today).
-5. **No hosted marketplace database.** Official/community presets are files the app reads; not a public cloud DB.
-6. **99% User Mode, 1% Creator Mode.** Most people never see a node graph. Creator authors **recipes** via a form - the app never embeds ComfyUI; people who want the node graph use ComfyUI itself.
+3. **Publish Blueprints, not workflows.** A Blueprint is arch + models + sampler + capabilities. The host **compiles** a Comfy API graph at generate time - we do not ship frozen `workflow.api.json` as the product path. The compiler lives in `backend/src/recipe/` (`RecipeArch`); that is a code name, not product copy.
+4. **Two data planes - never mix them.** Local app state (jobs, Catalog install state, gallery) vs Official manifests (read-only files; Official ships in-repo today).
+5. **No hosted marketplace database.** Official manifests are files the app reads; not a public cloud DB. A later **Registry** adds extras into the user's **Catalog** — still not a hosted marketplace DB.
+6. **99% User Mode, 1% Creator Mode.** Most people never see a node graph. Creator is **New blueprint** / **Edit blueprint** - the app never embeds ComfyUI; people who want the node graph use ComfyUI itself.
 
 ---
 
 ## Mental Model (UI language)
 
-| Layer         | Meaning                                    | Examples                                         |
-| ------------- | ------------------------------------------ | ------------------------------------------------ |
-| **Engine**    | Underlying AI stack                        | ComfyUI, llama.cpp, Whisper                      |
-| **Runtime**   | Installed, managed instance of an engine   | Official ComfyUI Windows Portable under app data |
-| **Blueprint** | Installable capability package             | “Z-Image Turbo”, “Wan 2.2”, “Kokoro”, “Trellis2” |
-| **Preset**    | User-facing install of a Blueprint version | Installed Z-Image Turbo                          |
-| **Resources** | Shared assets                              | Models, LoRAs, upscalers, custom nodes           |
-| **Projects**  | User workspaces / sessions                 | A portrait series                                |
-| **Gallery**   | All outputs with metadata                  | Lightroom-style library                          |
-| **Registry**  | Catalog UI over Blueprint sources          | Official (bundled) → later Community → Local     |
+Canonical terms: [`CONTEXT.md`](../CONTEXT.md).
+
+| Layer             | Meaning                                                                | Examples                                         |
+| ----------------- | ---------------------------------------------------------------------- | ------------------------------------------------ |
+| **Engine**        | Underlying AI stack                                                    | ComfyUI, llama.cpp, Whisper                      |
+| **Runtime**       | Installed, managed instance of an Engine                               | Official ComfyUI Windows Portable under app data |
+| **Blueprint**     | Installable capability package                                         | “Z-Image Turbo”, “Wan 2.2”, “Kokoro”, “Trellis2” |
+| **Catalog**       | One set of installable things (Blueprints, LoRAs, upscalers, Runtimes) | Official + Mine + later Registry extras          |
+| **Not installed** | Catalog row you cannot use yet                                         | Official Z-Image before install                  |
+| **Installed**     | Catalog row that is ready                                              | Official Z-Image after Downloads finishes        |
+| **Downloads**     | Transfer queue while a Catalog row is installing                       | Runtime extract, model HTTP                      |
+| **Gallery**       | All outputs with metadata                                              | Lightroom-style library                          |
+| **Registry**      | Later: place to **Save to catalog** or **Save & install** extras       | Not in the app today                             |
+
+Origin is a pill on the row (**Official**, **Mine**, **Registry**), not a list section. Do not say Preset, Projects, Resources, or Available.
 
 Users install **capabilities** (“cinematic images”). Power users can still open Comfy when they want.
 
@@ -44,14 +49,16 @@ Users install **capabilities** (“cinematic images”). Power users can still o
 
 Keep these mentally and in code as **two different systems**:
 
-| Plane                 | What it stores                                                                                | Where it lives                           | Who reads/writes                                 |
-| --------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------ |
-| **Local store**       | Jobs, gallery, installed presets, runtime installs, model assets, settings, download progress | **SQLite owned by Rust**                 | Rust writes natively; UI via Tauri IPC / events  |
-| **Blueprint catalog** | Official (later community) Blueprint manifests, model download URLs/hashes                    | **In-repo Official** today; GitHub later | App **reads** only; authors publish via git / PR |
+| Plane                  | What it stores                                                                                    | Where it lives                           | Who reads/writes                                 |
+| ---------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------ |
+| **Local store**        | Jobs, gallery, Catalog install state, runtime installs, model assets, settings, download progress | **SQLite owned by Rust**                 | Rust writes natively; UI via Tauri IPC / events  |
+| **Official manifests** | Official Blueprint / LoRA files, model download URLs/hashes                                       | **In-repo Official** today; GitHub later | App **reads** only; authors publish via git / PR |
 
-Do **not** put marketplace/catalog rows into the local SQLite as source of truth. Optional: cache a fetched catalog snapshot locally for offline browsing - still clearly “cache of GitHub,” not the registry itself.
+The user's **Catalog** is the product set (Not installed / Installed). Official Not installed rows are listed from Official manifests. Install state lives in the local store. A later Registry writes extras into that same Catalog — still not a hosted marketplace DB.
 
-There is **no** hosted Open Gen Studio database for presets/marketplace.
+Do **not** put Official manifests into SQLite as source of truth. Optional: cache a fetched Registry index locally for offline browse — cache of the source, not the Catalog itself.
+
+There is **no** hosted Open Gen Studio database for Catalog rows.
 
 ### Why not ZenStack
 
@@ -59,7 +66,7 @@ ZenStack is a poor fit here and is **not used**:
 
 - Single-user desktop - access policies add nothing.
 - Rust is the orchestrator and must write job/download/runtime state directly; putting the DB behind Next/ZenStack forces an extra localhost HTTP hop and an always-on Node data server for no real gain.
-- Catalog is files, not an ORM-backed multi-tenant DB - ZenStack’s strengths never apply.
+- Official manifests are files, not an ORM-backed multi-tenant DB - ZenStack’s strengths never apply.
 - UI can get live updates via **Tauri events** + IPC queries; no need for a Next CRUD layer.
 
 Revisit only if we later build a real multi-user cloud product. Not for the local store.
@@ -71,7 +78,7 @@ Revisit only if we later build a real multi-user cloud product. Not for the loca
 ```
 +------------------------------------------------+
 |                  Next.js UI                    |
-|  Generate · Registry · Models · Creator · …    |
+|  Generate · Downloads · Creator · …            |
 +----------------------|-------------------------+
                        |  Tauri IPC + events
                        |  (queries, commands, progress)
@@ -90,23 +97,23 @@ Revisit only if we later build a real multi-user cloud product. Not for the loca
                        |
                    Local GPU
 
-Catalog (today): content/blueprints/ (bundled)
-Catalog (later): GitHub Blueprint repo ──fetch──► Registry UI / installer
+Official manifests (today): content/blueprints/ (bundled)
+Registry (later): public extras ──Save to catalog / Save & install──► Catalog
 ```
 
 **Implication:** Next.js stays a **UI shell** (static export / Tauri `frontendDist` is fine). All durable local state and orchestration live in Rust. No Next.js API routes required for the local store.
 
 ### Stack (this repo)
 
-| Area        | Choice                                 | Notes                                  |
-| ----------- | -------------------------------------- | -------------------------------------- |
-| Shell       | **Tauri 2**                            | Already scaffolded (`backend/`)        |
-| UI          | **Next.js 16 + React 19 + Tailwind 4** | coss/Base UI; talks to Rust via IPC    |
-| Local store | **SQLite in Rust** (`rusqlite`)        | Single writer next to the orchestrator |
-| Host logic  | **Rust (Tauri)**                       | Processes, GPU, downloads, jobs        |
-| Catalog     | **Bundled Official** (+ GitHub later)  | Blueprint manifests; no cloud DB       |
-| Realtime UI | Tauri events + client state            | e.g. job progress / gallery inserts    |
-| Inference   | External runtimes only                 | GPU-first                              |
+| Area               | Choice                                  | Notes                                       |
+| ------------------ | --------------------------------------- | ------------------------------------------- |
+| Shell              | **Tauri 2**                             | Already scaffolded (`backend/`)             |
+| UI                 | **Next.js 16 + React 19 + Tailwind 4**  | coss/Base UI; talks to Rust via IPC         |
+| Local store        | **SQLite in Rust** (`rusqlite`)         | Single writer next to the orchestrator      |
+| Host logic         | **Rust (Tauri)**                        | Processes, GPU, downloads, jobs             |
+| Official manifests | **Bundled Official** (+ Registry later) | Files; user Catalog install state is SQLite |
+| Realtime UI        | Tauri events + client state             | e.g. job progress / gallery inserts         |
+| Inference          | External runtimes only                  | GPU-first                                   |
 
 ### Local store access
 
@@ -121,11 +128,11 @@ Catalog (later): GitHub Blueprint repo ──fetch──► Registry UI / instal
 
 ### User Mode (default)
 
-Simple form synthesized from the recipe’s **arch + capabilities** (not a frozen per-node UI schema):
+Simple form synthesized from the Blueprint’s **arch + capabilities** (not a frozen per-node UI schema):
 
 - Prompt / negative prompt (when capable)
 - Size, seed, steps, CFG / guidance
-- LoRA stack + Refine (shared libraries - not per-blueprint models)
+- LoRA stack + Refine (shared LoRAs / upscalers — not per-blueprint models)
 - Generate → job queue → Gallery
 - **Tools** (Image to Prompt, Prompt Enhancer) - Comfy utility jobs (QwenVL) that write back into Image Studio
 
@@ -133,18 +140,18 @@ No graph. No nodes.
 
 ### Creator Mode (advanced)
 
-**Recipe authoring form:** choose arch → fill model slots → sampler/defaults/capabilities → save to My blueprints (`%APPDATA%/…/blueprints/user/<id>/`). No Comfy UI or capture in-app.
+**New blueprint / Edit blueprint:** choose arch → fill model slots → sampler/defaults/capabilities → save to the Catalog as Mine (`%APPDATA%/…/blueprints/user/<id>/`). No Comfy UI or capture in-app.
 
 Promoting a user pack into `content/blueprints/` is a manual copy / PR - the app never writes Official.
 
 ---
 
-## Image Blueprints (recipes) - current path
+## Image Blueprints - current path
 
-A Blueprint is an immutable, versioned package. For **image / txt2img**, the payload is a **recipe**, not a frozen Comfy graph.
+A Blueprint is an immutable, versioned package. For **image / txt2img**, the compile payload lives in `backend/src/recipe/` — not a frozen Comfy graph.
 
 ```
-Blueprint (recipe)
+Blueprint
 ├── Metadata          (name, category, tags, VRAM, license)
 ├── Arch + flowType   (e.g. z-image / txt2img)
 ├── Models            (role, filename, path, URL)
@@ -160,7 +167,7 @@ Supported arches (v1): `z-image`, `krea2`, `flux`, `flux2`, `ideogram4`, `sdxl`,
 
 Official packs today: `z-image-turbo`, `z-image-base`, `krea2-turbo`, `krea2-raw`, `ideogram4`, `pony-v6`, `flux-dev`, `flux-schnell`, `flux2-dev`, `sdxl-base`, `sd15`, `qwen-image`, `qwen-image-distill`, `noobai-vpred`, `sd35-large`, `sd35-large-turbo`, `chroma`.
 
-### Models (preset download)
+### Models (download)
 
 ```json
 {
@@ -186,31 +193,32 @@ Install lands files in the shared library: `app_data/models/<path>/<filename>` (
 
 ---
 
-## Registry / Official Blueprints
+## Official Blueprints and the Catalog
 
-UI still feels like a Registry. **Official Blueprints ship inside the app** - not a hosted marketplace DB.
+**Official Blueprints ship inside the app** — they are Catalog rows with origin Official, often **Not installed** until Downloads finishes. That is not the Registry.
 
 ```
 content/blueprints/<id>/
-  manifest.json        # recipe (arch, models, defaults, capabilities)
+  manifest.json        # arch, models, defaults, capabilities
   thumbnail.png        # optional
 ```
 
 No `workflow.api.json`. No `controls[]`. See [`content/blueprints/README.md`](../content/blueprints/README.md).
 
 ```
-Registry (UI)
-├── Official   ← read from content/blueprints/ (built-in)
-├── Community  ← later: GitHub repo(s) of the same folder shape
-└── Local      ← My blueprints / user-added on disk
+Catalog (one set; dialogs filter by kind)
+├── Not installed | Installed
+└── origin pill: Official | Mine | Registry (later)
 ```
+
+**Registry** (later): browse extras; **Save to catalog** or **Save & install**. Install always goes through Downloads.
 
 ### Install / generate flow (Official)
 
 ```
-App lists content/blueprints/*
-  → User picks Blueprint → ensure Comfy runtime + models (+ nodes)
-  → Compile Comfy API graph from arch + recipe + live settings
+App lists Official manifests
+  → User picks a Catalog Blueprint → ensure Comfy runtime + models (+ nodes)
+  → Compile Comfy API graph from arch + Blueprint + live settings
   → POST Comfy /prompt → poll → Gallery
 ```
 
@@ -321,13 +329,13 @@ Internally route to the right runtime; UI never talks to Comfy HTTP directly for
 
 Tables are **machine-local**. Catalog Blueprints are not authoritative rows here.
 
-- **installed_presets** - local install of a Blueprint (id, version, source URL, install path, status)
+- **installed_presets** - Catalog install state for a Blueprint (id, version, source URL, install path, status). Table name is leftover; product word is Installed, not Preset.
 - **runtime_installs** - installed engine instances
 - **model_assets** - downloaded files, hashes, paths
 - **jobs** - queue + status + params + links to outputs
 - **gallery_items** - outputs + thumbnails + generation metadata
-- **settings** - directories, GPU preference, update prefs, Official catalog repo URL
-- **catalog_cache** (optional) - last-fetched GitHub index snapshot for offline browse
+- **settings** - directories, GPU preference, update prefs, Official manifest / later Registry source URL
+- **catalog_cache** (optional) - last-fetched Registry index for offline browse
 
 Migrations live in the Rust host (versioned SQL / rusqlite).
 
@@ -339,15 +347,15 @@ Migrations live in the Rust host (versioned SQL / rusqlite).
 
 - Next UI + Tauri shell; SQLite in Rust; IPC + events
 - ComfyUI Windows Portable install + supervisor + shared models
-- Recipe Official Blueprints + runtime graph compiler (`backend/src/recipe/`)
-- Creator recipe form; My blueprints; generate recipe-only
+- Official Blueprints + runtime graph compiler (`backend/src/recipe/`)
+- Creator New/Edit blueprint; Mine in Catalog; generate from Blueprints only
 - LoRA library + Refine (SR / USDU / SUPIR)
 - Tools: Image to Prompt + Prompt Enhance (QwenVL via Comfy)
 
 ### Next - ControlNet & polish
 
 - ControlNet group (capability-gated)
-- Batch gen, auto-update, Official catalog polish
+- Batch gen, auto-update, Official Catalog polish
 
 ### Later - Audio
 
@@ -361,12 +369,12 @@ Migrations live in the Rust host (versioned SQL / rusqlite).
 ### Later - 3D generation (after audio & video)
 
 - Runtime/plugin for **Trellis2** (and similar image/text → 3D models)
-- Official Blueprints under Registry → **3D**
+- Official Blueprints in the Catalog → **3D**
 - Gallery support for mesh outputs (e.g. GLB / OBJ) + simple 3D preview in User Mode
 
 ### Later - Advanced
 
-- Community catalog (second GitHub source)
+- Registry (public extras → Catalog via Save to catalog / Save & install)
 - Remote execution, scripting / REST for power users
 - Optional static-workflow packaging for power users only (not the default path)
 
@@ -375,7 +383,7 @@ Migrations live in the Rust host (versioned SQL / rusqlite).
 ## Success criteria (near term)
 
 1. Fresh machine → install an Official image Blueprint (e.g. Z-Image Turbo) → generate without touching a terminal.
-2. Creator can author a shareable recipe (arch + model slots) into My blueprints; User Mode synthesizes controls from the recipe.
+2. Creator can author a shareable Blueprint (arch + model slots) into the Catalog as Mine; User Mode synthesizes controls from the Blueprint.
 3. Rust owns local SQLite; UI stays live via Tauri IPC/events as jobs update (no ZenStack / Next data API).
 
 ---
@@ -383,10 +391,10 @@ Migrations live in the Rust host (versioned SQL / rusqlite).
 ## Out of scope (for now)
 
 - ZenStack / Next.js-owned local database
-- Hosted marketplace / public cloud database for presets
+- Hosted marketplace / public cloud database for Catalog rows
 - Training pipelines
 - CPU-only inference as a first-class path for heavy models
-- Fully open community uploads before Official catalog + publish pipeline are solid
+- Fully open community uploads before Official + Registry publish pipeline are solid
 - Replacing ComfyUI with a custom node editor
 - Shipping frozen `workflow.api.json` as the primary Blueprint format
 

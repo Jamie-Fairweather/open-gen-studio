@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
-import userEvent from "@testing-library/user-event"
 import type { DownloadJobView, DownloadSnapshot } from "@/lib/host"
 import { DownloadsPanel } from "./downloads-panel"
 
@@ -34,26 +33,22 @@ function job(partial: Partial<DownloadJobView> = {}): DownloadJobView {
 }
 
 describe("DownloadsPanel", () => {
-  it("empty state with blueprints CTA", async () => {
-    const user = userEvent.setup()
-    const onOpen = vi.fn()
+  it("empty state has no blueprint CTA", () => {
     render(
       <DownloadsPanel
         snapshot={{ active: null, queued: [], history: [] }}
         onPause={() => {}}
         onResume={() => {}}
         onCancel={() => {}}
-        onOpenBlueprints={onOpen}
         banner={<p>Notice</p>}
       />
     )
     expect(screen.getByText("Nothing in the queue")).toBeTruthy()
     expect(screen.getByText("Idle")).toBeTruthy()
-    await user.click(screen.getByRole("button", { name: /Blueprints/i }))
-    await user.click(
-      screen.getByRole("button", { name: /Choose a blueprint/i })
-    )
-    expect(onOpen).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole("button", { name: /Blueprints/i })).toBeNull()
+    expect(
+      screen.queryByRole("button", { name: /Choose a blueprint/i })
+    ).toBeNull()
   })
 
   it("status lines for active/queued/history combinations", () => {
@@ -133,21 +128,6 @@ describe("DownloadsPanel", () => {
     rerender(
       <DownloadsPanel snapshot={snap({ active: job() })} {...handlers} />
     )
-    // no onOpenBlueprints — header action omitted, empty CTA omitted when not empty
-    expect(screen.queryByText("Choose a blueprint")).toBeNull()
-
-    rerender(
-      <DownloadsPanel
-        snapshot={{ active: null, queued: [], history: [] }}
-        onPause={handlers.onPause}
-        onResume={handlers.onResume}
-        onCancel={handlers.onCancel}
-      />
-    )
-    expect(
-      screen.queryByRole("button", { name: /Choose a blueprint/i })
-    ).toBeNull()
-
     rerender(
       <DownloadsPanel
         snapshot={snap({

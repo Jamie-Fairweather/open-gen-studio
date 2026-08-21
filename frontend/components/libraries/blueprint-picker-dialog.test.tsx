@@ -33,7 +33,7 @@ function bp(partial: Partial<Blueprint>): Blueprint {
 }
 
 describe("BlueprintPickerDialog", () => {
-  it("searches, sections, select/install branches", async () => {
+  it("searches, pills, select/install branches", async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
     const onInstall = vi.fn()
@@ -92,7 +92,14 @@ describe("BlueprintPickerDialog", () => {
       />
     )
 
-    expect(screen.getByText("My blueprints")).toBeTruthy()
+    expect(screen.getByText("Mine")).toBeTruthy()
+    expect(screen.getAllByText("Official").length).toBeGreaterThan(0)
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Installed" })
+    ).toBeTruthy()
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Not installed" })
+    ).toBeTruthy()
     expect(screen.getAllByText(/checking size/).length).toBeGreaterThan(0)
     expect(screen.getAllByText("Downloading").length).toBeGreaterThan(0)
     expect(screen.getByText("Queued")).toBeTruthy()

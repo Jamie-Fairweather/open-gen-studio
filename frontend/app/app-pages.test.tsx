@@ -117,7 +117,6 @@ vi.mock("@/components/libraries", () => ({
     onPause: (id: string) => void
     onResume: (id: string) => void
     onCancel: (id: string) => void
-    onOpenBlueprints: () => void
   }) => (
     <div>
       {p.banner}
@@ -129,9 +128,6 @@ vi.mock("@/components/libraries", () => ({
       </button>
       <button type="button" onClick={() => p.onCancel("j1")}>
         cancel
-      </button>
-      <button type="button" onClick={p.onOpenBlueprints}>
-        blueprints
       </button>
     </div>
   ),
@@ -374,7 +370,6 @@ describe("app pages", () => {
     await userEvent.click(d2.getByText("resume"))
     await userEvent.click(d2.getByText("cancel"))
     await userEvent.click(d2.getByText("cancel"))
-    await userEvent.click(d2.getByText("blueprints"))
     await waitFor(() => expect(notifyError).toHaveBeenCalled())
 
     const getItem = vi

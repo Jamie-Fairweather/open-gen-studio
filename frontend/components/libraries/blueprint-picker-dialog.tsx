@@ -31,7 +31,11 @@ import {
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { WithTooltip } from "@/components/ui/tooltip"
-import { isInstalled } from "@/lib/blueprint-helpers"
+import {
+  catalogInstallLabel,
+  catalogOriginLabel,
+  isInstalled,
+} from "@/lib/blueprint-helpers"
 import { ARCHES } from "@/lib/creator-arches"
 import { formatBytes } from "@/lib/format"
 import { gallerySrc, type Blueprint } from "@/lib/host"
@@ -107,18 +111,30 @@ export function BlueprintPickerDialog({
         )
       : blueprints
 
-    return [...filtered].sort((a, b) => {
-      const ai = isInstalled(a) ? 0 : 1
-      const bi = isInstalled(b) ? 0 : 1
-      if (ai !== bi) return ai - bi
-      return a.name.localeCompare(b.name)
-    })
+    return [...filtered].sort((a, b) => a.name.localeCompare(b.name))
   }, [blueprints, query])
 
-  const mine = sorted.filter((bp) => bp.source === "user")
-  const official = sorted.filter((bp) => bp.source !== "user")
-  const officialInstalled = official.filter(isInstalled)
-  const officialAvailable = official.filter((bp) => !isInstalled(bp))
+  const installed = sorted.filter(isInstalled)
+  const notInstalled = sorted.filter((bp) => !isInstalled(bp))
+
+  const renderCard = (bp: Blueprint) => (
+    <BlueprintCard
+      key={bp.id}
+      bp={bp}
+      selected={selectedId === bp.id}
+      installing={installingId === bp.id}
+      queued={queuedIds.includes(bp.id)}
+      sizesProbing={sizesProbing}
+      onSelect={() => {
+        onSelect(bp.id)
+        if (isInstalled(bp)) onOpenChange(false)
+      }}
+      onInstall={() => onInstall(bp.id)}
+      onRequestUninstall={() =>
+        setPendingUninstall({ id: bp.id, name: bp.name })
+      }
+    />
+  )
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -129,8 +145,8 @@ export function BlueprintPickerDialog({
         <DialogHeader>
           <DialogTitle>Blueprints</DialogTitle>
           <DialogDescription>
-            Official packs plus your Creator saves. Installed appear first.
-            Download progress lives in Downloads.
+            Catalog Blueprints, split by installed. Official and Mine are pills.
+            Progress lives in Downloads.
           </DialogDescription>
           <div className="relative mt-2">
             <SearchIcon className="pointer-events-none absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -149,48 +165,12 @@ export function BlueprintPickerDialog({
             </p>
           ) : (
             <div className="flex flex-col gap-8 pb-6">
-              <BlueprintGridSection
-                title="My blueprints"
-                items={mine}
-                keyPrefix="user"
-                selectedId={selectedId}
-                installingId={installingId}
-                queuedIds={queuedIds}
-                sizesProbing={sizesProbing}
-                onSelect={(id) => {
-                  onSelect(id)
-                  onOpenChange(false)
-                }}
-                onInstall={onInstall}
-                onRequestUninstall={setPendingUninstall}
-              />
-              <BlueprintGridSection
-                title="Official · Installed"
-                items={officialInstalled}
-                keyPrefix="official"
-                selectedId={selectedId}
-                installingId={installingId}
-                queuedIds={queuedIds}
-                sizesProbing={sizesProbing}
-                onSelect={(id) => {
-                  onSelect(id)
-                  onOpenChange(false)
-                }}
-                onInstall={onInstall}
-                onRequestUninstall={setPendingUninstall}
-              />
-              <BlueprintGridSection
-                title="Official · Available"
-                items={officialAvailable}
-                keyPrefix="official"
-                selectedId={selectedId}
-                installingId={installingId}
-                queuedIds={queuedIds}
-                sizesProbing={sizesProbing}
-                onSelect={onSelect}
-                onInstall={onInstall}
-                onRequestUninstall={setPendingUninstall}
-              />
+              <BlueprintGridSection title={catalogInstallLabel(true)}>
+                {installed.map(renderCard)}
+              </BlueprintGridSection>
+              <BlueprintGridSection title={catalogInstallLabel(false)}>
+                {notInstalled.map(renderCard)}
+              </BlueprintGridSection>
             </div>
           )}
         </DialogPanel>
@@ -235,47 +215,17 @@ export function BlueprintPickerDialog({
 
 function BlueprintGridSection({
   title,
-  items,
-  keyPrefix,
-  selectedId,
-  installingId,
-  queuedIds,
-  sizesProbing,
-  onSelect,
-  onInstall,
-  onRequestUninstall,
+  children,
 }: {
   title: string
-  items: Blueprint[]
-  keyPrefix: string
-  selectedId: string | null
-  installingId: string | null
-  queuedIds: string[]
-  sizesProbing: boolean
-  onSelect: (id: string) => void
-  onInstall: (id: string) => void
-  onRequestUninstall: (bp: { id: string; name: string }) => void
+  children: React.ReactNode
 }) {
-  if (items.length === 0) return null
+  if (Array.isArray(children) && children.length === 0) return null
   return (
     <section className="flex flex-col gap-3">
       <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-        {items.map((bp) => (
-          <BlueprintCard
-            key={`${keyPrefix}-${bp.id}`}
-            bp={bp}
-            selected={selectedId === bp.id}
-            installing={installingId === bp.id}
-            queued={queuedIds.includes(bp.id)}
-            sizesProbing={sizesProbing}
-            onSelect={() => onSelect(bp.id)}
-            onInstall={() => onInstall(bp.id)}
-            onRequestUninstall={() =>
-              onRequestUninstall({ id: bp.id, name: bp.name })
-            }
-          />
-        ))}
+        {children}
       </div>
     </section>
   )
@@ -347,19 +297,12 @@ function BlueprintCard({
               {archLabel(bp.arch)}
             </Badge>
           ) : null}
-          {bp.source === "user" ? (
-            <Badge
-              variant="secondary"
-              className="rounded-md bg-black/55 text-[10px] text-white backdrop-blur-sm"
-            >
-              Mine
-            </Badge>
-          ) : null}
-          {installed ? (
-            <Badge className="rounded-md bg-primary/90 text-[10px] text-primary-foreground">
-              Installed
-            </Badge>
-          ) : null}
+          <Badge
+            variant="secondary"
+            className="rounded-md bg-black/55 text-[10px] text-white backdrop-blur-sm"
+          >
+            {catalogOriginLabel(bp.source)}
+          </Badge>
           {bp.requiresHfToken ? (
             <WithTooltip label="Requires a Hugging Face token in Settings">
               <Badge

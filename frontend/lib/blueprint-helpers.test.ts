@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest"
 import type { Blueprint, GalleryRecipe, LoraPack } from "@/lib/host"
 import {
   applyReuseAllSettings,
+  catalogInstallLabel,
+  catalogOriginLabel,
   isInstalled,
   lorasFromRecipe,
   pickDefaultBlueprintId,
@@ -34,6 +36,16 @@ const recipe = (values: Record<string, unknown>): GalleryRecipe => ({
   runtime: "comfy",
   prompt: "hi",
   values,
+})
+
+describe("catalogOriginLabel / catalogInstallLabel", () => {
+  it("maps source and install state", () => {
+    expect(catalogOriginLabel("user")).toBe("Mine")
+    expect(catalogOriginLabel("registry")).toBe("Registry")
+    expect(catalogOriginLabel("official")).toBe("Official")
+    expect(catalogInstallLabel(true)).toBe("Installed")
+    expect(catalogInstallLabel(false)).toBe("Not installed")
+  })
 })
 
 describe("isInstalled / pickDefaultBlueprintId", () => {

@@ -22,7 +22,7 @@
 
 Most local AI tools make you become the engineer: install Python, hunt weights, wire nodes, babysit a server. Open Gen Studio is the opposite. A beautiful desktop studio where you pick a Blueprint, automatically install what it needs, and generate. The app quietly runs the host (ComfyUI), downloads, and job queue so you can stay focused on making images.
 
-> **Early development (`0.1.0`). Images first; audio, video, and 3D later.**
+> **Early development (`0.2.2`). Images first; audio, video, and 3D later.**
 
 ---
 
@@ -42,7 +42,7 @@ Most local AI tools make you become the engineer: install Python, hunt weights, 
 - 🎨 **A studio, not a dashboard.** Prompt, generate, gallery, refine. Calm UI built for making images
 - 🧩 **LoRAs & upscale that just work.** Shared libraries across Blueprints, not per-pack scavenger hunts
 - ✨ **Smart helpers.** Image to Prompt and Prompt Enhance when you need a push
-- 📦 **Bring your own models.** Paste a Hugging Face or CivitAI link, fill the recipe, and generate. No node graph, no manual downloads.
+- 📦 **Bring your own models.** Paste a Hugging Face or CivitAI link, fill the Blueprint, and generate. No node graph, no manual downloads.
 
 > You shouldn’t need a weekend of setup to make one good image. That’s the bar.
 
@@ -52,10 +52,10 @@ Most local AI tools make you become the engineer: install Python, hunt weights, 
 
 |                            |                                                                         |
 | -------------------------- | ----------------------------------------------------------------------- |
-| 👤 **User Mode**           | recipe-driven forms (prompt, size, seed, LoRAs, refine). No node graph. |
-| 📦 **Official Blueprints** | bundled recipes; the host compiles a Comfy API graph at generate time.  |
-| 🛠 **Creator Mode**         | arch + model slots + defaults. Recipe form only; no Comfy UI in-app.    |
-| 📚 **Shared libraries**    | LoRAs and upscalers (SR / USDU / SUPIR).                                |
+| 👤 **User Mode**           | Blueprint forms (prompt, size, seed, LoRAs, refine). No node graph.     |
+| 📦 **Official Blueprints** | Official Catalog rows; the host compiles a Comfy API graph at generate. |
+| 🛠 **Creator Mode**         | New/Edit blueprint (arch + slots + defaults). No Comfy UI in-app.       |
+| 📚 **LoRAs & upscalers**   | Shared across Blueprints (SR / USDU / SUPIR).                           |
 | 🤖 **Tools**               | Image to Prompt and Prompt Enhance (QwenVL via Comfy).                  |
 | ⚙️ **Host**                | Tauri + Rust for SQLite, downloads, GPU detect, Comfy supervision.      |
 
@@ -67,7 +67,7 @@ Most local AI tools make you become the engineer: install Python, hunt weights, 
 | ------- | ----------------------------------------------------- |
 | Shell   | **Tauri 2**                                           |
 | UI      | **Next.js 16 · React 19 · Tailwind 4 · coss**         |
-| Host    | **Rust** (`rusqlite`, recipe compilers, IPC)          |
+| Host    | **Rust** (`rusqlite`, Blueprint compile, IPC)         |
 | IPC     | **Specta / tauri-specta → `frontend/lib/generated/`** |
 | Package | **Bun**                                               |
 
@@ -114,9 +114,11 @@ bun run desktop:pack:msix # unsigned MSIX for Microsoft Store (see packaging/msi
 | [Release notes](docs/release-notes/)                                           | Per-version changelog (`0.x.y.md`) |
 | [Coding standards](docs/contributing/coding-standards.md)                      | IPC: Rust → Specta → TypeScript    |
 | [Adding a model architecture](docs/contributing/adding-model-architectures.md) | New `RecipeArch` end-to-end        |
+| [Glossary](CONTEXT.md)                                                         | Product language                   |
+| [Language pass](docs/contributing/language-pass.md)                            | Docs vs later UI from the grill    |
 | [Product plan](docs/PLAN.md)                                                   | Vision, architecture, roadmap      |
 | [GPU support plan](docs/gpu-support-plan.md)                                   | NVIDIA / AMD / Intel roadmap       |
-| [Official Blueprints](content/blueprints/README.md)                            | Recipe manifest layout             |
+| [Official Blueprints](content/blueprints/README.md)                            | Blueprint manifest layout          |
 | [Official LoRAs](content/loras/README.md)                                      | Multi-arch LoRA packs              |
 
 ---
@@ -127,6 +129,6 @@ bun run desktop:pack:msix # unsigned MSIX for Microsoft Store (see packaging/msi
 
 # Status
 
-🟢 **Shipped:** Comfy runtime install, recipe compile, Official packs, Creator form, LoRAs, Refine, prompt Tools, gallery/jobs via IPC.
+🟢 **Shipped:** Comfy runtime install, Blueprint compile, Official packs, Creator form, LoRAs, Refine, prompt Tools, gallery/jobs via IPC.
 
 🟡 **Next:** ControlNet, polish, then audio / video / 3D.

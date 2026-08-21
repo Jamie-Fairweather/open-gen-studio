@@ -1,14 +1,12 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { DownloadIcon } from "lucide-react"
 import type { DownloadSnapshot } from "@/lib/host"
 import {
   StudioPanel,
   StudioPanelBody,
   StudioPanelHeader,
 } from "@/components/shell"
-import { Button } from "@/components/ui/button"
 import { DownloadActiveJob } from "./download-active-job"
 import { DownloadHistoryList } from "./download-history-list"
 import { DownloadQueueList } from "./download-queue-list"
@@ -25,7 +23,6 @@ type DownloadsPanelProps = {
   onPause: (jobId: string) => void
   onResume: (jobId: string) => void
   onCancel: (jobId: string) => void
-  onOpenBlueprints?: () => void
 }
 
 export function DownloadsPanel({
@@ -36,7 +33,6 @@ export function DownloadsPanel({
   onPause,
   onResume,
   onCancel,
-  onOpenBlueprints,
 }: DownloadsPanelProps) {
   const active = snapshot.active
   const queued = snapshot.queued
@@ -68,24 +64,7 @@ export function DownloadsPanel({
 
   return (
     <StudioPanel>
-      <StudioPanelHeader
-        title="Downloads"
-        description={statusLine}
-        action={
-          onOpenBlueprints ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0 before:hidden"
-              onClick={onOpenBlueprints}
-            >
-              <DownloadIcon />
-              Blueprints
-            </Button>
-          ) : undefined
-        }
-      />
+      <StudioPanelHeader title="Downloads" description={statusLine} />
 
       <StudioPanelBody>
         {banner}
@@ -114,15 +93,6 @@ export function DownloadsPanel({
                 Installs persist across restarts. Pause anytime - partial files
                 resume where they left off.
               </p>
-              {onOpenBlueprints ? (
-                <Button
-                  type="button"
-                  className="mt-1 rounded-full"
-                  onClick={onOpenBlueprints}
-                >
-                  Choose a blueprint
-                </Button>
-              ) : null}
             </div>
           </div>
         ) : (

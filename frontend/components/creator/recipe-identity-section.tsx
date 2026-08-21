@@ -66,7 +66,9 @@ export function RecipeIdentitySection({
 }: RecipeIdentitySectionProps) {
   return (
     <section className="space-y-2.5 rounded-xl border border-border/50 bg-muted/10 p-4">
-      <h2 className={sectionTitle}>Recipe</h2>
+      <h2 className={sectionTitle}>
+        {editing ? "Edit blueprint" : "New blueprint"}
+      </h2>
       <div className="space-y-1.5">
         <span className={fieldLabel}>Thumbnail</span>
         <CreatorThumbnailField
@@ -120,7 +122,7 @@ export function RecipeIdentitySection({
           <WithTooltip
             label={
               editing
-                ? "Id is fixed while editing. Save as a new recipe to change it."
+                ? "Id is fixed while editing. Save as a new blueprint to change it."
                 : undefined
             }
           >

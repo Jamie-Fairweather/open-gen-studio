@@ -13,6 +13,21 @@ export function isInstalled(bp: Blueprint): boolean {
   return bp.modelCount === 0 || bp.modelsReady >= bp.modelCount
 }
 
+export type CatalogOriginLabel = "Official" | "Mine" | "Registry"
+
+/** Origin pill. `user` is Mine; anything else Official until Registry ships. */
+export function catalogOriginLabel(source: string): CatalogOriginLabel {
+  if (source === "user") return "Mine"
+  if (source === "registry") return "Registry"
+  return "Official"
+}
+
+export function catalogInstallLabel(
+  installed: boolean
+): "Installed" | "Not installed" {
+  return installed ? "Installed" : "Not installed"
+}
+
 export function pickDefaultBlueprintId(
   bps: Blueprint[],
   preferred: string | null | undefined,

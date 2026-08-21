@@ -31,6 +31,10 @@ import {
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { WithTooltip } from "@/components/ui/tooltip"
+import {
+  catalogInstallLabel,
+  catalogOriginLabel,
+} from "@/lib/blueprint-helpers"
 import { gallerySrc, type LoraPack } from "@/lib/host"
 import { cn } from "@/lib/utils"
 
@@ -94,18 +98,41 @@ export function LoraPickerDialog({
         )
       : scoped
 
-    return [...filtered].sort((a, b) => {
-      const ar = isReadyForArch(a, arch) ? 0 : 1
-      const br = isReadyForArch(b, arch) ? 0 : 1
-      if (ar !== br) return ar - br
-      return a.name.localeCompare(b.name)
-    })
+    return [...filtered].sort((a, b) => a.name.localeCompare(b.name))
   }, [packs, arch, query])
 
-  const mine = sorted.filter((p) => p.source === "user")
-  const official = sorted.filter((p) => p.source !== "user")
-  const officialReady = official.filter((p) => isReadyForArch(p, arch))
-  const officialAvailable = official.filter((p) => !isReadyForArch(p, arch))
+  const installed = sorted.filter((p) => isReadyForArch(p, arch))
+  const notInstalled = sorted.filter((p) => !isReadyForArch(p, arch))
+
+  const renderCard = (pack: LoraPack) => {
+    const a = arch ?? pack.arches[0]
+    return (
+      <LoraCard
+        key={pack.id}
+        pack={pack}
+        arch={arch}
+        selected={selectedIds.includes(pack.id)}
+        installing={installingKey === `${pack.id}:${arch}`}
+        queued={queuedKeys.includes(`${pack.id}:${arch}`)}
+        onSelect={() => {
+          onSelect(pack.id)
+          onOpenChange(false)
+        }}
+        onInstall={() => {
+          if (a && isRecipeArch(a)) onInstall(pack.id, a)
+        }}
+        onRequestUninstall={() => {
+          if (a && isRecipeArch(a)) {
+            setPendingUninstall({
+              id: pack.id,
+              name: pack.name,
+              arch: a,
+            })
+          }
+        }}
+      />
+    )
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -115,7 +142,7 @@ export function LoraPickerDialog({
           <DialogDescription>
             {arch
               ? `Packs for ${arch}. Add to your stack, or install files first.`
-              : "Official packs plus your saves. Download progress lives in Downloads."}
+              : "Catalog LoRAs, split by installed. Official and Mine are pills. Progress lives in Downloads."}
           </DialogDescription>
           <div className="relative mt-2">
             <SearchIcon className="pointer-events-none absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -136,52 +163,12 @@ export function LoraPickerDialog({
             </p>
           ) : (
             <div className="flex flex-col gap-8 pb-6">
-              <LoraGridSection
-                title="My LoRAs"
-                items={mine}
-                keyPrefix="user"
-                arch={arch}
-                selectedIds={selectedIds}
-                installingKey={installingKey}
-                queuedKeys={queuedKeys}
-                onSelect={(id) => {
-                  onSelect(id)
-                  onOpenChange(false)
-                }}
-                onInstall={onInstall}
-                onRequestUninstall={setPendingUninstall}
-              />
-              <LoraGridSection
-                title="Official · Ready"
-                items={officialReady}
-                keyPrefix="official"
-                arch={arch}
-                selectedIds={selectedIds}
-                installingKey={null}
-                queuedKeys={queuedKeys}
-                forceInstallingFalse
-                onSelect={(id) => {
-                  onSelect(id)
-                  onOpenChange(false)
-                }}
-                onInstall={onInstall}
-                onRequestUninstall={setPendingUninstall}
-              />
-              <LoraGridSection
-                title="Official · Available"
-                items={officialAvailable}
-                keyPrefix="official"
-                arch={arch}
-                selectedIds={selectedIds}
-                installingKey={installingKey}
-                queuedKeys={queuedKeys}
-                onSelect={(id) => {
-                  onSelect(id)
-                  onOpenChange(false)
-                }}
-                onInstall={onInstall}
-                onRequestUninstall={setPendingUninstall}
-              />
+              <LoraGridSection title={catalogInstallLabel(true)}>
+                {installed.map(renderCard)}
+              </LoraGridSection>
+              <LoraGridSection title={catalogInstallLabel(false)}>
+                {notInstalled.map(renderCard)}
+              </LoraGridSection>
             </div>
           )}
         </DialogPanel>
@@ -205,7 +192,7 @@ export function LoraPickerDialog({
               <span className="font-medium text-foreground">
                 {pendingUninstall?.name}
               </span>
-              . Files still used by other ready LoRAs are kept.
+              . Files still used by other installed LoRAs are kept.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -232,63 +219,17 @@ export function LoraPickerDialog({
 
 function LoraGridSection({
   title,
-  items,
-  keyPrefix,
-  arch,
-  selectedIds,
-  installingKey,
-  queuedKeys,
-  forceInstallingFalse,
-  onSelect,
-  onInstall,
-  onRequestUninstall,
+  children,
 }: {
   title: string
-  items: LoraPack[]
-  keyPrefix: string
-  arch?: string | null
-  selectedIds: string[]
-  installingKey?: string | null
-  queuedKeys: string[]
-  forceInstallingFalse?: boolean
-  onSelect: (id: string) => void
-  onInstall: (id: string, arch: RecipeArch) => void
-  onRequestUninstall: (pending: {
-    id: string
-    name: string
-    arch: RecipeArch
-  }) => void
+  children: React.ReactNode
 }) {
-  if (items.length === 0) return null
+  if (Array.isArray(children) && children.length === 0) return null
   return (
     <section className="flex flex-col gap-3">
       <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {items.map((pack) => (
-          <LoraCard
-            key={`${keyPrefix}-${pack.id}`}
-            pack={pack}
-            arch={arch}
-            selected={selectedIds.includes(pack.id)}
-            installing={
-              forceInstallingFalse
-                ? false
-                : installingKey === `${pack.id}:${arch}`
-            }
-            queued={queuedKeys.includes(`${pack.id}:${arch}`)}
-            onSelect={() => onSelect(pack.id)}
-            onInstall={() => {
-              const a = arch ?? pack.arches[0]
-              if (a && isRecipeArch(a)) onInstall(pack.id, a)
-            }}
-            onRequestUninstall={() => {
-              const a = arch ?? pack.arches[0]
-              if (a && isRecipeArch(a)) {
-                onRequestUninstall({ id: pack.id, name: pack.name, arch: a })
-              }
-            }}
-          />
-        ))}
+        {children}
       </div>
     </section>
   )
@@ -355,19 +296,12 @@ function LoraCard({
           >
             {archLabel}
           </Badge>
-          {pack.source === "user" ? (
-            <Badge
-              variant="secondary"
-              className="rounded-md bg-black/55 text-[10px] text-white backdrop-blur-sm"
-            >
-              Mine
-            </Badge>
-          ) : null}
-          {ready ? (
-            <Badge className="rounded-md bg-primary/90 text-[10px] text-primary-foreground">
-              Ready
-            </Badge>
-          ) : null}
+          <Badge
+            variant="secondary"
+            className="rounded-md bg-black/55 text-[10px] text-white backdrop-blur-sm"
+          >
+            {catalogOriginLabel(pack.source)}
+          </Badge>
         </div>
       </button>
 

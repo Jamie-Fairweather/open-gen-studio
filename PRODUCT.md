@@ -10,15 +10,15 @@ web
 
 Primary: creative people who want strong local images without becoming ML engineers — people leaving cloud apps for privacy, or leaving ComfyUI / A1111 because the tooling feels like a science project.
 
-Secondary (confirmed, not primary): Creator Mode authors who build recipe Blueprints via a form; they still do not use an in-app node graph.
+Secondary (confirmed, not primary): Creator Mode authors who use New blueprint / Edit blueprint; they still do not use an in-app node graph.
 
 ## Product Purpose
 
 Open Gen Studio is a local desktop image studio. Users pick an Official Blueprint (or their own), install what it needs, prompt, generate, and work in a gallery — while the app quietly runs the host (ComfyUI), downloads, and job queue.
 
-Success in a session means both: a clean first path (Blueprint → install → prompt → image) and a durable studio loop (iterate, LoRAs, refine, tools, library). When those conflict, keep the first path short and the ongoing loop free — not locked to Official content only.
+Success in a session means both: a clean first path (Blueprint → install → prompt → image) and a durable studio loop (iterate, LoRAs, refine, tools). When those conflict, keep the first path short and the ongoing loop free — not locked to Official content only.
 
-Early product (`0.1.0`): images first; audio, video, and 3D later.
+Early product (`0.2.2`): images first; audio, video, and 3D later.
 
 ## Positioning
 
@@ -32,21 +32,21 @@ Neighboring tools that are _not_ this product: living in Comfy’s node UI, A111
 
 Desktop app (Tauri 2) with a Next.js web UI. Primary target environment today: Windows + NVIDIA GPU via Official ComfyUI Windows Portable.
 
-Core loop: Registry / Blueprints → install models & deps → User Mode recipe form → Generate → job queue → Gallery; shared LoRA and upscale libraries; Tools (Image to Prompt, Prompt Enhance); Creator Mode for authoring recipes to My blueprints.
+Core loop: Catalog (Official / Mine Blueprints) → install via Downloads → User Mode form → Generate → job queue → Gallery; LoRAs and upscalers; Tools (Image to Prompt, Prompt Enhance); Creator Mode New/Edit blueprint. Registry is later (Save to catalog / Save & install extras).
 
-Terminology that must stay consistent: Engine, Runtime, Blueprint (recipe), Preset, Resources, Gallery, Registry. Blueprints are recipes the host compiles at generate time — not shipped frozen `workflow.api.json` as the product path.
+Terminology: [`CONTEXT.md`](./CONTEXT.md) — Engine, Runtime, Blueprint, Official, Mine, Catalog, Not installed, Installed, Registry (later), Downloads, Gallery. Do not say Preset, Projects, Resources, Available, or recipe in product copy. The host compiles a Blueprint at generate time — not a shipped frozen `workflow.api.json`.
 
 ## Capabilities and Constraints
 
 Confirmed:
 
-- User Mode: recipe-driven forms (prompt, size, seed, LoRAs, refine); no node graph in-app.
-- Official Blueprints and LoRAs ship with the product; users install them, then can also bring their own content.
-- Shared LoRA and upscaler libraries across Blueprints.
+- User Mode: Blueprint-driven forms (prompt, size, seed, LoRAs, refine); no node graph in-app.
+- Official Blueprints and LoRAs ship in the Catalog; users install them, then can also bring their own (Mine).
+- LoRAs and upscalers shared across Blueprints.
 - Tools: Image to Prompt and Prompt Enhance (via Comfy utility jobs).
-- Host (Rust/Tauri): SQLite local store, downloads, GPU detect, Comfy supervision, recipe compile, IPC.
+- Host (Rust/Tauri): SQLite local store, downloads, GPU detect, Comfy supervision, Blueprint compile (`recipe/` in code), IPC.
 - The app never performs inference; external runtimes do.
-- No hosted marketplace database; Official catalog is bundled files (GitHub fetch later is an implementation detail).
+- No hosted marketplace database; Official manifests are bundled files. A later Registry adds extras to the Catalog.
 - 99% User Mode / 1% Creator Mode product balance.
 
 Undecided / open:
@@ -72,5 +72,5 @@ Do not fabricate testimonials, benchmarks, customer logos, pricing, or marketpla
 1. **Stay a studio, not a dashboard or a node graph.** Optimize for making images, not for administering an ML stack.
 2. **One-click Official path, open escape hatches.** Ship curated Blueprints and LoRAs that just install; never trap users inside Official-only content.
 3. **Orchestrate, don’t infer.** The app installs, queues, and supervises; engines do the GPU work.
-4. **Recipes over workflows.** Publish Blueprints as recipes; compile graphs at generate time; never make users pack nodes by hand for the happy path.
+4. **Blueprints over workflows.** Publish Blueprints; compile graphs at generate time; never make users pack nodes by hand for the happy path.
 5. **Local and private by default.** User GPU, user files, no cloud product dependency for core generation.

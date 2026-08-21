@@ -106,6 +106,12 @@ describe("LoraPickerDialog", () => {
       />
     )
     expect(screen.getByText(/Packs for flux/)).toBeTruthy()
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Installed" })
+    ).toBeTruthy()
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Not installed" })
+    ).toBeTruthy()
     expect(screen.getByText("In stack")).toBeTruthy()
     expect(screen.getByText("Downloading")).toBeTruthy()
     expect(screen.getByText("Queued")).toBeTruthy()
@@ -165,7 +171,7 @@ describe("LoraPickerDialog", () => {
         onUninstall={() => {}}
       />
     )
-    // Official · Ready "Add" (second Add in DOM when both mine + ready exist)
+    // Installed Official "Add" (second Add when Mine + Official are both ready)
     await user.click(screen.getAllByRole("button", { name: /^Add$/i })[1]!)
     expect(onSelect).toHaveBeenCalledWith("ready2")
     expect(onOpenChange).toHaveBeenCalledWith(false)
@@ -218,7 +224,7 @@ describe("LoraPickerDialog", () => {
         onUninstall={onUninstall}
       />
     )
-    expect(screen.getByText(/Official packs plus your saves/)).toBeTruthy()
+    expect(screen.getByText(/Catalog LoRAs/)).toBeTruthy()
     await user.click(screen.getByRole("button", { name: /^Install$/i }))
     expect(onInstall).toHaveBeenCalledWith("i", "flux")
     await user.click(screen.getByRole("button", { name: /^Uninstall$/i }))

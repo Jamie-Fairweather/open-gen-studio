@@ -257,7 +257,9 @@ describe("refine ui", () => {
         onEnsureUsdu={onEnsureUsdu}
       />
     )
-    expect(screen.getByText(/reuses the recipe sampler/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/reuses the Blueprint sampler/i)
+    ).toBeInTheDocument()
     await user.click(screen.getByRole("combobox", { name: /Scale/i }))
     await user.click(screen.getByRole("option", { name: /2×/i }))
     expect(onUsduScaleChange).toHaveBeenCalledWith(2)

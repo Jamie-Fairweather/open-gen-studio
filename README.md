@@ -5,7 +5,7 @@
 ### **Local image generation that feels like a product, not a science project.**
 
 <p>
-  <img src="https://img.shields.io/badge/status-0.2.1-orange?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/status-0.2.2-orange?style=for-the-badge" />
   <img src="https://img.shields.io/badge/platform-Windows-blue?style=for-the-badge" />
   <img src="https://img.shields.io/badge/coverage-100%25%20lines-brightgreen?style=for-the-badge" />
   <img src="https://img.shields.io/badge/Built%20with-Tauri%202-7C3AED?style=for-the-badge" />

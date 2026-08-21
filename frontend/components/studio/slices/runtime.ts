@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from "react"
 import type { StateCreator } from "zustand"
 import {
   installComfyui,
+  listDownloads,
   listSettings,
   runtimePinsStatus,
   startComfyui,
@@ -94,11 +95,11 @@ export const createRuntimeSlice: StateCreator<
       )
       if (!settings[SETTING_GPU_VENDOR]?.trim()) {
         s.setGpuVendorDialogOpen(true)
-        notifyError(
-          "Choose which GPU to use before installing the runtime",
-          "GPU required"
+        const err = new Error(
+          "Choose which GPU to use before installing the runtime"
         )
-        return
+        notifyError(err.message, "GPU required")
+        throw err
       }
     }
     s.setRuntimeBusy(true)
@@ -112,13 +113,16 @@ export const createRuntimeSlice: StateCreator<
     try {
       // Force reinstall so GPU vendor / portable pin changes replace the old build.
       await installComfyui()
+      // Don't rely only on the event race — pull the snapshot so onboarding
+      // sees the queued runtime job immediately.
+      const snap = await listDownloads().catch(() => null)
+      if (snap) s.setDownloadSnapshot(snap)
     } catch (e) {
       s.setRuntimeBusy(false)
       s.setRuntimeMessage(null)
-      notifyError(
-        e instanceof Error ? e.message : String(e),
-        "ComfyUI install failed"
-      )
+      const message = e instanceof Error ? e.message : String(e)
+      notifyError(message, "ComfyUI install failed")
+      throw e instanceof Error ? e : new Error(message)
     }
   },
 

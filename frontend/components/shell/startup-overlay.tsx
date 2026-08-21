@@ -105,7 +105,7 @@ export function StartupOverlay() {
   return (
     <div
       className={cn(
-        "fixed inset-0 z-100 flex flex-col items-center justify-center bg-background",
+        "fixed inset-0 z-[130] flex flex-col items-center justify-center bg-background",
         !reducedMotion && "transition-opacity duration-300 ease-out",
         phase === "exit" && "opacity-0"
       )}

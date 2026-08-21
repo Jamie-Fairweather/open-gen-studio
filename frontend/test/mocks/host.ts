@@ -72,6 +72,7 @@ export function createHostMock(overrides: Record<string, unknown> = {}) {
       path: "C:/data",
       isCustom: false,
       locatorPath: "C:/data",
+      defaultPath: "C:/data",
       storageChosen: true,
     })),
     pickDataDir: vi.fn(async () => null),

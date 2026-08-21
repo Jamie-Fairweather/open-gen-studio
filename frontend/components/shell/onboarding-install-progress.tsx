@@ -12,6 +12,7 @@ import {
   stepStatusIcon,
 } from "@/components/libraries/download-progress"
 import { TransferRail } from "@/components/libraries/transfer-rail"
+import { OnboardingErrorAlert } from "@/components/shell/onboarding-error-alert"
 import { MIN_ETA_SPEED_BPS } from "@/lib/download-thresholds"
 import { formatBytes, formatEta } from "@/lib/format"
 import { getBlueprint } from "@/lib/host/blueprints"
@@ -27,6 +28,7 @@ const COMFY_FALLBACK_LABELS = [
   "Download ComfyUI",
   "Extract",
   "Configure",
+  "Install Python packages",
   "Install extensions",
 ] as const
 
@@ -203,7 +205,7 @@ export function OnboardingInstallProgress({
     (s) => s.status === "running" || s.status === "paused"
   )
   // Live backend line — used for % sub-progress (extract), not as the title.
-  // Sub-tasks (e.g. pip inside "Install extensions") can race ahead of the step.
+  // Sub-tasks (e.g. node install chatter) can race ahead of the active step.
   const activeDetail =
     activeJob?.kind === "runtime" &&
     activeStep &&
@@ -250,22 +252,24 @@ export function OnboardingInstallProgress({
       <div className="space-y-2">
         <TransferRail value={pct ?? 0} idle={pct == null && !error} />
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 font-mono text-[11px] text-muted-foreground tabular-nums">
-          <span className={cn(error ? "text-destructive" : undefined)}>
-            {error
-              ? error
-              : isTransfer && bytesTotal != null
-                ? `${formatBytes(bytesDone)} / ${formatBytes(bytesTotal)}${etaLabel}`
-                : isTransfer && bytesDone > 0
-                  ? `${formatBytes(bytesDone)}${etaLabel}`
-                  : isTransfer
-                    ? "Preparing…"
-                    : workLabel}
+          <span>
+            {isTransfer && bytesTotal != null
+              ? `${formatBytes(bytesDone)} / ${formatBytes(bytesTotal)}${etaLabel}`
+              : isTransfer && bytesDone > 0
+                ? `${formatBytes(bytesDone)}${etaLabel}`
+                : isTransfer
+                  ? "Preparing…"
+                  : workLabel}
           </span>
           <span className="text-foreground/85">
             {error ? "Failed" : pct != null ? formatPct(pct) : "-"}
           </span>
         </div>
       </div>
+
+      {error ? (
+        <OnboardingErrorAlert title="Install failed" description={error} />
+      ) : null}
 
       {combined.length > 0 ? (
         <ul className="space-y-1.5 border-t border-border/50 pt-3">

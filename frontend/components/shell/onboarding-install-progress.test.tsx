@@ -155,9 +155,16 @@ describe("OnboardingInstallProgress", () => {
         }),
         step({
           id: "d",
-          label: "Install extensions",
+          label: "Install Python packages",
           status: "done",
           idx: 3,
+          stepKind: "action",
+        }),
+        step({
+          id: "e",
+          label: "Install extensions",
+          status: "done",
+          idx: 4,
           stepKind: "action",
         }),
       ],
@@ -199,8 +206,8 @@ describe("OnboardingInstallProgress", () => {
     expect(items.map((el) => el.textContent)).toEqual(
       expect.arrayContaining([
         expect.stringMatching(/^✓\s*1\.\s*Download ComfyUI/),
-        expect.stringMatching(/^✓\s*4\.\s*Install extensions/),
-        expect.stringMatching(/^●\s*5\.\s*Download model/),
+        expect.stringMatching(/^✓\s*5\.\s*Install extensions/),
+        expect.stringMatching(/^●\s*6\.\s*Download model/),
       ])
     )
   })
@@ -234,9 +241,16 @@ describe("OnboardingInstallProgress", () => {
         }),
         step({
           id: "d",
-          label: "Install extensions",
+          label: "Install Python packages",
           status: "queued",
           idx: 3,
+          stepKind: "action",
+        }),
+        step({
+          id: "e",
+          label: "Install extensions",
+          status: "queued",
+          idx: 4,
           stepKind: "action",
         }),
       ],
@@ -266,10 +280,10 @@ describe("OnboardingInstallProgress", () => {
     )
 
     const items = screen.getAllByRole("listitem")
-    expect(items).toHaveLength(6)
+    expect(items).toHaveLength(7)
     expect(items[0]?.textContent).toMatch(/1\.\s*Download ComfyUI/)
-    expect(items[4]?.textContent).toMatch(/5\.\s*Install custom nodes/)
-    expect(items[5]?.textContent).toMatch(/6\.\s*flux\.safetensors/)
+    expect(items[5]?.textContent).toMatch(/6\.\s*Install custom nodes/)
+    expect(items[6]?.textContent).toMatch(/7\.\s*flux\.safetensors/)
   })
 
   it("previews blueprint steps before the job is enqueued", async () => {
@@ -287,8 +301,8 @@ describe("OnboardingInstallProgress", () => {
 
     await waitFor(() => {
       const items = screen.getAllByRole("listitem")
-      expect(items).toHaveLength(5)
-      expect(items[4]?.textContent).toMatch(/5\.\s*krea\.safetensors/)
+      expect(items).toHaveLength(6)
+      expect(items[5]?.textContent).toMatch(/6\.\s*krea\.safetensors/)
     })
   })
 
@@ -308,8 +322,8 @@ describe("OnboardingInstallProgress", () => {
 
     await waitFor(() => {
       const items = screen.getAllByRole("listitem")
-      expect(items).toHaveLength(5)
-      expect(items[4]?.textContent).toMatch(/5\.\s*Install krea2-turbo/)
+      expect(items).toHaveLength(6)
+      expect(items[5]?.textContent).toMatch(/6\.\s*Install krea2-turbo/)
     })
   })
 
@@ -327,9 +341,12 @@ describe("OnboardingInstallProgress", () => {
     )
     await waitFor(() => {
       const items = screen.getAllByRole("listitem")
-      expect(items.length).toBeGreaterThanOrEqual(5)
+      expect(items.length).toBeGreaterThanOrEqual(6)
       expect(items[0]?.textContent).toMatch(/^✓\s*1\.\s*Download ComfyUI/)
-      expect(items[3]?.textContent).toMatch(/^✓\s*4\.\s*Install extensions/)
+      expect(items[3]?.textContent).toMatch(
+        /^✓\s*4\.\s*Install Python packages/
+      )
+      expect(items[4]?.textContent).toMatch(/^✓\s*5\.\s*Install extensions/)
     })
   })
 
@@ -360,9 +377,16 @@ describe("OnboardingInstallProgress", () => {
         }),
         step({
           id: "d",
+          label: "Install Python packages",
+          status: "done",
+          idx: 3,
+          stepKind: "action",
+        }),
+        step({
+          id: "e",
           label: "Install extensions",
           status: "running",
-          idx: 3,
+          idx: 4,
           stepKind: "action",
         }),
       ],
@@ -374,14 +398,14 @@ describe("OnboardingInstallProgress", () => {
         blueprintId="krea2-turbo"
         comfyReady={false}
         speedBps={0}
-        runtimeMessage="Installing Python dependencies…"
+        runtimeMessage="Installing Ultimate SD Upscale…"
         error={null}
         onRetry={vi.fn()}
       />
     )
 
     expect(screen.getByText("Install extensions…")).toBeTruthy()
-    expect(screen.queryByText("Installing Python dependencies…")).toBeNull()
+    expect(screen.queryByText("Installing Ultimate SD Upscale…")).toBeNull()
   })
 
   it("still shows extract percent progress from the runtime message", () => {
@@ -419,5 +443,45 @@ describe("OnboardingInstallProgress", () => {
 
     expect(screen.getByText(/Extracting archive/)).toBeTruthy()
     expect(screen.getAllByText("42.00%").length).toBeGreaterThan(0)
+  })
+
+  it("shows an install error alert and retry", () => {
+    const onRetry = vi.fn()
+    render(
+      <OnboardingInstallProgress
+        snapshot={snap({})}
+        blueprintId="krea2-turbo"
+        comfyReady={false}
+        speedBps={0}
+        runtimeMessage={null}
+        error="queue did not start"
+        onRetry={onRetry}
+      />
+    )
+
+    const alert = screen.getByRole("alert")
+    expect(alert).toHaveTextContent("Install failed")
+    expect(alert).toHaveTextContent("queue did not start")
+    expect(screen.getByText("Failed")).toBeTruthy()
+    screen.getByRole("button", { name: "Retry" }).click()
+    expect(onRetry).toHaveBeenCalled()
+  })
+
+  it("hides retry when the parent footer owns it", () => {
+    render(
+      <OnboardingInstallProgress
+        snapshot={snap({})}
+        blueprintId="krea2-turbo"
+        comfyReady={false}
+        speedBps={0}
+        runtimeMessage={null}
+        error="boom"
+        onRetry={vi.fn()}
+        hideRetry
+      />
+    )
+
+    expect(screen.getByRole("alert")).toHaveTextContent("boom")
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull()
   })
 })

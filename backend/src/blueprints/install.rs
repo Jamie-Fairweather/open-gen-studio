@@ -206,10 +206,9 @@ pub(crate) fn install_custom_nodes(app: &AppHandle, nodes: &[CustomNodeDep]) -> 
     if nodes.is_empty() {
         return Ok(());
     }
-    let portable =
-        comfy::find_portable_root(&comfy::runtimes_dir(app)?.join("portable")).map_err(|_| {
-            "ComfyUI portable not found - install the runtime before custom nodes".to_string()
-        })?;
+    let portable = comfy::live_portable_root_for_app(app).map_err(|_| {
+        "ComfyUI portable not found - install the runtime before custom nodes".to_string()
+    })?;
     let custom_dir = portable.join("ComfyUI").join("custom_nodes");
     fs::create_dir_all(&custom_dir).map_err(|e| e.to_string())?;
 

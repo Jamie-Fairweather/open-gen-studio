@@ -29,13 +29,42 @@ pub fn pinned_version() -> &'static str {
 }
 
 /// Read persisted GPU choice + detection → portable kind for install.
+///
+/// When the user already saved `gpu_vendor` (onboarding / settings), skip a full
+/// `nvidia-smi`/WMI rescan — those probes can hang for minutes in some VMs and
+/// would block Comfy enqueue entirely.
 pub fn effective_gpu_choice(app: &AppHandle) -> Result<(GpuVendor, Option<NvidiaVariant>), String> {
+    let (vendor_setting, nvidia_override) = {
+        let state = app.state::<AppState>();
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        (
+            db.get_setting(SETTING_GPU_VENDOR)?,
+            db.get_setting(SETTING_NVIDIA_PORTABLE_OVERRIDE)?,
+        )
+    };
+
+    if let Some(raw) = vendor_setting
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        let vendor =
+            GpuVendor::parse(raw).ok_or_else(|| format!("Invalid gpu_vendor setting: {raw}"))?;
+        let nvidia = if vendor == GpuVendor::Nvidia {
+            Some(
+                nvidia_override
+                    .as_deref()
+                    .and_then(NvidiaVariant::parse)
+                    .unwrap_or(NvidiaVariant::Modern),
+            )
+        } else {
+            None
+        };
+        return Ok((vendor, nvidia));
+    }
+
     let info = gpu::detect_gpus();
-    let state = app.state::<AppState>();
-    let db = state.db.lock().map_err(|e| e.to_string())?;
-    let vendor_setting = db.get_setting(SETTING_GPU_VENDOR)?;
-    let nvidia_override = db.get_setting(SETTING_NVIDIA_PORTABLE_OVERRIDE)?;
-    gpu::resolve_choice(&info, vendor_setting.as_deref(), nvidia_override.as_deref())
+    gpu::resolve_choice(&info, None, nvidia_override.as_deref())
 }
 
 pub fn portable_kind_for_app(app: &AppHandle) -> Result<PortableKind, String> {
@@ -125,11 +154,19 @@ fn runtime_row_ids(existing: Option<&RuntimeInstall>) -> (String, i64) {
 }
 
 fn ready_runtime(id: String, created_at: i64, root: &Path) -> RuntimeInstall {
+    // Prefer a short on-disk root under MSIX (relocates out of Packages\… when needed)
+    // so pip/Python stay under Windows MAX_PATH. Falls back to canonicalize.
+    let install_path = match super::paths::process_portable_root(root) {
+        Ok(p) => p,
+        Err(_) => fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf()),
+    }
+    .display()
+    .to_string();
     RuntimeInstall {
         id,
         engine: super::paths::ENGINE.into(),
         version: COMFY_PINNED_VERSION.into(),
-        install_path: root.display().to_string(),
+        install_path,
         port: Some(super::paths::DEFAULT_PORT as i64),
         status: "ready".into(),
         error: None,
@@ -208,8 +245,17 @@ pub fn extract_portable_core(
 
     let root = super::paths::find_portable_root(&extract_to)?;
     if !super::paths::portable_ready(&root) {
-        return Err("extract finished but ComfyUI portable looks incomplete".into());
+        // Common failure: python.exe extracted but python3*.dll missing (truncated archive).
+        let detail = match super::paths::portable_python_exe(&root) {
+            Err(e) => e,
+            Ok(_) => "ComfyUI/main.py missing".into(),
+        };
+        let _ = remove_dir_retries(&extract_to, 4);
+        return Err(format!(
+            "extract finished but ComfyUI portable looks incomplete ({detail})"
+        ));
     }
+    super::paths::unblock_embedded_python(&root);
     Ok(())
 }
 
@@ -232,7 +278,7 @@ pub fn configure_portable_core(
 
     super::paths::emit_progress(app, "configure", "Writing shared model paths…");
     super::paths::write_extra_model_paths(&root, &models)?;
-    super::manager::ensure_comfy_manager(app, &root)?;
+    // Manager / pip deps are a separate download-manager step (`runtime_python_deps`).
 
     if backup_path.is_dir() {
         super::paths::emit_progress(app, "configure", "Restoring custom nodes…");
@@ -270,6 +316,8 @@ pub fn install_portable(
 ) -> Result<RuntimeInstall, String> {
     let _ = download_portable_archive(app)?;
     let runtime = install_portable_core(app, existing, force)?;
+    let root = PathBuf::from(&runtime.install_path);
+    super::manager::ensure_comfy_manager(app, &root)?;
     super::paths::emit_progress(
         app,
         "configure",

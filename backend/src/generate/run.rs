@@ -42,6 +42,23 @@ pub fn resolve_random_seeds(values: &mut HashMap<String, Value>) -> bool {
     true
 }
 
+/// Install every managed custom-node pack the compiled graph needs into the
+/// same portable tree `start` loads. Returns true when a pack was missing
+/// (Comfy must restart to register the new `class_type`).
+fn ensure_workflow_extensions(app: &AppHandle, workflow: &Value) -> Result<bool, String> {
+    let mut changed = false;
+    for id in crate::pins::managed_pin_ids_for_workflow(workflow) {
+        if !crate::upscale::managed_node_at_pin(app, id) {
+            changed = true;
+        }
+        match id {
+            "supir" => crate::upscale::ensure_supir_custom_node(app)?,
+            _ => crate::upscale::ensure_pinned_node(app, id)?,
+        }
+    }
+    Ok(changed)
+}
+
 fn persist_generate_values(db: &Mutex<Db>, job: &Job, values: &HashMap<String, Value>) {
     let Ok(mut params) = serde_json::from_str::<Value>(&job.params_json) else {
         return;
@@ -131,6 +148,7 @@ pub fn run_generate(
     };
 
     let port = runtime.port.unwrap_or(comfy::DEFAULT_PORT as i64) as u16;
+    let extensions_changed = ensure_workflow_extensions(app, &workflow)?;
 
     if !comfy::health(port)? {
         if runtime.install_path.is_empty() {
@@ -141,7 +159,7 @@ pub fn run_generate(
             crate::ipc::JobProgress::new(&job.id, "start", "Starting runtime…"),
         );
         comfy::start(app, processes, runtime, port)?;
-        comfy::wait_until_healthy(port, 60)?;
+        comfy::wait_until_healthy(processes, port, 90)?;
         // Mark runtime running so UI clears the "Starting runtime…" toast.
         {
             let db = db.lock().map_err(|e| e.to_string())?;
@@ -159,6 +177,14 @@ pub fn run_generate(
                 "message": "Runtime is ready",
             }),
         );
+    } else if extensions_changed {
+        let _ = app.emit(
+            "jobs://progress",
+            crate::ipc::JobProgress::new(&job.id, "start", "Reloading runtime for extensions…"),
+        );
+        comfy::stop(processes)?;
+        comfy::start(app, processes, runtime, port)?;
+        comfy::wait_until_healthy(processes, port, 90)?;
     }
 
     if job_cancelled(cancelled_jobs, &job.id) {

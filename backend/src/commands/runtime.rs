@@ -38,7 +38,7 @@ pub fn comfy_needs_install(app: &AppHandle, state: &AppState) -> Result<bool, St
             let path = Path::new(&r.install_path);
             let path_ok = !r.install_path.is_empty()
                 && path.join("ComfyUI").is_dir()
-                && path.join("python_embeded").join("python.exe").is_file();
+                && comfy::portable_python_exe(path).is_ok();
             let pin_ok = path_ok && comfy::portable_pin_matches(path, kind.as_str());
             // "installing" after a crash means a stalled job - retry.
             // Pin mismatch → migrate to the version this app release requires.
@@ -122,7 +122,8 @@ pub fn start_comfyui(app: AppHandle, state: State<'_, AppState>) -> Result<Runti
     let runtime_id = runtime.id.clone();
     std::thread::spawn(move || {
         let state = app_bg.state::<AppState>();
-        match comfy::wait_until_healthy(port, 60) {
+        // Cold start: CUDA + Manager + custom nodes can exceed 2 minutes on VMs.
+        match comfy::wait_until_healthy(&state.processes, port, 90) {
             Ok(()) => {
                 if let Ok(db) = state.db.lock() {
                     if let Ok(updated) =

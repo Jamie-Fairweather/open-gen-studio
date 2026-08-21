@@ -198,9 +198,6 @@ pub(crate) fn run_next_job(app: &AppHandle) {
         db.list_download_steps(&job.id).unwrap_or_default()
     };
 
-    // Probe waiting http sizes once so the UI can show combined job progress.
-    super::steps::seed_http_totals(app, &job.id);
-
     for step in steps {
         if matches!(step.status.as_str(), "done" | "cancelled") {
             continue;
@@ -221,6 +218,12 @@ pub(crate) fn run_next_job(app: &AppHandle) {
             let _ = db.update_download_step_status(&step.id, "running", None, None, None);
         }
         emit_snapshot(app);
+
+        // Size probes after the step is visible — HEAD can take tens of seconds
+        // and previously left the UI stuck on "Starting…" with every step Waiting.
+        if step.step_kind == "http" {
+            super::steps::seed_http_totals(app, &job.id);
+        }
 
         let result = run_step(app, &job.id, &step);
         match result {

@@ -60,6 +60,27 @@ sideload — not only on a developer PC that already has app data / WebView2 war
 Declare Partner Center system requirements honestly (min ~16GB RAM / 8GB VRAM);
 first-run onboarding warns and can be bypassed when hardware is under-spec.
 
+### First-run “Install Python packages” / extensions
+
+Certification PCs may lack **git** or have flaky PyPI. The install pipeline
+hard-fails (Retry) instead of soft-skipping; onboarding already requires
+internet:
+
+1. **Install Python packages** — copies bundled **VC++ runtime DLLs**
+   (`backend/resources/vc140/`) next to portable `python.exe` (MSIX/clean VMs
+   cannot rely on System32 alone), then `ensurepip` / get-pip → PyPI
+   `pip install -r manager_requirements.txt` (retries).
+2. **Install extensions** — managed custom nodes via **GitHub codeload zip**
+   - `.oga_node_pin` marker; `git` only as fallback.
+3. **Long paths** — MSIX AppData under `Packages\…\LocalCache\…` exceeds
+   Windows MAX_PATH for pip (junctions are not enough — Python resolves them).
+   Default library root is `%USERPROFILE%\Open Gen Studio`. If a portable
+   install is already under Packages, it is relocated to
+   `%USERPROFILE%\.ogs\cui` before pip, with a junction left at the old path.
+
+Before Store resubmit, sideload the MSIX on a **clean VM without git** and
+confirm first-run completes through both steps.
+
 ## Local sideload test (optional)
 
 Self-sign only for installing on your machine (**not** for Store upload):

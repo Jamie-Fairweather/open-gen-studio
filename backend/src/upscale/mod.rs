@@ -16,8 +16,8 @@ pub use install::install_upscaler;
 #[allow(unused_imports)]
 pub use nodes::{
     ensure_managed_nodes, ensure_pinned_custom_node, ensure_pinned_node, ensure_supir_custom_node,
-    ensure_usdu_custom_node, managed_nodes_pin_status, supir_at_pin, supir_installed, usdu_at_pin,
-    usdu_installed,
+    ensure_usdu_custom_node, managed_node_at_pin, managed_nodes_pin_status, supir_at_pin,
+    supir_installed, usdu_at_pin, usdu_installed,
 };
 #[allow(unused_imports)]
 pub use types::{

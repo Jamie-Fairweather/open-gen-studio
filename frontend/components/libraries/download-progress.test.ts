@@ -30,9 +30,24 @@ describe("friendlyInstallStatus", () => {
       friendlyInstallStatus("Installing ComfyUI-QwenVL Python dependencies…")
     ).toBe("Installing Python dependencies…")
     expect(friendlyInstallStatus("Ensuring ComfyUI-Manager…")).toBe(
-      "Installing extensions…"
+      "Installing Python packages…"
+    )
+    expect(friendlyInstallStatus("Installing Python packages…")).toBe(
+      "Installing Python packages…"
+    )
+    expect(friendlyInstallStatus("Bootstrapping pip…")).toBe(
+      "Installing Python packages…"
+    )
+    expect(friendlyInstallStatus("Python packages ready")).toBe(
+      "Python packages ready"
     )
     expect(friendlyInstallStatus("custom node ready")).toBe("Extensions ready")
+    expect(friendlyInstallStatus("Installing Visual C++ runtime…")).toBe(
+      "Installing system runtime…"
+    )
+    expect(friendlyInstallStatus("Could not place VCRUNTIME140.dll")).toBe(
+      "Installing system runtime…"
+    )
   })
 
   it("leaves plain messages alone", () => {

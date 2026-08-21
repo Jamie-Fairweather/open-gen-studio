@@ -52,6 +52,7 @@ specta = { version = "=2.0.0-rc.25", features = ["derive", "function", "serde_js
 specta-serde = "=0.0.12"
 specta-typescript = "=0.0.12"
 tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-window-state = "2"
@@ -60,6 +61,9 @@ tauri-plugin-window-state = "2"
 windows = { version = "0.61", features = [
   "Win32_Foundation",
   "Win32_Globalization",
+  "Win32_Graphics_Dxgi",
+  "Win32_Storage_Packaging_Appx",
   "Win32_System_Com",
+  "Win32_System_Diagnostics_Debug",
   "Win32_System_SystemInformation",
 ] }

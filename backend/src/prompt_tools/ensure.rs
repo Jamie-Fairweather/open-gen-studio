@@ -7,8 +7,6 @@ use super::types::{
 use crate::comfy::{self, ProcessState};
 use crate::db::{Db, RuntimeInstall};
 use crate::download;
-use crate::pins;
-use crate::process_cmd;
 use crate::upscale;
 use serde_json::Value;
 use std::fs;
@@ -40,9 +38,8 @@ pub(crate) fn emit_progress(
 }
 
 fn portable_root(app: &AppHandle) -> Result<PathBuf, String> {
-    comfy::find_portable_root(&comfy::runtimes_dir(app)?.join("portable")).map_err(|_| {
-        "ComfyUI portable not found - install the runtime before Prompt Tools".to_string()
-    })
+    comfy::live_portable_root_for_app(app)
+        .map_err(|_| "ComfyUI portable not found - install the runtime before Prompt Tools".into())
 }
 
 fn qwenvl_model_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -90,34 +87,7 @@ pub fn provider_ready(app: &AppHandle, provider_id: &str) -> bool {
 }
 
 fn node_ready(app: &AppHandle, pin_id: &str) -> bool {
-    let Some(pin) = pins::node_pin(pin_id) else {
-        return false;
-    };
-    let Ok(runtimes) = comfy::runtimes_dir(app) else {
-        return false;
-    };
-    let Ok(portable) = comfy::find_portable_root(&runtimes.join("portable")) else {
-        return false;
-    };
-    let dest = portable
-        .join("ComfyUI")
-        .join("custom_nodes")
-        .join(pin.folder);
-    if !dest.is_dir() {
-        return false;
-    }
-    let Ok(out) = process_cmd::new("git")
-        .current_dir(&dest)
-        .args(["rev-parse", "HEAD"])
-        .output()
-    else {
-        return false;
-    };
-    if !out.status.success() {
-        return false;
-    }
-    let head = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    head.starts_with(pin.commit) || pin.commit.starts_with(&head) || head == pin.commit
+    upscale::managed_node_at_pin(app, pin_id)
 }
 
 pub fn list_weights(app: &AppHandle) -> Result<Vec<PromptToolWeightInfo>, String> {
@@ -368,10 +338,6 @@ pub fn install_qwenvl_python_deps(app: &AppHandle) -> Result<bool, String> {
     if marker.is_file() {
         return Ok(false);
     }
-    let python = root.join("python_embeded").join("python.exe");
-    if !python.is_file() {
-        return Err("ComfyUI portable python.exe missing - cannot install QwenVL deps".into());
-    }
     let reqs = root
         .join("ComfyUI")
         .join("custom_nodes")
@@ -382,6 +348,10 @@ pub fn install_qwenvl_python_deps(app: &AppHandle) -> Result<bool, String> {
             "ComfyUI-QwenVL requirements.txt missing - reinstall Prompt Tools / custom node".into(),
         );
     }
+    let staged = comfy::stage_requirements_for_pip(&root, &reqs)?;
+    let staged_s = staged
+        .to_str()
+        .ok_or("invalid staged QwenVL requirements path")?;
     emit_progress(
         app,
         "install",
@@ -389,23 +359,23 @@ pub fn install_qwenvl_python_deps(app: &AppHandle) -> Result<bool, String> {
         None,
         Some("requirements.txt"),
     );
-    let reqs_s = reqs.to_str().ok_or("invalid requirements path")?;
     // requirements.txt lists bare `transformers`; Comfy's embed often already has an
     // older build, so pip skips upgrade. Qwen3-VL needs >= 4.57.
-    let status = process_cmd::new(&python)
+    let status = comfy::command_portable_python(&root)?
         .args([
             "-s",
             "-m",
             "pip",
             "install",
+            "--disable-pip-version-check",
             "--upgrade",
             "transformers>=4.57.0",
             "-r",
-            reqs_s,
+            staged_s,
         ])
-        .current_dir(&root)
         .status()
         .map_err(|e| format!("failed to run pip for QwenVL: {e}"))?;
+    let _ = std::fs::remove_file(&staged);
     if !status.success() {
         return Err("QwenVL requirements.txt pip install failed".into());
     }
@@ -430,7 +400,7 @@ pub(crate) fn ensure_comfy_running(
         }
         emit_progress(app, "start", "Starting runtime…", None, None);
         comfy::start(app, processes, runtime, port)?;
-        comfy::wait_until_healthy(port, 60)?;
+        comfy::wait_until_healthy(processes, port, 90)?;
         if let Ok(db) = db.lock() {
             if let Ok(updated) =
                 db.update_runtime_status(&runtime.id, "running", Some(port as i64), None)

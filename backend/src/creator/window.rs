@@ -33,7 +33,7 @@ pub fn ensure_comfy_url(
     let port = runtime.port.unwrap_or(comfy::DEFAULT_PORT as i64) as u16;
     if !comfy::health(port)? {
         comfy::start(app, processes, &runtime, port)?;
-        comfy::wait_until_healthy(port, 60)?;
+        comfy::wait_until_healthy(processes, port, 90)?;
         {
             let db = db.lock().map_err(|e| e.to_string())?;
             if let Ok(updated) =

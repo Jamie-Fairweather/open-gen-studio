@@ -7,11 +7,12 @@ import {
   vendorOptionsFromAdapters,
   type GpuVendorOption,
 } from "@/components/dialogs/gpu-vendor-dialog"
+import { OnboardingErrorAlert } from "@/components/shell/onboarding-error-alert"
+import { OnboardingInstallProgress } from "@/components/shell/onboarding-install-progress"
+import { Titlebar } from "@/components/shell/titlebar"
 import { blueprintIdFromJobKey } from "@/components/studio/slices/job-keys"
 import { SETTING_GPU_VENDOR } from "@/components/studio/slices/setting-keys"
 import { useStudioStore } from "@/components/studio/store"
-import { OnboardingInstallProgress } from "@/components/shell/onboarding-install-progress"
-import { Titlebar } from "@/components/shell/titlebar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -24,6 +25,7 @@ import {
   getDataDirInfo,
   getSystemSpecs,
   isTauri,
+  listDownloads,
   listSettings,
   openExternalUrl,
   pickDataDir,
@@ -36,7 +38,6 @@ import {
   type GpuVendor,
   type SystemSpecs,
 } from "@/lib/host"
-import { notifyError } from "@/lib/notify"
 import {
   bytesToGb,
   formatSpecGb,
@@ -88,10 +89,10 @@ export function OnboardingOverlay() {
   const runtimes = useStudioStore((s) => s.runtimes)
   const gpu = useStudioStore((s) => s.gpu)
   const hasHfToken = useStudioStore((s) => s.hasHfToken)
-  const runtimeBusy = useStudioStore((s) => s.runtimeBusy)
   const setRuntimeBusy = useStudioStore((s) => s.setRuntimeBusy)
   const runtimeMessage = useStudioStore((s) => s.runtimeMessage)
   const downloadSnapshot = useStudioStore((s) => s.downloadSnapshot)
+  const setDownloadSnapshot = useStudioStore((s) => s.setDownloadSnapshot)
   const downloadSpeedBps = useStudioStore((s) => s.downloadSpeedBps)
   const handleInstallComfy = useStudioStore((s) => s.handleInstallComfy)
   const requestBlueprintInstall = useStudioStore(
@@ -116,8 +117,10 @@ export function OnboardingOverlay() {
   const [bootstrapped, setBootstrapped] = useState(false)
   const [gpuSelected, setGpuSelected] = useState<GpuVendor | null>(null)
   const [gpuBusy, setGpuBusy] = useState(false)
+  const [gpuError, setGpuError] = useState<string | null>(null)
   const [hfToken, setHfToken] = useState("")
   const [hfBusy, setHfBusy] = useState(false)
+  const [hfError, setHfError] = useState<string | null>(null)
   const [storageInfo, setStorageInfo] = useState<DataDirInfo | null>(null)
   const [storageMode, setStorageMode] = useState<"default" | "custom">(
     "default"
@@ -126,7 +129,10 @@ export function OnboardingOverlay() {
     null
   )
   const [storageBusy, setStorageBusy] = useState(false)
-  const [storageError, setStorageError] = useState<string | null>(null)
+  const [storageError, setStorageError] = useState<{
+    title: string
+    description: string
+  } | null>(null)
   const [installError, setInstallError] = useState<string | null>(null)
   const [installKick, setInstallKick] = useState(0)
   const installStartedRef = useRef({ comfy: false, blueprint: false })
@@ -348,10 +354,14 @@ export function OnboardingOverlay() {
 
   async function confirmGpu() {
     if (!gpuChoice) return
+    setGpuError(null)
     setGpuBusy(true)
     try {
       await setSetting(SETTING_GPU_VENDOR, gpuChoice)
       await advance({ step: "blueprint" })
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      setGpuError(message)
     } finally {
       setGpuBusy(false)
     }
@@ -390,8 +400,10 @@ export function OnboardingOverlay() {
     } catch (e) {
       if (moving) endDataDirMove()
       const message = e instanceof Error ? e.message : String(e)
-      setStorageError(message)
-      notifyError(message, "Could not set data folder")
+      setStorageError({
+        title: "Could not set data folder",
+        description: message,
+      })
     } finally {
       setStorageBusy(false)
     }
@@ -406,8 +418,10 @@ export function OnboardingOverlay() {
       setCustomStoragePath(picked)
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
-      setStorageError(message)
-      notifyError(message, "Could not choose folder")
+      setStorageError({
+        title: "Could not choose folder",
+        description: message,
+      })
     }
   }
 
@@ -425,6 +439,7 @@ export function OnboardingOverlay() {
     const token = hfToken.trim()
     if (!token) return
     setHfBusy(true)
+    setHfError(null)
     try {
       await setProviderToken("huggingFace", token)
       await refreshProviderTokenStatus()
@@ -432,6 +447,9 @@ export function OnboardingOverlay() {
       installStartedRef.current = { comfy: false, blueprint: false }
       setInstallError(null)
       await advance({ step: "install", hfSkipped: false })
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      setHfError(message)
     } finally {
       setHfBusy(false)
     }
@@ -454,87 +472,108 @@ export function OnboardingOverlay() {
     await advance({ step: "hf", blueprintId })
   }
 
-  // Drive Comfy → blueprint install while on the install step.
+  // Finish onboarding once Comfy + blueprint are both ready.
   useEffect(() => {
     if (step !== "install" || !blueprintId || phase === "hidden") return
-
-    const comfyReady = isComfyReady(runtimes)
     const bp = blueprints.find((b) => b.id === blueprintId)
-    if (comfyReady && bp && isInstalled(bp)) {
+    if (isComfyReady(runtimes) && bp && isInstalled(bp)) {
       selectBlueprint(blueprintId)
       void setSetting(SETTING_ONBOARDING, "").catch(() => {})
-      return
     }
+  }, [step, blueprintId, phase, runtimes, blueprints, selectBlueprint])
 
-    // Terminal errors are derived during render — just allow retry.
+  // Kick Comfy install. Keep deps narrow — including runtimeBusy/downloadSnapshot
+  // re-ran this effect mid-invoke, cancelled the async, and showed a fake
+  // "did not start" error while swallowing the real failure.
+  useEffect(() => {
+    if (step !== "install" || !blueprintId || phase === "hidden") return
+    if (isComfyReady(runtimes)) return
     if (comfy?.status === "error" || failedRuntimeJob) {
       installStartedRef.current.comfy = false
       return
     }
-    if (activeBpJob?.status === "error") {
-      installStartedRef.current.blueprint = false
-      return
-    }
+    if (runtimeJobPending || isComfyInstalling(runtimes)) return
+    if (installStartedRef.current.comfy) return
 
-    const bpJobMatch = (job: { kind: string; jobKey: string }) =>
-      job.kind === "blueprint" &&
-      blueprintIdFromJobKey(job.jobKey) === blueprintId
-
-    let cancelled = false
+    let showError = true
+    installStartedRef.current.comfy = true
     void (async () => {
-      // Comfy must be queued/running before blueprint, or a re-entrant effect can
-      // enqueue blueprint first and the worker will start on step 5.
-      if (!comfyReady) {
-        const installing =
-          isComfyInstalling(runtimes) || runtimeBusy || runtimeJobPending
-        if (!installing && !installStartedRef.current.comfy) {
-          installStartedRef.current.comfy = true
-          setInstallError(null)
-          try {
-            await handleInstallComfy()
-          } catch (e) {
-            if (!cancelled) {
-              setInstallError(e instanceof Error ? e.message : String(e))
-              installStartedRef.current.comfy = false
-            }
-          }
-          return
+      try {
+        await handleInstallComfy()
+        const snap = await listDownloads()
+        setDownloadSnapshot(snap)
+        const hasRuntime =
+          snap.active?.kind === "runtime" ||
+          snap.queued.some((j) => j.kind === "runtime")
+        if (!hasRuntime) {
+          throw new Error(
+            "ComfyUI install did not queue a download job. Tap Retry."
+          )
         }
-        if (!runtimeJobPending && !isComfyInstalling(runtimes)) {
-          // Still waiting for the runtime job to appear in the snapshot.
-          return
-        }
-      }
-
-      if (cancelled) return
-
-      // Preview steps already show the blueprint plan; only enqueue once Comfy
-      // is fully done (including extensions) so the title/queue stay Comfy → blueprint.
-      if (!comfyReady || runtimeJobPending) return
-
-      if (bp && !isInstalled(bp) && !installStartedRef.current.blueprint) {
-        const activeBp =
-          downloadSnapshot.active != null && bpJobMatch(downloadSnapshot.active)
-        const queuedBp = downloadSnapshot.queued.some(bpJobMatch)
-        if (activeBp || queuedBp) {
-          installStartedRef.current.blueprint = true
-          return
-        }
-        installStartedRef.current.blueprint = true
-        setInstallError(null)
-        try {
-          await requestBlueprintInstall(blueprintId)
-        } catch (e) {
-          if (!cancelled) {
-            setInstallError(e instanceof Error ? e.message : String(e))
-            installStartedRef.current.blueprint = false
-          }
+      } catch (e) {
+        installStartedRef.current.comfy = false
+        setRuntimeBusy(false)
+        if (showError) {
+          setInstallError(e instanceof Error ? e.message : String(e))
         }
       }
     })()
 
     return () => {
-      cancelled = true
+      showError = false
+    }
+  }, [
+    step,
+    blueprintId,
+    phase,
+    runtimes,
+    comfy?.status,
+    failedRuntimeJob,
+    runtimeJobPending,
+    handleInstallComfy,
+    setDownloadSnapshot,
+    setRuntimeBusy,
+    installKick,
+  ])
+
+  // Enqueue blueprint only after Comfy is fully done (including extensions).
+  useEffect(() => {
+    if (step !== "install" || !blueprintId || phase === "hidden") return
+    if (!isComfyReady(runtimes) || runtimeJobPending) return
+    if (activeBpJob?.status === "error") {
+      installStartedRef.current.blueprint = false
+      return
+    }
+
+    const bp = blueprints.find((b) => b.id === blueprintId)
+    if (!bp || isInstalled(bp) || installStartedRef.current.blueprint) return
+
+    const bpJobMatch = (job: { kind: string; jobKey: string }) =>
+      job.kind === "blueprint" &&
+      blueprintIdFromJobKey(job.jobKey) === blueprintId
+    const activeBp =
+      downloadSnapshot.active != null && bpJobMatch(downloadSnapshot.active)
+    const queuedBp = downloadSnapshot.queued.some(bpJobMatch)
+    if (activeBp || queuedBp) {
+      installStartedRef.current.blueprint = true
+      return
+    }
+
+    let showError = true
+    installStartedRef.current.blueprint = true
+    void (async () => {
+      try {
+        await requestBlueprintInstall(blueprintId)
+      } catch (e) {
+        installStartedRef.current.blueprint = false
+        if (showError) {
+          setInstallError(e instanceof Error ? e.message : String(e))
+        }
+      }
+    })()
+
+    return () => {
+      showError = false
     }
   }, [
     step,
@@ -542,15 +581,10 @@ export function OnboardingOverlay() {
     phase,
     runtimes,
     blueprints,
-    comfy?.status,
-    activeBpJob?.status,
-    failedRuntimeJob,
     runtimeJobPending,
-    runtimeBusy,
+    activeBpJob?.status,
     downloadSnapshot,
-    handleInstallComfy,
     requestBlueprintInstall,
-    selectBlueprint,
     installKick,
   ])
 
@@ -565,6 +599,8 @@ export function OnboardingOverlay() {
         installStartedRef.current.comfy = true
         try {
           await handleInstallComfy()
+          const snap = await listDownloads()
+          setDownloadSnapshot(snap)
         } catch (e) {
           setInstallError(e instanceof Error ? e.message : String(e))
           installStartedRef.current.comfy = false
@@ -771,8 +807,9 @@ export function OnboardingOverlay() {
   return (
     <div
       className={cn(
-        // Sit under StartupOverlay (z-100) so startup can hand off without flashing studio.
-        "fixed inset-0 z-[90] flex flex-col bg-background",
+        // Above toasts (z-110). StartupOverlay stays higher so it can hand off
+        // without flashing studio.
+        "fixed inset-0 z-[120] flex flex-col bg-background",
         phase === "exit" && "opacity-0 transition-opacity duration-300 ease-out"
       )}
       role="dialog"
@@ -930,7 +967,10 @@ export function OnboardingOverlay() {
                     >
                       <span className="font-medium">Default location</span>
                       <span className="font-mono text-xs break-all text-muted-foreground">
-                        {storageInfo?.locatorPath ?? storageInfo?.path ?? "…"}
+                        {storageInfo?.defaultPath ??
+                          storageInfo?.locatorPath ??
+                          storageInfo?.path ??
+                          "…"}
                       </span>
                     </button>
                     <button
@@ -955,9 +995,10 @@ export function OnboardingOverlay() {
                     </button>
                   </div>
                   {storageError ? (
-                    <p className="text-center text-sm text-destructive">
-                      {storageError}
-                    </p>
+                    <OnboardingErrorAlert
+                      title={storageError.title}
+                      description={storageError.description}
+                    />
                   ) : null}
                 </div>
               ) : null}
@@ -1010,6 +1051,12 @@ export function OnboardingOverlay() {
                       )
                     })}
                   </div>
+                  {gpuError ? (
+                    <OnboardingErrorAlert
+                      title="Could not save GPU"
+                      description={gpuError}
+                    />
+                  ) : null}
                 </div>
               ) : null}
 
@@ -1072,6 +1119,12 @@ export function OnboardingOverlay() {
                   >
                     Create a read-only token on Hugging Face
                   </button>
+                  {hfError ? (
+                    <OnboardingErrorAlert
+                      title="Could not save token"
+                      description={hfError}
+                    />
+                  ) : null}
                 </div>
               ) : null}
 

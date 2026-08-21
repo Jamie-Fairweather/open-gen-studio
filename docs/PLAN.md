@@ -282,7 +282,7 @@ Why portable (not “build our own venv”):
 
 ### Host implications
 
-- Downloader must support **`.7z` extract** (portable is 7z, not zip). Pure Rust via **sevenz-rust2** (always works); optional system 7-Zip CLI when present for a faster path.
+- Downloader must support **`.7z` extract** (portable is 7z, not zip). Pure Rust via **sevenz-rust2**, with extract progress from uncompressed bytes streamed (`Extracting… N%`).
 - Process manager launches `python_embeded\python.exe`, not `run_nvidia_gpu.bat` (bats are for humans; we pass flags ourselves).
 - Shared **model library** outside the portable tree via `extra_model_paths.yaml` so Blueprint installs don’t duplicate multi‑GB weights per Comfy copy.
 - Comfy HTTP is for the host/recipe runner only - not exposed as an in-app node editor.

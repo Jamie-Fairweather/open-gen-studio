@@ -1,9 +1,7 @@
 use super::state::AppState;
 use crate::blueprints;
 use crate::download;
-use crate::gpu::{
-    self, GpuVendor, NvidiaVariant, SETTING_GPU_VENDOR, SETTING_NVIDIA_PORTABLE_OVERRIDE,
-};
+use crate::gpu::{GpuVendor, NvidiaVariant, SETTING_GPU_VENDOR, SETTING_NVIDIA_PORTABLE_OVERRIDE};
 use crate::providers::ProviderKind;
 use crate::secrets::{self, TokenProvider};
 use serde::{Deserialize, Serialize};
@@ -53,14 +51,10 @@ pub fn set_setting(state: State<'_, AppState>, key: String, value: String) -> Re
     }
 
     if key == SETTING_GPU_VENDOR {
-        let vendor =
-            GpuVendor::parse(&value).ok_or_else(|| format!("Invalid gpu_vendor: {value}"))?;
-        let info = gpu::detect_gpus();
-        if info.available && !info.adapters.iter().any(|a| a.vendor == vendor) {
-            return Err(format!(
-                "GPU vendor {} is not present on this machine",
-                vendor.as_str()
-            ));
+        // Don't re-probe hardware here: a cold WMI/nvidia-smi detect blocks the
+        // UI on "Saving…" (and can hang if another detect is already running).
+        if GpuVendor::parse(&value).is_none() {
+            return Err(format!("Invalid gpu_vendor: {value}"));
         }
     } else if key == SETTING_NVIDIA_PORTABLE_OVERRIDE {
         let trimmed = value.trim();

@@ -66,6 +66,16 @@ const store = vi.hoisted(() => ({
       error: string | null
     }[]
   },
+  setDownloadSnapshot: vi.fn((next: unknown) => {
+    store.downloadSnapshot =
+      typeof next === "function"
+        ? (
+            next as (
+              s: typeof store.downloadSnapshot
+            ) => typeof store.downloadSnapshot
+          )(store.downloadSnapshot)
+        : (next as typeof store.downloadSnapshot)
+  }),
   downloadSpeedBps: 0,
   handleInstallComfy: vi.fn(async () => {}),
   requestBlueprintInstall: vi.fn(async () => {}),
@@ -84,7 +94,9 @@ const store = vi.hoisted(() => ({
 const host = vi.hoisted(() => ({
   isTauri: vi.fn(() => true),
   listSettings: vi.fn(async () => ({})),
-  setSetting: vi.fn(async () => {}),
+  setSetting: vi.fn<(key: string, value: string) => Promise<void>>(
+    async () => {}
+  ),
   setProviderToken: vi.fn(async () => {}),
   openExternalUrl: vi.fn(async () => {}),
   getSystemSpecs: vi.fn(async () => ({
@@ -97,6 +109,7 @@ const host = vi.hoisted(() => ({
     path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
     isCustom: false,
     locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+    defaultPath: "C:/Users/test/Open Gen Studio",
     storageChosen: true,
   })),
   pickDataDir: vi.fn(async () => null),
@@ -106,6 +119,16 @@ const host = vi.hoisted(() => ({
     migrated: false,
   })),
   relaunchApp: vi.fn(async () => {}),
+  listDownloads: vi.fn(async () => ({
+    active: {
+      kind: "runtime",
+      jobKey: "runtime:comfyui",
+      status: "queued",
+      error: null,
+    },
+    queued: [],
+    history: [],
+  })),
 }))
 
 vi.mock("@/components/studio/store", () => {
@@ -126,6 +149,7 @@ vi.mock("@/lib/host", () => ({
   pickDataDir: (...a: unknown[]) => host.pickDataDir(...a),
   setDataDir: (...a: unknown[]) => host.setDataDir(...a),
   relaunchApp: (...a: unknown[]) => host.relaunchApp(...a),
+  listDownloads: (...a: unknown[]) => host.listDownloads(...a),
   gallerySrc: (p: string) => p,
 }))
 
@@ -179,6 +203,16 @@ describe("OnboardingOverlay", () => {
       gpuName: "Test GPU",
     })
     host.detectGpu.mockResolvedValue(null)
+    host.listDownloads.mockResolvedValue({
+      active: {
+        kind: "runtime",
+        jobKey: "runtime:comfyui",
+        status: "queued",
+        error: null,
+      },
+      queued: [],
+      history: [],
+    })
     store.handleInstallComfy.mockResolvedValue(undefined)
     store.requestBlueprintInstall.mockResolvedValue(undefined)
     store.refreshProviderTokenStatus.mockResolvedValue(undefined)
@@ -246,6 +280,7 @@ describe("OnboardingOverlay", () => {
       path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
       isCustom: false,
       locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      defaultPath: "C:/Users/test/Open Gen Studio",
       storageChosen: false,
     })
     render(<OnboardingOverlay />)
@@ -263,6 +298,24 @@ describe("OnboardingOverlay", () => {
     ).toBeInTheDocument()
   })
 
+  it("skips the step fade when reduced motion is preferred", async () => {
+    const user = userEvent.setup()
+    useMediaQuery.mockReturnValue(true)
+    host.getDataDirInfo.mockResolvedValueOnce({
+      path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      isCustom: false,
+      locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      defaultPath: "C:/Users/test/Open Gen Studio",
+      storageChosen: false,
+    })
+    render(<OnboardingOverlay />)
+    expect(await screen.findByText("Choose data folder")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Continue" }))
+    expect(
+      await screen.findByText("Pick your first Blueprint")
+    ).toBeInTheDocument()
+  })
+
   it("shows hardware warning first when under minimum specs", async () => {
     const user = userEvent.setup()
     host.getSystemSpecs.mockResolvedValue({
@@ -274,6 +327,7 @@ describe("OnboardingOverlay", () => {
       path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
       isCustom: false,
       locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      defaultPath: "C:/Users/test/Open Gen Studio",
       storageChosen: false,
     })
     render(<OnboardingOverlay />)
@@ -325,6 +379,7 @@ describe("OnboardingOverlay", () => {
       path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
       isCustom: false,
       locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      defaultPath: "C:/Users/test/Open Gen Studio",
       storageChosen: false,
     })
     render(<OnboardingOverlay />)
@@ -349,6 +404,7 @@ describe("OnboardingOverlay", () => {
       path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
       isCustom: false,
       locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      defaultPath: "C:/Users/test/Open Gen Studio",
       storageChosen: false,
     })
     render(<OnboardingOverlay />)
@@ -381,6 +437,7 @@ describe("OnboardingOverlay", () => {
       path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
       isCustom: false,
       locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      defaultPath: "C:/Users/test/Open Gen Studio",
       storageChosen: true,
     })
     host.listSettings.mockResolvedValue({
@@ -413,11 +470,11 @@ describe("OnboardingOverlay", () => {
 
   it("handles custom pick cancel, pick errors, and confirm failures", async () => {
     const user = userEvent.setup()
-    const { notifyError } = await import("@/lib/notify")
     host.getDataDirInfo.mockResolvedValue({
       path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
       isCustom: false,
       locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      defaultPath: "C:/Users/test/Open Gen Studio",
       storageChosen: false,
     })
     render(<OnboardingOverlay />)
@@ -440,24 +497,20 @@ describe("OnboardingOverlay", () => {
 
     host.pickDataDir.mockRejectedValueOnce(new Error("picker blew up"))
     await user.click(screen.getByRole("button", { name: /Custom location/i }))
-    await waitFor(() => {
-      expect(notifyError).toHaveBeenCalledWith(
-        "picker blew up",
-        "Could not choose folder"
-      )
-    })
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not choose folder"
+    )
+    expect(screen.getByRole("alert")).toHaveTextContent("picker blew up")
 
     host.pickDataDir.mockResolvedValueOnce("D:/Open Gen Studio")
     host.setDataDir.mockRejectedValueOnce("disk full")
     await user.click(screen.getByRole("button", { name: /Custom location/i }))
     await waitForEnabled("Continue")
     await user.click(screen.getByRole("button", { name: "Continue" }))
-    await waitFor(() => {
-      expect(notifyError).toHaveBeenCalledWith(
-        "disk full",
-        "Could not set data folder"
-      )
-    })
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not set data folder"
+    )
+    expect(screen.getByRole("alert")).toHaveTextContent("disk full")
   })
 
   it("ends a relocate overlay when move succeeds without restart", async () => {
@@ -474,12 +527,14 @@ describe("OnboardingOverlay", () => {
         path: "C:/Old",
         isCustom: true,
         locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+        defaultPath: "C:/Users/test/Open Gen Studio",
         storageChosen: true,
       })
       .mockResolvedValueOnce({
         path: "D:/New",
         isCustom: true,
         locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+        defaultPath: "C:/Users/test/Open Gen Studio",
         storageChosen: true,
       })
     host.listSettings.mockResolvedValue({
@@ -513,7 +568,6 @@ describe("OnboardingOverlay", () => {
     const user = userEvent.setup()
     const { getDataDirMoveActive, endDataDirMove } =
       await import("@/lib/data-dir-move")
-    const { notifyError } = await import("@/lib/notify")
     endDataDirMove()
     store.gpu = {
       needsVendorChoice: true,
@@ -523,6 +577,7 @@ describe("OnboardingOverlay", () => {
       path: "C:/Old",
       isCustom: true,
       locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      defaultPath: "C:/Users/test/Open Gen Studio",
       storageChosen: true,
     })
     host.listSettings.mockResolvedValue({
@@ -542,12 +597,10 @@ describe("OnboardingOverlay", () => {
     await waitFor(() => expect(host.pickDataDir).toHaveBeenCalled())
     await waitForEnabled("Continue")
     await user.click(screen.getByRole("button", { name: "Continue" }))
-    await waitFor(() => {
-      expect(notifyError).toHaveBeenCalledWith(
-        "copy failed",
-        "Could not set data folder"
-      )
-    })
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not set data folder"
+    )
+    expect(screen.getByRole("alert")).toHaveTextContent("copy failed")
     expect(getDataDirMoveActive()).toBe(false)
   })
 
@@ -555,9 +608,11 @@ describe("OnboardingOverlay", () => {
     const user = userEvent.setup()
     render(<OnboardingOverlay />)
 
-    expect(
-      await screen.findByRole("dialog", { name: "Set up Open Gen Studio" })
-    ).toBeInTheDocument()
+    const dialog = await screen.findByRole("dialog", {
+      name: "Set up Open Gen Studio",
+    })
+    expect(dialog).toBeInTheDocument()
+    expect(dialog).toHaveClass("z-[120]")
     expect(screen.getByText("Open Gen Studio")).toBeInTheDocument()
     expect(screen.getByText("Setup · Blueprint")).toBeInTheDocument()
     expect(screen.getByText("Pick your first Blueprint")).toBeInTheDocument()
@@ -602,6 +657,25 @@ describe("OnboardingOverlay", () => {
     expect(await screen.findByText("Installing ComfyUI")).toBeInTheDocument()
   })
 
+  it("surfaces an HF save error on the step", async () => {
+    const user = userEvent.setup()
+    host.setProviderToken.mockRejectedValueOnce(new Error("token rejected"))
+    render(<OnboardingOverlay />)
+    await waitForEnabled("Continue")
+    await user.click(screen.getByRole("button", { name: "Continue" }))
+    expect(await screen.findByText("Hugging Face token")).toBeInTheDocument()
+    await user.type(
+      screen.getByLabelText("Hugging Face access token"),
+      "hf_test"
+    )
+    await user.click(screen.getByRole("button", { name: "Save and continue" }))
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not save token"
+    )
+    expect(screen.getByRole("alert")).toHaveTextContent("token rejected")
+    expect(screen.getByText("Hugging Face token")).toBeInTheDocument()
+  })
+
   it("skips HF when a token is already saved", async () => {
     const user = userEvent.setup()
     store.hasHfToken = true
@@ -638,12 +712,48 @@ describe("OnboardingOverlay", () => {
     await user.click(screen.getByRole("button", { name: /AMD/i }))
     await waitForEnabled("Continue")
     await user.click(screen.getByRole("button", { name: "Continue" }))
+    await waitFor(() => {
+      expect(host.setSetting).toHaveBeenCalledWith("gpu_vendor", "amd")
+    })
     expect(
       await screen.findByText("Pick your first Blueprint")
     ).toBeInTheDocument()
     await waitForEnabled("Back")
     await user.click(screen.getByRole("button", { name: "Back" }))
     expect(await screen.findByText("Choose your GPU")).toBeInTheDocument()
+  })
+
+  it("stays on GPU and surfaces a save error", async () => {
+    const user = userEvent.setup()
+    store.gpu = {
+      needsVendorChoice: true,
+      adapters: [
+        { vendor: "nvidia", name: "RTX", memoryTotal: "12 GB" },
+        { vendor: "amd", name: "RX", memoryTotal: null },
+      ],
+    }
+    host.listSettings.mockResolvedValue({
+      ui_onboarding_v1: JSON.stringify({
+        step: "gpu",
+        blueprintId: null,
+        hfSkipped: false,
+      }),
+    })
+    host.setSetting.mockImplementation(async (key) => {
+      if (key === "gpu_vendor") throw new Error("GPU vendor write failed")
+    })
+    render(<OnboardingOverlay />)
+    expect(await screen.findByText("Choose your GPU")).toBeInTheDocument()
+    await waitForEnabled("Continue")
+    await user.click(screen.getByRole("button", { name: "Continue" }))
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not save GPU"
+    )
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "GPU vendor write failed"
+    )
+    expect(screen.getByText("Choose your GPU")).toBeInTheDocument()
+    expect(screen.queryByText("Pick your first Blueprint")).toBeNull()
   })
 
   it("uses reduced-motion stage handoff and HF back", async () => {
@@ -912,6 +1022,62 @@ describe("OnboardingOverlay", () => {
     )
   })
 
+  it("errors when Comfy install does not queue a runtime job", async () => {
+    host.listSettings.mockResolvedValue({
+      ui_onboarding_v1: JSON.stringify({
+        step: "install",
+        blueprintId: "krea2-turbo",
+        hfSkipped: true,
+      }),
+    })
+    host.listDownloads.mockResolvedValue({
+      active: {
+        kind: "blueprint",
+        jobKey: "blueprint:krea2-turbo",
+        status: "queued",
+        error: null,
+      },
+      queued: [{ kind: "blueprint", jobKey: "blueprint:other" }],
+      history: [],
+    })
+    render(<OnboardingOverlay />)
+    await waitFor(() => {
+      expect(store.handleInstallComfy).toHaveBeenCalled()
+    })
+    expect(await screen.findByRole("button", { name: "Retry" })).toBeTruthy()
+    expect(screen.getByTestId("install-progress")).toHaveTextContent(
+      "did not queue a download job"
+    )
+  })
+
+  it("accepts a runtime job that is queued rather than active", async () => {
+    host.listSettings.mockResolvedValue({
+      ui_onboarding_v1: JSON.stringify({
+        step: "install",
+        blueprintId: "krea2-turbo",
+        hfSkipped: true,
+      }),
+    })
+    host.listDownloads.mockResolvedValue({
+      active: {
+        kind: "blueprint",
+        jobKey: "blueprint:krea2-turbo",
+        status: "queued",
+        error: null,
+      },
+      queued: [{ kind: "runtime", jobKey: "runtime:comfyui" }],
+      history: [],
+    })
+    render(<OnboardingOverlay />)
+    await waitFor(() => {
+      expect(store.handleInstallComfy).toHaveBeenCalled()
+    })
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull()
+    expect(screen.getByTestId("install-progress")).not.toHaveTextContent(
+      "did not queue a download job"
+    )
+  })
+
   it("records install failures from host calls", async () => {
     host.listSettings.mockResolvedValue({
       ui_onboarding_v1: JSON.stringify({
@@ -1043,7 +1209,9 @@ describe("OnboardingOverlay", () => {
     expect(store.handleInstallComfy).not.toHaveBeenCalled()
   })
 
-  it("waits when runtimeBusy before the job appears in the snapshot", async () => {
+  it("does not treat runtimeBusy alone as an in-flight install", async () => {
+    // A busy flag without a download job used to leave onboarding stuck on
+    // "Starting ComfyUI install…" forever — kick install again instead.
     host.listSettings.mockResolvedValue({
       ui_onboarding_v1: JSON.stringify({
         step: "install",
@@ -1054,7 +1222,9 @@ describe("OnboardingOverlay", () => {
     store.runtimeBusy = true
     render(<OnboardingOverlay />)
     expect(await screen.findByText("Installing ComfyUI")).toBeInTheDocument()
-    expect(store.handleInstallComfy).not.toHaveBeenCalled()
+    await waitFor(() => {
+      expect(store.handleInstallComfy).toHaveBeenCalled()
+    })
   })
 
   it("handles listSettings failure during bootstrap", async () => {

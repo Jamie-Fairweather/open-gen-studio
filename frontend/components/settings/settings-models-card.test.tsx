@@ -9,6 +9,7 @@ const host = vi.hoisted(() => ({
     path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
     isCustom: false,
     locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+    defaultPath: "C:/Users/test/Open Gen Studio",
     storageChosen: true,
   })),
   openDataDir: vi.fn(async () => "C:/data"),
@@ -52,6 +53,7 @@ describe("SettingsModelsCard", () => {
       path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
       isCustom: false,
       locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+      defaultPath: "C:/Users/test/Open Gen Studio",
       storageChosen: true,
     })
     host.pickDataDir.mockResolvedValue("D:/Open Gen Studio")
@@ -119,12 +121,14 @@ describe("SettingsModelsCard", () => {
         path: "C:/Users/test/AppData/Roaming/Open Gen Studio",
         isCustom: false,
         locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+        defaultPath: "C:/Users/test/Open Gen Studio",
         storageChosen: true,
       })
       .mockResolvedValueOnce({
         path: "D:/Open Gen Studio",
         isCustom: true,
         locatorPath: "C:/Users/test/AppData/Roaming/Open Gen Studio",
+        defaultPath: "C:/Users/test/Open Gen Studio",
         storageChosen: true,
       })
     render(<SettingsModelsCard onBrowseModels={() => {}} />)

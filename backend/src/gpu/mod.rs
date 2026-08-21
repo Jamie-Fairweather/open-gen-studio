@@ -5,7 +5,7 @@ mod portable;
 mod types;
 
 #[allow(unused_imports)]
-pub use detect::{detect_gpus, parse_cuda_version_from_smi};
+pub use detect::{cuda_user_mode_driver_present, detect_gpus, parse_cuda_version_from_smi};
 #[allow(unused_imports)]
 pub use portable::{resolve_choice, select_nvidia_variant};
 #[allow(unused_imports)]

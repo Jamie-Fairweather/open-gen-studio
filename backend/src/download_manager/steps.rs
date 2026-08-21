@@ -307,6 +307,28 @@ pub(crate) fn run_step(
                     let _ = app.emit("runtimes://updated", &runtime);
                     Ok(())
                 }
+                "runtime_python_deps" => {
+                    let engine = spec
+                        .get("engine")
+                        .and_then(|v| v.as_str())
+                        .ok_or("runtime engine missing")?;
+                    if engine != comfy::ENGINE {
+                        return Err(format!("unknown engine: {engine}"));
+                    }
+                    comfy::emit_runtime_progress(app, "python-deps", "Installing Python packages…");
+                    let root = {
+                        let state = app.state::<AppState>();
+                        let db = state.db.lock().map_err(|e| e.to_string())?;
+                        let rt = db
+                            .get_runtime_by_engine(comfy::ENGINE)?
+                            .ok_or("ComfyUI runtime missing - configure first")?;
+                        if rt.install_path.is_empty() {
+                            return Err("ComfyUI install path empty".into());
+                        }
+                        PathBuf::from(rt.install_path)
+                    };
+                    comfy::ensure_comfy_manager(app, &root)
+                }
                 "runtime_extensions" => {
                     let engine = spec
                         .get("engine")

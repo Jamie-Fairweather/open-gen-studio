@@ -44,6 +44,7 @@ const commands = vi.hoisted(() => ({
     path: "C:/data",
     isCustom: false,
     locatorPath: "C:/data",
+    defaultPath: "C:/data",
     storageChosen: true,
   })),
   pickDataDir: vi.fn(async () => "D:/data"),
@@ -155,6 +156,7 @@ describe("runtime command wrappers", () => {
       path: "C:/data",
       isCustom: false,
       locatorPath: "C:/data",
+      defaultPath: "C:/data",
       storageChosen: true,
     })
     await expect(pickDataDir()).resolves.toBe("D:/data")

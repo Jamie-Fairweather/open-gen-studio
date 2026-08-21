@@ -176,15 +176,9 @@ pub async fn set_data_dir(
 
     let locator = app_paths::locator_dir(&app)?;
     let current = app_paths::resolve_data_dir(&locator);
-    let target = match &requested {
-        None => locator.clone(),
-        Some(p) => p.clone(),
-    };
-    let moving = current != target
-        && match (current.canonicalize(), target.canonicalize()) {
-            (Ok(a), Ok(b)) => a != b,
-            _ => true,
-        };
+    let target = app_paths::set_data_dir_destination(&locator, requested.as_deref())?;
+    // Same predicate `set_data_dir` uses — Default under MSIX is preferred, not locator.
+    let moving = !app_paths::paths_equal(&current, &target);
 
     if !moving {
         return app_paths::set_data_dir(&app, requested.as_deref(), false);
@@ -246,9 +240,11 @@ pub async fn set_data_dir(
         }
         Ok(_) => {
             app_paths::set_move_in_progress(false);
+            reopen_live_db(&app, &state);
         }
         Err(err) => {
             app_paths::set_move_in_progress(false);
+            reopen_live_db(&app, &state);
             let _ = app.emit(
                 "data-dir://progress",
                 DataDirProgress {
@@ -262,6 +258,18 @@ pub async fn set_data_dir(
     }
 
     result
+}
+
+fn reopen_live_db(app: &AppHandle, state: &AppState) {
+    let Ok(dir) = app_paths::app_data_dir(app) else {
+        return;
+    };
+    let Ok(mut db) = state.db.lock() else {
+        return;
+    };
+    if let Err(e) = db.reopen(&dir) {
+        log::error!("reopen db after set_data_dir: {e}");
+    }
 }
 
 #[tauri::command]

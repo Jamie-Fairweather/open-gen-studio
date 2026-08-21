@@ -101,7 +101,7 @@ pub(crate) fn is_ready(app: &AppHandle, spec: &DownloadSpec) -> Result<bool, Str
                     !rt.install_path.is_empty()
                         && rt.status != "error"
                         && rt.status != "installing"
-                        && path.join("python_embeded").join("python.exe").is_file()
+                        && comfy::portable_python_exe(&path).is_ok()
                         && comfy::portable_pin_matches(&path, kind.as_str())
                 }
                 None => false,
@@ -282,6 +282,12 @@ pub(crate) fn plan_steps(
                         "engine": engine,
                         "force": force,
                     }),
+                    bytes_total: None,
+                },
+                PlannedStep {
+                    step_kind: "action".into(),
+                    label: "Install Python packages".into(),
+                    spec: json!({ "action": "runtime_python_deps", "engine": engine }),
                     bytes_total: None,
                 },
                 PlannedStep {

@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const host = vi.hoisted(() => ({
   listSettings: vi.fn(async () => ({})),
+  listDownloads: vi.fn(async () => ({
+    active: null,
+    queued: [],
+    history: [],
+  })),
   runtimePinsStatus: vi.fn(async () => ({ comfy: { expected: "v9" } })),
   installComfyui: vi.fn(async () => {}),
   startComfyui: vi.fn(async () => {}),
@@ -92,13 +97,13 @@ describe("createRuntimeSlice", () => {
     s.setRuntimeMessage("m")
     s.setComfyHealthy(true)
 
-    await s.handleInstallComfy()
+    await expect(s.handleInstallComfy()).rejects.toThrow(/GPU/)
     expect(notifyError).toHaveBeenCalled()
     expect(host.installComfyui).not.toHaveBeenCalled()
 
     host.listSettings.mockRejectedValueOnce(new Error("settings"))
     store.setState({ gpu: { needsVendorChoice: true } as never })
-    await store.getState().handleInstallComfy()
+    await expect(store.getState().handleInstallComfy()).rejects.toThrow(/GPU/)
     expect(host.installComfyui).not.toHaveBeenCalled()
 
     host.listSettings.mockResolvedValueOnce({ gpu_vendor: "nvidia" })
@@ -125,11 +130,13 @@ describe("createRuntimeSlice", () => {
 
     host.installComfyui.mockRejectedValueOnce(new Error("fail"))
     store.setState({ gpu: null, runtimeBusy: false })
-    await store.getState().handleInstallComfy()
+    await expect(store.getState().handleInstallComfy()).rejects.toThrow("fail")
     expect(store.getState().runtimeBusy).toBe(false)
     expect(notifyError).toHaveBeenCalled()
     host.installComfyui.mockRejectedValueOnce("plain-install")
-    await store.getState().handleInstallComfy()
+    await expect(store.getState().handleInstallComfy()).rejects.toThrow(
+      "plain-install"
+    )
     expect(notifyError).toHaveBeenCalledWith(
       "plain-install",
       "ComfyUI install failed"

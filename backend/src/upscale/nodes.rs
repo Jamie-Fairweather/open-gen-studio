@@ -1,5 +1,6 @@
+use crate::archive_zip;
 use crate::comfy;
-use crate::pins::{self, NodePin, MANAGED_NODES};
+use crate::pins::{self, NodePin, MANAGED_NODES, NODE_PIN_MARKER};
 use crate::process_cmd;
 use crate::upscale::types::{UpscaleProgress, SUPIR_NODE_NAME, USDU_NODE_NAME};
 use std::fs;
@@ -8,18 +9,16 @@ use std::process::Stdio;
 use tauri::{AppHandle, Emitter};
 
 pub(crate) fn custom_nodes_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let portable =
-        comfy::find_portable_root(&comfy::runtimes_dir(app)?.join("portable")).map_err(|_| {
-            "ComfyUI portable not found - install the runtime before custom upscale nodes"
-                .to_string()
-        })?;
+    let portable = comfy::live_portable_root_for_app(app).map_err(|_| {
+        "ComfyUI portable not found - install the runtime before custom upscale nodes".to_string()
+    })?;
     let custom_dir = portable.join("ComfyUI").join("custom_nodes");
     fs::create_dir_all(&custom_dir).map_err(|e| e.to_string())?;
     Ok(custom_dir)
 }
 
 pub(crate) fn portable_root(app: &AppHandle) -> Result<PathBuf, String> {
-    comfy::find_portable_root(&comfy::runtimes_dir(app)?.join("portable"))
+    comfy::live_portable_root_for_app(app)
         .map_err(|_| "ComfyUI portable not found - install the runtime first".to_string())
 }
 
@@ -48,17 +47,41 @@ pub fn supir_at_pin(app: &AppHandle) -> bool {
         .unwrap_or(false)
 }
 
+pub fn managed_node_at_pin(app: &AppHandle, pin_id: &str) -> bool {
+    pins::node_pin(pin_id)
+        .map(|p| node_at_pin(app, p))
+        .unwrap_or(false)
+}
+
+fn dest_sha_at_pin(dest: &Path, pin: &NodePin) -> bool {
+    installed_node_sha(dest)
+        .map(|h| sha_matches(&h, pin.commit))
+        .unwrap_or(false)
+}
+
 pub(crate) fn node_at_pin(app: &AppHandle, pin: &NodePin) -> bool {
     let Ok(dir) = custom_nodes_dir(app) else {
         return false;
     };
     let dest = dir.join(pin.folder);
-    if !dest.is_dir() {
-        return false;
+    dest.is_dir() && dest_sha_at_pin(&dest, pin) && pin.submodules_ready(&dest)
+}
+
+fn sha_matches(installed: &str, expected: &str) -> bool {
+    installed.starts_with(expected) || expected.starts_with(installed) || installed == expected
+}
+
+/// Prefer `.oga_node_pin` (zip installs); fall back to `git rev-parse` for git clones.
+pub(crate) fn installed_node_sha(dest: &Path) -> Result<String, String> {
+    let marker = dest.join(NODE_PIN_MARKER);
+    if marker.is_file() {
+        let s = fs::read_to_string(&marker).map_err(|e| e.to_string())?;
+        let sha = s.trim();
+        if !sha.is_empty() {
+            return Ok(sha.to_string());
+        }
     }
-    git_head_sha(&dest)
-        .map(|h| h.starts_with(pin.commit) || pin.commit.starts_with(&h) || h == pin.commit)
-        .unwrap_or(false)
+    git_head_sha(dest)
 }
 
 pub(crate) fn git_head_sha(repo: &Path) -> Result<String, String> {
@@ -71,6 +94,25 @@ pub(crate) fn git_head_sha(repo: &Path) -> Result<String, String> {
         return Err("git rev-parse failed".into());
     }
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+fn write_node_pin_marker(dest: &Path, commit: &str) -> Result<(), String> {
+    fs::write(dest.join(NODE_PIN_MARKER), commit.as_bytes()).map_err(|e| e.to_string())
+}
+
+fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<(), String> {
+    fs::create_dir_all(dest).map_err(|e| e.to_string())?;
+    for entry in fs::read_dir(src).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let from = entry.path();
+        let to = dest.join(entry.file_name());
+        if from.is_dir() {
+            copy_dir_recursive(&from, &to)?;
+        } else {
+            fs::copy(&from, &to).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
 }
 
 /// Ensure every managed custom node is checked out at its pinned SHA.
@@ -104,18 +146,15 @@ pub fn managed_nodes_pin_status(app: &AppHandle) -> Vec<pins::PinStatus> {
     MANAGED_NODES
         .iter()
         .map(|pin| {
-            // One git rev-parse per node (node_at_pin would spawn a second).
-            let head = custom_nodes_dir(app).ok().and_then(|d| {
-                let dest = d.join(pin.folder);
-                if dest.is_dir() {
-                    git_head_sha(&dest).ok()
-                } else {
-                    None
-                }
-            });
-            let matches = head.as_ref().is_some_and(|h| {
-                h.starts_with(pin.commit) || pin.commit.starts_with(h) || h == pin.commit
-            });
+            let dest = custom_nodes_dir(app).ok().map(|d| d.join(pin.folder));
+            let dest_ok = dest.as_ref().is_some_and(|p| p.is_dir());
+            let head = dest
+                .as_ref()
+                .filter(|p| p.is_dir())
+                .and_then(|p| installed_node_sha(p).ok());
+            let matches = dest_ok
+                && head.as_ref().is_some_and(|h| sha_matches(h, pin.commit))
+                && dest.as_ref().is_some_and(|p| pin.submodules_ready(p));
             pins::PinStatus {
                 id: pin.id.into(),
                 expected: pins::short_sha(pin.commit).into(),
@@ -209,7 +248,7 @@ fn node_progress_label(pin: &NodePin) -> &str {
     }
 }
 
-/// Clone (if needed) and check out the pinned commit for a managed custom node.
+/// Install a managed custom node at the pinned commit (GitHub zip, then git fallback).
 pub fn ensure_pinned_custom_node(app: &AppHandle, pin: &NodePin) -> Result<(), String> {
     let custom_dir = custom_nodes_dir(app)?;
     fs::create_dir_all(&custom_dir).map_err(|e| e.to_string())?;
@@ -219,6 +258,14 @@ pub fn ensure_pinned_custom_node(app: &AppHandle, pin: &NodePin) -> Result<(), S
 
     if node_at_pin(app, pin) {
         return Ok(());
+    }
+    // Zip installs omit git submodules. If the pin marker is already there,
+    // only fetch the missing payload — don't wipe a working parent checkout.
+    if dest.is_dir() && dest_sha_at_pin(&dest, pin) && !pin.submodules_ready(&dest) {
+        ensure_node_submodules(app, pin, &dest)?;
+        if node_at_pin(app, pin) {
+            return Ok(());
+        }
     }
 
     let _ = app.emit(
@@ -231,68 +278,30 @@ pub fn ensure_pinned_custom_node(app: &AppHandle, pin: &NodePin) -> Result<(), S
         },
     );
 
-    if !dest.is_dir() {
-        let status = process_cmd::new("git")
-            .args(["clone", "--no-checkout", pin.repo])
-            .arg(&dest)
-            .status()
-            .map_err(|e| {
-                format!(
-                    "git clone failed for {} (is git installed?): {e}",
-                    pin.folder
-                )
-            })?;
-        if !status.success() {
-            let _ = fs::remove_dir_all(&dest);
-            return Err(format!(
-                "git clone failed for {} ({})",
-                pin.folder, pin.repo
-            ));
-        }
-    }
-
-    let fetch = process_cmd::new("git")
-        .current_dir(&dest)
-        .args(["fetch", "--depth", "1", "origin", pin.commit])
-        .status()
-        .map_err(|e| format!("git fetch failed for {}: {e}", pin.folder))?;
-    if !fetch.success() {
-        // Fallback: deepen / full fetch of the commit.
-        let fetch2 = process_cmd::new("git")
-            .current_dir(&dest)
-            .args(["fetch", "origin", pin.commit])
-            .status()
-            .map_err(|e| format!("git fetch failed for {}: {e}", pin.folder))?;
-        if !fetch2.success() {
-            return Err(format!(
-                "git fetch {}@{short} failed - check network / git",
+    let mut errors: Vec<String> = Vec::new();
+    match install_node_from_zip(app, pin, &custom_dir, &dest) {
+        Ok(()) => {}
+        Err(e) => {
+            log::warn!(
+                "zip install failed for {} ({short}), trying git: {e}",
                 pin.folder
-            ));
-        }
-    }
-
-    let checkout = process_cmd::new("git")
-        .current_dir(&dest)
-        .args(["checkout", "--force", pin.commit])
-        .status()
-        .map_err(|e| format!("git checkout failed for {}: {e}", pin.folder))?;
-    if !checkout.success() {
-        let reset = process_cmd::new("git")
-            .current_dir(&dest)
-            .args(["reset", "--hard", pin.commit])
-            .status()
-            .map_err(|e| format!("git reset failed for {}: {e}", pin.folder))?;
-        if !reset.success() {
-            return Err(format!(
-                "could not check out pinned commit {short} for {}",
-                pin.folder
-            ));
+            );
+            errors.push(format!("zip: {e}"));
+            if let Err(git_err) = install_node_from_git(pin, &dest) {
+                errors.push(format!("git: {git_err}"));
+                return Err(format!(
+                    "failed to install {}@{short}: {}",
+                    pin.folder,
+                    errors.join(" | ")
+                ));
+            }
+            ensure_node_submodules(app, pin, &dest)?;
         }
     }
 
     if !node_at_pin(app, pin) {
         return Err(format!(
-            "{} is not at pinned commit {short} after checkout",
+            "{} is not at pinned commit {short} after install",
             pin.folder
         ));
     }
@@ -310,6 +319,129 @@ pub fn ensure_pinned_custom_node(app: &AppHandle, pin: &NodePin) -> Result<(), S
     Ok(())
 }
 
+fn install_node_from_zip(
+    app: &AppHandle,
+    pin: &NodePin,
+    custom_dir: &Path,
+    dest: &Path,
+) -> Result<(), String> {
+    let url = archive_zip::github_commit_zip_url(pin.repo, pin.commit)?;
+    let zip_path = custom_dir.join(format!(".oga_{}_pin.zip", pin.id));
+    let extract_to = custom_dir.join(format!(".oga_{}_extract", pin.id));
+    archive_zip::download_and_extract_zip(app, &url, &zip_path, &extract_to)?;
+    let nested = archive_zip::single_top_level_dir(&extract_to)?;
+    if dest.exists() {
+        fs::remove_dir_all(dest).map_err(|e| e.to_string())?;
+    }
+    // Prefer rename; fall back to copy (cross-volume).
+    if fs::rename(&nested, dest).is_err() {
+        copy_dir_recursive(&nested, dest)?;
+        let _ = fs::remove_dir_all(&nested);
+    }
+    let _ = fs::remove_dir_all(&extract_to);
+    write_node_pin_marker(dest, pin.commit)?;
+    ensure_node_submodules(app, pin, dest)?;
+    Ok(())
+}
+
+fn ensure_node_submodules(app: &AppHandle, pin: &NodePin, dest: &Path) -> Result<(), String> {
+    for sub in pin.submodules {
+        if dest.join(sub.path).join(sub.ready_file).is_file() {
+            continue;
+        }
+        let url = archive_zip::github_commit_zip_url(sub.repo, sub.commit)?;
+        let zip_path = dest.join(format!(".oga_{}_sub.zip", pin.id));
+        let extract_to = dest.join(format!(".oga_{}_sub_extract", pin.id));
+        archive_zip::download_and_extract_zip(app, &url, &zip_path, &extract_to)?;
+        let nested = archive_zip::single_top_level_dir(&extract_to)?;
+        let sub_dest = dest.join(sub.path);
+        if sub_dest.exists() {
+            fs::remove_dir_all(&sub_dest).map_err(|e| e.to_string())?;
+        }
+        if let Some(parent) = sub_dest.parent() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        if fs::rename(&nested, &sub_dest).is_err() {
+            copy_dir_recursive(&nested, &sub_dest)?;
+            let _ = fs::remove_dir_all(&nested);
+        }
+        let _ = fs::remove_dir_all(&extract_to);
+        if !sub_dest.join(sub.ready_file).is_file() {
+            return Err(format!(
+                "{} submodule {} is missing {}",
+                pin.folder, sub.path, sub.ready_file
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn install_node_from_git(pin: &NodePin, dest: &Path) -> Result<(), String> {
+    let short = pins::short_sha(pin.commit);
+    if dest.exists() {
+        fs::remove_dir_all(dest).map_err(|e| e.to_string())?;
+    }
+
+    let status = process_cmd::new("git")
+        .args(["clone", "--no-checkout", pin.repo])
+        .arg(dest)
+        .status()
+        .map_err(|e| {
+            format!(
+                "git clone failed for {} (is git installed?): {e}",
+                pin.folder
+            )
+        })?;
+    if !status.success() {
+        let _ = fs::remove_dir_all(dest);
+        return Err(format!(
+            "git clone failed for {} ({})",
+            pin.folder, pin.repo
+        ));
+    }
+
+    let fetch = process_cmd::new("git")
+        .current_dir(dest)
+        .args(["fetch", "--depth", "1", "origin", pin.commit])
+        .status()
+        .map_err(|e| format!("git fetch failed for {}: {e}", pin.folder))?;
+    if !fetch.success() {
+        let fetch2 = process_cmd::new("git")
+            .current_dir(dest)
+            .args(["fetch", "origin", pin.commit])
+            .status()
+            .map_err(|e| format!("git fetch failed for {}: {e}", pin.folder))?;
+        if !fetch2.success() {
+            return Err(format!(
+                "git fetch {}@{short} failed - check network / git",
+                pin.folder
+            ));
+        }
+    }
+
+    let checkout = process_cmd::new("git")
+        .current_dir(dest)
+        .args(["checkout", "--force", pin.commit])
+        .status()
+        .map_err(|e| format!("git checkout failed for {}: {e}", pin.folder))?;
+    if !checkout.success() {
+        let reset = process_cmd::new("git")
+            .current_dir(dest)
+            .args(["reset", "--hard", pin.commit])
+            .status()
+            .map_err(|e| format!("git reset failed for {}: {e}", pin.folder))?;
+        if !reset.success() {
+            return Err(format!(
+                "could not check out pinned commit {short} for {}",
+                pin.folder
+            ));
+        }
+    }
+
+    write_node_pin_marker(dest, pin.commit)?;
+    Ok(())
+}
+
 pub(crate) fn install_supir_python_deps(app: &AppHandle) -> Result<(), String> {
     let root = portable_root(app)?;
     let marker = root.join(".oga_supir_deps");
@@ -317,10 +449,6 @@ pub(crate) fn install_supir_python_deps(app: &AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    let python = root.join("python_embeded").join("python.exe");
-    if !python.is_file() {
-        return Err("ComfyUI portable python.exe missing - cannot install SUPIR deps".into());
-    }
     let reqs = root
         .join("ComfyUI")
         .join("custom_nodes")
@@ -329,6 +457,11 @@ pub(crate) fn install_supir_python_deps(app: &AppHandle) -> Result<(), String> {
     if !reqs.is_file() {
         return Err("SUPIR requirements.txt missing after clone".into());
     }
+    // Stage into python_embeded — unpackaged pip cannot open MSIX-redirected Roaming paths.
+    let staged = comfy::stage_requirements_for_pip(&root, &reqs)?;
+    let staged_s = staged
+        .to_str()
+        .ok_or("invalid staged SUPIR requirements path")?;
 
     let _ = app.emit(
         "upscale://progress",
@@ -340,20 +473,22 @@ pub(crate) fn install_supir_python_deps(app: &AppHandle) -> Result<(), String> {
         },
     );
 
-    let output = process_cmd::new(&python)
+    let output = crate::comfy::command_portable_python(&root)?
         .args([
             "-s",
             "-m",
             "pip",
             "install",
+            "--disable-pip-version-check",
             "-r",
-            reqs.to_str().ok_or("invalid SUPIR requirements path")?,
+            staged_s,
         ])
-        .current_dir(&root)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
         .map_err(|e| format!("failed to run pip for SUPIR: {e}"))?;
+
+    let _ = fs::remove_file(&staged);
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -371,4 +506,36 @@ pub(crate) fn install_supir_python_deps(app: &AppHandle) -> Result<(), String> {
 
     fs::write(&marker, b"ok").map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("oga-node-{name}-{nanos}"));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn installed_node_sha_prefers_marker_over_git() {
+        let dir = temp_dir("marker");
+        write_node_pin_marker(&dir, "abcdef0123456789").unwrap();
+        assert_eq!(installed_node_sha(&dir).unwrap(), "abcdef0123456789");
+        assert!(sha_matches("abcdef0123456789", "abcdef0"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn sha_matches_prefix_either_side() {
+        assert!(sha_matches("abcdef0", "abcdef0123456789"));
+        assert!(sha_matches("abcdef0123456789", "abcdef0"));
+        assert!(!sha_matches("deadbeef", "abcdef0"));
+    }
 }

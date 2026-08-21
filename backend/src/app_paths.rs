@@ -4,7 +4,8 @@
 //!
 //! Users may relocate the heavy data root (models, runtimes, gallery, DB) via a pointer file
 //! that always lives under the fixed locator dir:
-//! `{locator}/data-root.json` → `{ "path": "D:\\Open Gen Studio" }` or `{ "path": null }`.
+//! `{locator}/data-root.json` → `{ "path": "D:\\…" }` (custom or MSIX default) or
+//! `{ "path": null }` (unpackaged default, where preferred == locator).
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -53,7 +54,8 @@ const MIGRATE_NAMES: &[&str] = &[
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct DataRootPointer {
-    /// Absolute custom root, or `null` when the user confirmed the default locator.
+    /// Absolute library root. `null` only when default == locator (unpackaged).
+    /// MSIX default is an explicit `%USERPROFILE%\Open Gen Studio` path, not null.
     path: Option<String>,
 }
 
@@ -62,7 +64,10 @@ struct DataRootPointer {
 pub struct DataDirInfo {
     pub path: String,
     pub is_custom: bool,
+    /// Where `data-root.json` lives (may be a long MSIX AppData path).
     pub locator_path: String,
+    /// Recommended default library root (short profile path under MSIX).
+    pub default_path: String,
     pub storage_chosen: bool,
 }
 
@@ -105,6 +110,63 @@ pub fn locator_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .join(APP_DATA_FOLDER))
 }
 
+fn path_looks_msix_virtualized(s: &str) -> bool {
+    let lower = s.to_ascii_lowercase();
+    lower.contains(r"\packages\") && lower.contains(r"\localcache\")
+}
+
+/// True when this process has MSIX/AppX package identity (Store / sideload).
+pub fn is_msix_packaged() -> bool {
+    #[cfg(windows)]
+    {
+        use windows::Win32::Storage::Packaging::Appx::GetCurrentPackageFullName;
+        let mut len = 0u32;
+        let err = unsafe { GetCurrentPackageFullName(&mut len, None) };
+        // 15700 = APPMODEL_ERROR_NO_PACKAGE. Anything else (incl. buffer-too-small) is packaged.
+        err.0 != 15700
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
+/// MSIX virtualizes `%APPDATA%` under `Packages\…\LocalCache\Roaming\…`.
+/// Tauri often returns the friendly `AppData\Roaming\…` view — canonicalize to see the real path.
+pub fn is_msix_virtualized_path(path: &Path) -> bool {
+    if path_looks_msix_virtualized(&path.to_string_lossy()) {
+        return true;
+    }
+    fs::canonicalize(path)
+        .map(|c| path_looks_msix_virtualized(&c.to_string_lossy()))
+        .unwrap_or(false)
+}
+
+/// Recommended default library root. Under MSIX, prefer `%USERPROFILE%\Open Gen Studio`
+/// so Comfy/pip paths stay under MAX_PATH without requiring admin long-path policy.
+pub fn preferred_default_root(locator: &Path) -> PathBuf {
+    if !is_msix_packaged() && !is_msix_virtualized_path(locator) {
+        return locator.to_path_buf();
+    }
+    match std::env::var_os("USERPROFILE") {
+        Some(home) => PathBuf::from(home).join(APP_DATA_FOLDER),
+        None => locator.to_path_buf(),
+    }
+}
+
+/// Path unpackaged processes (portable Python / Comfy) can open.
+/// Strips `\\?\` and expands MSIX AppData redirection.
+pub fn path_visible_outside_msix(path: &Path) -> PathBuf {
+    let canon = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let s = canon.to_string_lossy();
+    let stripped = s
+        .strip_prefix(r"\\?\UNC\")
+        .map(|rest| format!(r"\\{rest}"))
+        .or_else(|| s.strip_prefix(r"\\?\").map(|rest| rest.to_string()))
+        .unwrap_or_else(|| s.into_owned());
+    PathBuf::from(stripped)
+}
+
 fn pointer_path(locator: &Path) -> PathBuf {
     locator.join(POINTER_FILE)
 }
@@ -138,7 +200,7 @@ pub fn storage_chosen(locator: &Path) -> bool {
     locator.join("models").is_dir() || locator.join("runtimes").is_dir()
 }
 
-fn paths_equal(a: &Path, b: &Path) -> bool {
+pub(crate) fn paths_equal(a: &Path, b: &Path) -> bool {
     if a == b {
         return true;
     }
@@ -150,16 +212,34 @@ fn paths_equal(a: &Path, b: &Path) -> bool {
 
 /// Resolve the active data root from a locator + optional pointer.
 pub fn resolve_data_dir(locator: &Path) -> PathBuf {
+    let preferred = preferred_default_root(locator);
     match read_pointer(locator) {
         Some(DataRootPointer { path: Some(custom) }) => {
             let custom = PathBuf::from(custom.trim());
             if custom.is_absolute() {
                 custom
             } else {
-                locator.to_path_buf()
+                preferred
             }
         }
-        _ => locator.to_path_buf(),
+        // Explicit default (`path: null`): keep locator if library data already
+        // lives there (pre-MSIX-short-path installs); otherwise use preferred.
+        Some(DataRootPointer { path: None }) => {
+            if dir_has_migrate_payload(locator) {
+                locator.to_path_buf()
+            } else {
+                preferred
+            }
+        }
+        // No pointer yet: prefer short root under MSIX; preserve locator when
+        // legacy models/runtimes already exist there.
+        None => {
+            if dir_has_migrate_payload(locator) {
+                locator.to_path_buf()
+            } else {
+                preferred
+            }
+        }
     }
 }
 
@@ -171,11 +251,13 @@ pub fn app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
 pub fn data_dir_info(app: &AppHandle) -> Result<DataDirInfo, String> {
     let locator = locator_dir(app)?;
     let path = resolve_data_dir(&locator);
-    let is_custom = !paths_equal(&path, &locator);
+    let default_path = preferred_default_root(&locator);
+    let is_custom = !paths_equal(&path, &default_path);
     Ok(DataDirInfo {
         path: path.to_string_lossy().into_owned(),
         is_custom,
         locator_path: locator.to_string_lossy().into_owned(),
+        default_path: default_path.to_string_lossy().into_owned(),
         storage_chosen: storage_chosen(&locator),
     })
 }
@@ -286,6 +368,24 @@ pub fn migrate_data_root_with_progress(
     Ok(moved)
 }
 
+/// Where a Default (`None`) or custom confirm will actually write.
+/// The Tauri command's "are we moving?" check must use this — not `locator_dir`.
+/// Under MSIX, Default is `%USERPROFILE%\Open Gen Studio`, not the Packages path.
+pub fn set_data_dir_destination(
+    locator: &Path,
+    requested: Option<&Path>,
+) -> Result<PathBuf, String> {
+    match requested {
+        None => Ok(preferred_default_root(locator)),
+        Some(p) => {
+            if !p.is_absolute() {
+                return Err("Data directory must be an absolute path".into());
+            }
+            Ok(p.to_path_buf())
+        }
+    }
+}
+
 /// Confirm default or custom data root. Returns whether the app should relaunch.
 /// Caller must pause/stop runtimes and close the live DB before calling when `moving`.
 pub fn set_data_dir(
@@ -295,16 +395,8 @@ pub fn set_data_dir(
 ) -> Result<SetDataDirResult, String> {
     let locator = locator_dir(app)?;
     let current = resolve_data_dir(&locator);
-    let target = match requested {
-        None => locator.clone(),
-        Some(p) => {
-            let p = p.to_path_buf();
-            if !p.is_absolute() {
-                return Err("Data directory must be an absolute path".into());
-            }
-            p
-        }
-    };
+    let preferred = preferred_default_root(&locator);
+    let target = set_data_dir_destination(&locator, requested)?;
 
     let same = paths_equal(&current, &target);
     let mut migrated = false;
@@ -326,9 +418,11 @@ pub fn set_data_dir(
         fs::create_dir_all(&target).map_err(|e| e.to_string())?;
     }
 
-    if paths_equal(&target, &locator) {
+    if paths_equal(&target, &preferred) && paths_equal(&preferred, &locator) {
+        // Classic non-MSIX default: pointer null means locator.
         write_pointer(&locator, None)?;
     } else {
+        // Custom folder, or MSIX short default outside the Packages path.
         write_pointer(&locator, Some(&target))?;
     }
 
@@ -395,6 +489,61 @@ mod tests {
     }
 
     #[test]
+    fn msix_virtualized_path_detection() {
+        let msix = PathBuf::from(
+            r"C:\Users\user\AppData\Local\Packages\JamieFairweather.OpenGenStudio_wcqg2dr9399ny\LocalCache\Roaming\Open Gen Studio",
+        );
+        assert!(is_msix_virtualized_path(&msix));
+        // Friendly Roaming string is not enough — only canonicalize (when the
+        // folder exists under Packages) or an explicit Packages path counts.
+        let normal = PathBuf::from(r"C:\Users\user\AppData\Roaming\Open Gen Studio");
+        assert!(!is_msix_virtualized_path(&normal));
+    }
+
+    #[test]
+    fn path_visible_strips_verbatim_prefix() {
+        let dir = tmp("visible");
+        let visible = path_visible_outside_msix(&dir);
+        let s = visible.to_string_lossy();
+        assert!(!s.starts_with(r"\\?\"), "{s}");
+        assert!(visible.is_absolute());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn set_destination_none_is_preferred_not_locator() {
+        let msix = PathBuf::from(
+            r"C:\Users\user\AppData\Local\Packages\App_pubid\LocalCache\Roaming\Open Gen Studio",
+        );
+        let dest = set_data_dir_destination(&msix, None).unwrap();
+        assert_eq!(dest, preferred_default_root(&msix));
+        if std::env::var_os("USERPROFILE").is_some() {
+            assert_ne!(dest, msix);
+        }
+        let custom = PathBuf::from(r"D:\Open Gen Studio");
+        assert_eq!(
+            set_data_dir_destination(&msix, Some(&custom)).unwrap(),
+            custom
+        );
+        let rel = PathBuf::from("relative");
+        assert!(set_data_dir_destination(&msix, Some(&rel)).is_err());
+    }
+
+    #[test]
+    fn preferred_default_uses_profile_under_msix() {
+        let msix = PathBuf::from(
+            r"C:\Users\user\AppData\Local\Packages\App_pubid\LocalCache\Roaming\Open Gen Studio",
+        );
+        let preferred = preferred_default_root(&msix);
+        if let Some(home) = std::env::var_os("USERPROFILE") {
+            assert_eq!(preferred, PathBuf::from(home).join(APP_DATA_FOLDER));
+        }
+        let normal = tmp("not-msix");
+        assert_eq!(preferred_default_root(&normal), normal);
+        let _ = fs::remove_dir_all(&normal);
+    }
+
+    #[test]
     fn storage_not_chosen_for_db_only_locator() {
         let loc = tmp("db-only");
         touch_file(&loc.join("open-gen-studio.db"));
@@ -421,6 +570,48 @@ mod tests {
         assert_eq!(resolve_data_dir(&loc), loc);
         let _ = fs::remove_dir_all(&loc);
         let _ = fs::remove_dir_all(&custom);
+    }
+
+    fn msix_looking_locator(name: &str) -> (PathBuf, PathBuf) {
+        let root = tmp(name);
+        let loc = root
+            .join("Packages")
+            .join("App_pubid")
+            .join("LocalCache")
+            .join("Roaming")
+            .join(APP_DATA_FOLDER);
+        fs::create_dir_all(&loc).unwrap();
+        (root, loc)
+    }
+
+    #[test]
+    fn resolve_msix_empty_uses_preferred() {
+        let (root, loc) = msix_looking_locator("msix-empty");
+        let preferred = preferred_default_root(&loc);
+        assert_ne!(preferred, loc);
+        assert_eq!(resolve_data_dir(&loc), preferred);
+        write_pointer(&loc, None).unwrap();
+        assert_eq!(resolve_data_dir(&loc), preferred);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn resolve_msix_legacy_models_stay_on_locator() {
+        let (root, loc) = msix_looking_locator("msix-legacy");
+        fs::create_dir_all(loc.join("models")).unwrap();
+        assert_eq!(resolve_data_dir(&loc), loc);
+        write_pointer(&loc, None).unwrap();
+        assert_eq!(resolve_data_dir(&loc), loc);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn resolve_msix_db_only_stays_on_locator_until_confirm() {
+        let (root, loc) = msix_looking_locator("msix-db");
+        touch_file(&loc.join("open-gen-studio.db"));
+        assert!(!storage_chosen(&loc));
+        assert_eq!(resolve_data_dir(&loc), loc);
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]

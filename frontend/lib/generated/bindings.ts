@@ -334,7 +334,10 @@ export type ComfyStatus = {
 export type DataDirInfo = {
   path: string
   isCustom: boolean
+  /** Where `data-root.json` lives (may be a long MSIX AppData path). */
   locatorPath: string
+  /** Recommended default library root (short profile path under MSIX). */
+  defaultPath: string
   storageChosen: boolean
 }
 

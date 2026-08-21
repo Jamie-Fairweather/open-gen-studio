@@ -1,4 +1,5 @@
 mod app_paths;
+mod archive_zip;
 mod blueprints;
 mod comfy;
 mod comfy_queue;
@@ -51,6 +52,8 @@ fn shutdown_comfy(app: &tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Avoid Windows "python313.dll was not found" message boxes hanging install.
+    process_cmd::suppress_win32_error_dialogs();
     let builder = commands::specta_builder();
 
     #[cfg(debug_assertions)]

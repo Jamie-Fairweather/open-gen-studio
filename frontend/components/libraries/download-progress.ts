@@ -21,14 +21,27 @@ export function friendlyInstallStatus(
   if (/to pin\s+[0-9a-f]/i.test(m) || /Updating\s+ComfyUI-/i.test(m)) {
     return "Installing extensions…"
   }
+  if (/Visual C\+\+|VCRUNTIME/i.test(m)) {
+    return "Installing system runtime…"
+  }
+  if (
+    /Python packages/i.test(m) ||
+    /Bootstrapping pip/i.test(m) ||
+    /Preparing pip/i.test(m)
+  ) {
+    return /ready/i.test(m)
+      ? "Python packages ready"
+      : "Installing Python packages…"
+  }
   if (/Python dependencies/i.test(m)) {
     return "Installing Python dependencies…"
   }
-  if (
-    /Ensuring\s+ComfyUI-/i.test(m) ||
-    /ComfyUI-Manager/i.test(m) ||
-    /custom node/i.test(m)
-  ) {
+  if (/ComfyUI-Manager/i.test(m)) {
+    return /ready/i.test(m)
+      ? "Python packages ready"
+      : "Installing Python packages…"
+  }
+  if (/Ensuring\s+ComfyUI-/i.test(m) || /custom node/i.test(m)) {
     return /ready/i.test(m) ? "Extensions ready" : "Installing extensions…"
   }
   // "ComfyUI-Foo ready at abc1234" → drop the hash noise

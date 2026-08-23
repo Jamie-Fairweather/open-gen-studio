@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { BlueprintDetail } from "@/lib/host"
+import { blueprintSession } from "@/lib/blueprint-session/state"
 import { studioRefs } from "@/components/studio/studio-refs"
 import type { StudioSessionV1 } from "@/components/studio/slices/session-persist"
 
@@ -54,6 +55,7 @@ vi.mock(
     return {
       ...actual,
       flushPersistSession: vi.fn(),
+      flushPersistImageSession: vi.fn(),
     }
   }
 )
@@ -101,14 +103,14 @@ beforeEach(() => {
   state.detail = null
   state.controlValues = {}
   state.startupHydrated = false
-  studioRefs.pendingRecipe = null
-  studioRefs.pendingSession = null
-  studioRefs.controlValuesByBlueprintId = {}
-  studioRefs.forceBlueprintDefaults = false
+  blueprintSession.pendingRecipe = null
+  blueprintSession.pendingSession = null
+  blueprintSession.controlValuesByBlueprintId = {}
+  blueprintSession.forceBlueprintDefaults = false
   studioRefs.aspectId = "1:1"
   studioRefs.sideLength = 1024
   studioRefs.loraPacks = []
-  studioRefs.suppressSessionPersist = true
+  blueprintSession.suppressImagePersist = true
   studioRefs.startupCatalogReady = true
 })
 
@@ -142,7 +144,7 @@ describe("applyLoadedBlueprintDetail", () => {
       expect.objectContaining({ width: 1024, height: 1024, seed: 0 })
     )
 
-    studioRefs.pendingRecipe = {
+    blueprintSession.pendingRecipe = {
       blueprintId: "bp1",
       blueprintName: "BP",
       category: "image",
@@ -199,7 +201,7 @@ describe("applyLoadedBlueprintDetail", () => {
         seeded: false,
       },
     }
-    studioRefs.pendingSession = session
+    blueprintSession.pendingSession = session
     applyLoadedBlueprintDetail(detail({ id: "bp2" }))
     expect(setAspectId).toHaveBeenCalledWith("16:9")
     expect(setControlValues).toHaveBeenCalledWith(
@@ -213,10 +215,10 @@ describe("applyLoadedBlueprintDetail", () => {
       expect.objectContaining({ seed: 11 })
     )
 
-    studioRefs.controlValuesByBlueprintId.bp4 = { seed: 77 }
+    blueprintSession.controlValuesByBlueprintId.bp4 = { seed: 77 }
     state.detail = detail({ id: "other" })
     applyLoadedBlueprintDetail(detail({ id: "bp4" }))
-    expect(studioRefs.controlValuesByBlueprintId.other).toEqual(
+    expect(blueprintSession.controlValuesByBlueprintId.other).toEqual(
       state.controlValues
     )
     expect(setControlValues).toHaveBeenCalledWith(
@@ -240,7 +242,7 @@ describe("applyLoadedBlueprintDetail", () => {
     expect(setControlValues).toHaveBeenCalledWith({ seed: 1 })
 
     // restoredControls + non-finite size → session aspect path (lines 68-74)
-    studioRefs.pendingSession = {
+    blueprintSession.pendingSession = {
       ...session,
       aspectId: "4:3",
       sideLength: 0,
@@ -263,7 +265,7 @@ describe("applyLoadedBlueprintDetail", () => {
     )
 
     // restoredControls + non-finite size + no session → studioRefs path (75-79)
-    studioRefs.controlValuesByBlueprintId["size-refs"] = {}
+    blueprintSession.controlValuesByBlueprintId["size-refs"] = {}
     studioRefs.aspectId = "1:1"
     studioRefs.sideLength = 0
     state.detail = detail({ id: "other2" })
@@ -281,9 +283,9 @@ describe("applyLoadedBlueprintDetail", () => {
     )
 
     // !restoredControls path uses studioRefs.sideLength || SIDE_LENGTH_DEFAULT (L83)
-    studioRefs.pendingRecipe = null
-    studioRefs.pendingSession = null
-    studioRefs.controlValuesByBlueprintId = {}
+    blueprintSession.pendingRecipe = null
+    blueprintSession.pendingSession = null
+    blueprintSession.controlValuesByBlueprintId = {}
     studioRefs.aspectId = "1:1"
     studioRefs.sideLength = 0
     state.detail = null
@@ -324,12 +326,16 @@ describe("applyLoadedBlueprintDetail", () => {
       seed: 0,
     })
 
-    studioRefs.controlValuesByBlueprintId.krea = { steps: 40, cfg: 7, seed: 9 }
+    blueprintSession.controlValuesByBlueprintId.krea = {
+      steps: 40,
+      cfg: 7,
+      seed: 9,
+    }
     state.detail = detail({ id: "other" })
     state.controlValues = { seed: 1 }
-    studioRefs.forceBlueprintDefaults = true
+    blueprintSession.forceBlueprintDefaults = true
     applyLoadedBlueprintDetail(withSampling)
-    expect(studioRefs.forceBlueprintDefaults).toBe(false)
+    expect(blueprintSession.forceBlueprintDefaults).toBe(false)
     expect(setControlValues).toHaveBeenCalledWith(
       expect.objectContaining({ steps: 8, cfg: 1, seed: 0 })
     )
@@ -351,7 +357,7 @@ describe("applyLoadedBlueprintDetail", () => {
         { id: "seed", type: "number", nodeId: "1", input: "seed", default: 0 },
       ],
     })
-    studioRefs.pendingSession = {
+    blueprintSession.pendingSession = {
       v: 1,
       prompt: "",
       aspectId: "1:1",
@@ -388,9 +394,9 @@ describe("applyLoadedBlueprintDetail", () => {
         seeded: false,
       },
     }
-    studioRefs.forceBlueprintDefaults = true
+    blueprintSession.forceBlueprintDefaults = true
     applyLoadedBlueprintDetail(withSampling)
-    expect(studioRefs.pendingSession).toBeNull()
+    expect(blueprintSession.pendingSession).toBeNull()
     expect(setControlValues).toHaveBeenCalledWith(
       expect.objectContaining({ steps: 8, cfg: 1, seed: 0 })
     )

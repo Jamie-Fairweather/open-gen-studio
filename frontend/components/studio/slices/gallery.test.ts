@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { blueprintSession } from "@/lib/blueprint-session/state"
 import { studioRefs } from "../studio-refs"
 
 const host = vi.hoisted(() => ({
@@ -19,8 +20,8 @@ vi.mock("@/lib/notify", async () => {
 })
 
 vi.mock("./session-persist", () => ({
-  flushPersistSession: vi.fn(),
-  schedulePersistSession: vi.fn(),
+  flushPersistImageSession: vi.fn(),
+  schedulePersistImageSession: vi.fn(),
 }))
 
 import { notifyError, notifyInfo, notifySuccess } from "@/lib/notify"
@@ -38,7 +39,7 @@ const item = (id: string) =>
 
 beforeEach(() => {
   vi.clearAllMocks()
-  studioRefs.pendingRecipe = null
+  blueprintSession.pendingRecipe = null
   studioRefs.livePreviewSrc = "x"
   studioRefs.pendingPreviewSrc = "y"
 })
@@ -181,7 +182,7 @@ describe("createGallerySlice", () => {
       values: {},
     })
     store.getState().handleReuseGallerySettings(item("g5"))
-    expect(studioRefs.pendingRecipe).toBeTruthy()
+    expect(blueprintSession.pendingRecipe).toBeTruthy()
 
     host.parseGalleryRecipe.mockReturnValueOnce({
       category: "image",

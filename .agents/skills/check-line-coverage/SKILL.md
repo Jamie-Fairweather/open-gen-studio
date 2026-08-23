@@ -1,9 +1,9 @@
 ---
 name: check-line-coverage
 description: >
-  Runs bun run cleanup after every change (lint, typecheck, format) and
-  gets frontend line coverage to 100%. Must always apply after a change
-  has been completed.
+  Runs bun run cleanup after every change (lint, typecheck, format),
+  gets frontend line coverage to 100%, and returns an example commit
+  message. Must always apply after a change has been completed.
 ---
 
 # Check Line Coverage
@@ -44,4 +44,9 @@ when they have no statements.
 ## Done
 
 `bun run cleanup` exited 0. If coverage ran, All files `% Lines` is `100` —
-tell the user that number. Do not commit.
+tell the user that number.
+
+Then return one example commit message. Match this repo: read
+`git log -10 --format='%s'` and write one line (`feat:` / `fix:` / `chore:` /
+`docs:`) that states why the change exists. Max 72 characters. Offer it.
+Do not create the commit.

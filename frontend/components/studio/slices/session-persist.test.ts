@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { studioRefs } from "../studio-refs"
+import { blueprintSession } from "@/lib/blueprint-session/state"
 
 const host = vi.hoisted(() => ({
   isTauri: vi.fn(() => true),
@@ -15,13 +15,17 @@ import {
   bindSessionPersist,
   currentToolsPath,
   filterSessionLoras,
+  flushPersistImageSession,
   flushPersistSession,
+  flushPersistToolsSession,
   isKnownToolsPath,
   overlayControlValues,
   overlaySessionControls,
   parseStudioSession,
   resolveSessionUpscaleModelId,
+  schedulePersistImageSession,
   schedulePersistSession,
+  schedulePersistToolsSession,
   serializeStudioSession,
   type StudioSessionSource,
 } from "./session-persist"
@@ -69,14 +73,14 @@ function source(
 beforeEach(() => {
   vi.clearAllMocks()
   vi.useFakeTimers()
-  studioRefs.suppressSessionPersist = false
+  blueprintSession.suppressImagePersist = false
   host.isTauri.mockReturnValue(true)
   bindSessionPersist(() => source())
 })
 
 afterEach(() => {
   vi.useRealTimers()
-  studioRefs.suppressSessionPersist = true
+  blueprintSession.suppressImagePersist = true
 })
 
 describe("session-persist", () => {
@@ -215,11 +219,11 @@ describe("session-persist", () => {
     flushPersistSession()
 
     host.isTauri.mockReturnValue(true)
-    studioRefs.suppressSessionPersist = true
+    blueprintSession.suppressImagePersist = true
     schedulePersistSession()
     flushPersistSession()
 
-    studioRefs.suppressSessionPersist = false
+    blueprintSession.suppressImagePersist = false
     bindSessionPersist(null as never)
     schedulePersistSession()
     flushPersistSession()
@@ -227,5 +231,41 @@ describe("session-persist", () => {
     flushPersistSession()
     schedulePersistSession()
     vi.advanceTimersByTime(400)
+  })
+
+  it("gates image persist and still writes tools from pending image", () => {
+    host.setSetting.mockClear()
+    blueprintSession.suppressImagePersist = true
+    blueprintSession.pendingSession = parseStudioSession(
+      JSON.stringify({
+        v: 1,
+        prompt: "pending-prompt",
+        aspectId: "16:9",
+        sideLength: 768,
+      })
+    )
+    schedulePersistImageSession()
+    flushPersistImageSession()
+    expect(host.setSetting).not.toHaveBeenCalled()
+
+    flushPersistToolsSession()
+    expect(host.setSetting).toHaveBeenCalled()
+    const payload = JSON.parse(
+      String(host.setSetting.mock.calls.at(-1)?.[1] ?? "{}")
+    )
+    expect(payload.prompt).toBe("pending-prompt")
+    expect(payload.aspectId).toBe("16:9")
+
+    host.setSetting.mockClear()
+    schedulePersistToolsSession()
+    vi.advanceTimersByTime(400)
+    expect(host.setSetting).toHaveBeenCalled()
+
+    blueprintSession.suppressImagePersist = false
+    blueprintSession.pendingSession = null
+    host.setSetting.mockClear()
+    schedulePersistImageSession()
+    vi.advanceTimersByTime(400)
+    expect(host.setSetting).toHaveBeenCalled()
   })
 })

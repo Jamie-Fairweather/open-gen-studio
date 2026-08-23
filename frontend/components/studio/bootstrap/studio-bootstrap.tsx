@@ -9,7 +9,11 @@ import {
 import { usePathname, useRouter } from "next/navigation"
 import { getOfficialBlueprint, isTauri } from "@/lib/host"
 import { notifyError } from "@/lib/notify"
-import { flushPersistSession } from "@/components/studio/slices/session-persist"
+import {
+  flushPersistImageSession,
+  flushPersistToolsSession,
+} from "@/components/studio/slices/session-persist"
+import { blueprintSession } from "@/lib/blueprint-session/state"
 import { selectActiveSelectedId } from "@/components/studio/selectors"
 import { useStudioSelector, useStudioStore } from "@/components/studio/store"
 import { studioRefs } from "@/components/studio/studio-refs"
@@ -47,9 +51,7 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
 
   // Persist toolsPath as current route when entering/leaving /tools.
   useEffect(() => {
-    if (!studioRefs.suppressSessionPersist) {
-      flushPersistSession()
-    }
+    flushPersistToolsSession()
   }, [pathname])
 
   useEffect(() => {
@@ -71,7 +73,7 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
     if (!galleryLoaded || selectedGalleryId == null) return
     if (!gallery.some((item) => item.id === selectedGalleryId)) {
       useStudioStore.getState().setSelectedGalleryId(null)
-      flushPersistSession()
+      flushPersistImageSession()
     }
   }, [selectedGalleryId, gallery, galleryLoaded])
 
@@ -82,13 +84,13 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!activeSelectedId || !isTauri()) return
     let cancelled = false
-    const prefetch = studioRefs.detailPrefetch
+    const prefetch = blueprintSession.detailPrefetch
     const detailPromise =
       prefetch?.id === activeSelectedId
         ? prefetch.promise
         : getOfficialBlueprint(activeSelectedId)
     if (prefetch?.id === activeSelectedId) {
-      studioRefs.detailPrefetch = null
+      blueprintSession.detailPrefetch = null
     }
     void detailPromise
       .then((d) => {
@@ -97,8 +99,8 @@ export function StudioBootstrap({ children }: { children: ReactNode }) {
       })
       .catch((e) => {
         if (!cancelled) {
-          studioRefs.pendingSession = null
-          studioRefs.suppressSessionPersist = false
+          blueprintSession.pendingSession = null
+          blueprintSession.suppressImagePersist = false
           tryMarkStartupHydrated()
           notifyError(e instanceof Error ? e.message : String(e))
         }

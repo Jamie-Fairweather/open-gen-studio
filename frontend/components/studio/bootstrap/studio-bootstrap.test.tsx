@@ -13,16 +13,20 @@ const {
   cleanupHostListeners,
   runStartupLoadSafe,
   tryMarkStartupHydrated,
-  flushPersistSession,
+  flushPersistImageSession,
+  flushPersistToolsSession,
   notifyError,
   tabFromPath,
   studioRefs,
+  blueprintSession,
 } = vi.hoisted(() => {
   const state: Record<string, unknown> = {}
   const studioRefs = {
-    suppressSessionPersist: false,
     navigateTab: null as null | ((t: string) => void),
     pushPath: null as null | ((p: string) => void),
+  }
+  const blueprintSession = {
+    suppressImagePersist: false,
     detailPrefetch: null as null | { id: string; promise: Promise<unknown> },
     pendingSession: null as unknown,
   }
@@ -44,7 +48,9 @@ const {
     cleanupHostListeners: vi.fn(),
     runStartupLoadSafe: vi.fn(async () => {}),
     tryMarkStartupHydrated: vi.fn(),
-    flushPersistSession: vi.fn(),
+    flushPersistImageSession: vi.fn(),
+    flushPersistToolsSession: vi.fn(),
+    blueprintSession,
     notifyError: vi.fn(),
     tabFromPath: vi.fn(() => "image"),
     studioRefs,
@@ -73,7 +79,11 @@ vi.mock("../studio-tabs", () => ({
   tabFromPath: (...a: unknown[]) => tabFromPath(...a),
 }))
 vi.mock("../slices/session-persist", () => ({
-  flushPersistSession: (...a: unknown[]) => flushPersistSession(...a),
+  flushPersistImageSession: (...a: unknown[]) => flushPersistImageSession(...a),
+  flushPersistToolsSession: (...a: unknown[]) => flushPersistToolsSession(...a),
+}))
+vi.mock("@/lib/blueprint-session/state", () => ({
+  blueprintSession,
 }))
 vi.mock("./bootstrap-helpers", () => ({
   applyLoadedBlueprintDetail: (...a: unknown[]) =>
@@ -111,8 +121,8 @@ describe("StudioBootstrap", () => {
       setCivitaiToken: vi.fn(),
       setCivitaiTokenDirty: vi.fn(),
     })
-    studioRefs.suppressSessionPersist = false
-    studioRefs.detailPrefetch = null
+    blueprintSession.suppressImagePersist = false
+    blueprintSession.detailPrefetch = null
     studioRefs.navigateTab = null
     studioRefs.pushPath = null
   })
@@ -147,7 +157,7 @@ describe("StudioBootstrap", () => {
       expect(state.refreshProviderTokenStatus).toHaveBeenCalled()
     )
 
-    studioRefs.detailPrefetch = {
+    blueprintSession.detailPrefetch = {
       id: "bp1",
       promise: Promise.resolve({ id: "bp1", name: "P" }),
     }
@@ -162,7 +172,7 @@ describe("StudioBootstrap", () => {
     getOfficialBlueprint.mockRejectedValueOnce(new Error("detail fail"))
     unmount()
     // force non-prefetch path
-    studioRefs.detailPrefetch = null
+    blueprintSession.detailPrefetch = null
     render(
       <StudioBootstrap>
         <span>err</span>
@@ -184,7 +194,7 @@ describe("StudioBootstrap", () => {
   })
 
   it("skips persist, gallery guard, cancel paths, and string errors", async () => {
-    studioRefs.suppressSessionPersist = true
+    blueprintSession.suppressImagePersist = true
     Object.assign(state, {
       selectedGalleryId: null,
       galleryLoaded: false,
@@ -195,7 +205,8 @@ describe("StudioBootstrap", () => {
         <span>skip</span>
       </StudioBootstrap>
     )
-    expect(flushPersistSession).not.toHaveBeenCalled()
+    expect(flushPersistToolsSession).toHaveBeenCalled()
+    expect(flushPersistImageSession).not.toHaveBeenCalled()
 
     Object.assign(state, {
       selectedGalleryId: "keep",
@@ -215,7 +226,7 @@ describe("StudioBootstrap", () => {
         resolveDetail = r
       })
     )
-    studioRefs.detailPrefetch = null
+    blueprintSession.detailPrefetch = null
     const { unmount: u2 } = render(
       <StudioBootstrap>
         <span>cancel-detail</span>
@@ -226,7 +237,7 @@ describe("StudioBootstrap", () => {
     await Promise.resolve()
 
     getOfficialBlueprint.mockRejectedValueOnce("plain-fail")
-    studioRefs.detailPrefetch = null
+    blueprintSession.detailPrefetch = null
     const { unmount: uErr } = render(
       <StudioBootstrap>
         <span>err-str</span>
@@ -254,7 +265,7 @@ describe("StudioBootstrap", () => {
     expect(state.setHfToken).not.toHaveBeenCalled()
 
     getOfficialBlueprint.mockRejectedValueOnce("plain-fail")
-    studioRefs.detailPrefetch = null
+    blueprintSession.detailPrefetch = null
     render(
       <StudioBootstrap>
         <span>err-str</span>

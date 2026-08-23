@@ -18,8 +18,8 @@ vi.mock("@/lib/notify", async () => {
 })
 
 vi.mock("./session-persist", () => ({
-  flushPersistSession: vi.fn(),
-  schedulePersistSession: vi.fn(),
+  flushPersistImageSession: vi.fn(),
+  schedulePersistImageSession: vi.fn(),
 }))
 
 import { notifyError, notifyInfo } from "@/lib/notify"

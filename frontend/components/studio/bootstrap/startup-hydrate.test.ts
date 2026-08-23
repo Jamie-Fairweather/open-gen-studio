@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { blueprintSession } from "@/lib/blueprint-session/state"
 import { studioRefs } from "../studio-refs"
 
 const host = vi.hoisted(() => ({
@@ -75,11 +76,11 @@ const router = { replace: vi.fn() } as never
 
 beforeEach(() => {
   vi.clearAllMocks()
-  studioRefs.suppressSessionPersist = true
+  blueprintSession.suppressImagePersist = true
   studioRefs.startupCatalogReady = false
-  studioRefs.pendingSession = null
-  studioRefs.preferredBlueprintId = null
-  studioRefs.detailPrefetch = null
+  blueprintSession.pendingSession = null
+  blueprintSession.preferredBlueprintId = null
+  blueprintSession.detailPrefetch = null
   useStudioStore.setState({
     startupHydrated: false,
     blueprintsLoaded: false,
@@ -101,7 +102,7 @@ describe("startup-hydrate", () => {
       galleryLoaded: true,
     })
     studioRefs.startupCatalogReady = true
-    studioRefs.suppressSessionPersist = false
+    blueprintSession.suppressImagePersist = false
     tryMarkStartupHydrated()
 
     useStudioStore.setState({ startupHydrated: false })
@@ -114,9 +115,9 @@ describe("startup-hydrate", () => {
       galleryLoaded: true,
     })
     studioRefs.startupCatalogReady = true
-    studioRefs.suppressSessionPersist = true
+    blueprintSession.suppressImagePersist = true
     tryMarkStartupHydrated()
-    studioRefs.suppressSessionPersist = false
+    blueprintSession.suppressImagePersist = false
     tryMarkStartupHydrated()
     expect(useStudioStore.getState().startupHydrated).toBe(true)
 
@@ -126,13 +127,13 @@ describe("startup-hydrate", () => {
       galleryLoaded: true,
     })
     studioRefs.startupCatalogReady = true
-    studioRefs.suppressSessionPersist = true
+    blueprintSession.suppressImagePersist = true
     tryMarkStartupHydrated()
     expect(useStudioStore.getState().startupHydrated).toBe(false)
-    studioRefs.suppressSessionPersist = false
+    blueprintSession.suppressImagePersist = false
 
     useStudioStore.setState({ startupHydrated: false })
-    studioRefs.suppressSessionPersist = true
+    blueprintSession.suppressImagePersist = true
     studioRefs.startupCatalogReady = false
 
     host.listSettings.mockResolvedValueOnce({
@@ -183,9 +184,9 @@ describe("startup-hydrate", () => {
     await runStartupLoad(router)
     expect(useStudioStore.getState().prompt).toBe("restored")
     expect(router.replace).toHaveBeenCalledWith("/tools/image-to-prompt")
-    expect(studioRefs.detailPrefetch?.id).toBe("bp1")
+    expect(blueprintSession.detailPrefetch?.id).toBe("bp1")
     // second prefetch same id is no-op
-    studioRefs.detailPrefetch = {
+    blueprintSession.detailPrefetch = {
       id: "bp1",
       promise: Promise.resolve({} as never),
     }
@@ -210,7 +211,7 @@ describe("startup-hydrate", () => {
       { engine: "comfyui", status: "installing", version: "v1.2.3" },
     ])
     studioRefs.startupCatalogReady = false
-    studioRefs.suppressSessionPersist = true
+    blueprintSession.suppressImagePersist = true
     useStudioStore.setState({
       startupHydrated: false,
       blueprintsLoaded: false,
@@ -316,7 +317,7 @@ describe("startup-hydrate", () => {
     host.listBlueprints.mockResolvedValueOnce([
       { id: "bp1", category: "image" },
     ])
-    studioRefs.detailPrefetch = null
+    blueprintSession.detailPrefetch = null
     useStudioStore.setState({
       selectedId: null,
       blueprints: [{ id: "bp1", category: "image" } as never],
@@ -325,7 +326,7 @@ describe("startup-hydrate", () => {
     await runStartupLoadSafe(router)
     expect(notifyError).toHaveBeenCalled()
     expect(useStudioStore.getState().blueprintsLoaded).toBe(true)
-    expect(studioRefs.detailPrefetch?.id).toBe("bp1")
+    expect(blueprintSession.detailPrefetch?.id).toBe("bp1")
 
     // safe path with already selected (skip ensureDetailPrefetch assign)
     host.listSettings.mockRejectedValueOnce(new Error("boom2"))
@@ -392,7 +393,7 @@ describe("startup-hydrate", () => {
     await runStartupLoad(router)
     expect(notifyError).toHaveBeenCalledWith("loras-str")
 
-    studioRefs.detailPrefetch = {
+    blueprintSession.detailPrefetch = {
       id: "bp1",
       promise: Promise.resolve({ id: "bp1" } as never),
     }
@@ -402,10 +403,10 @@ describe("startup-hydrate", () => {
       blueprints: [{ id: "bp1", category: "image" } as never],
     })
     await runStartupLoadSafe(router)
-    expect(studioRefs.detailPrefetch?.id).toBe("bp1")
+    expect(blueprintSession.detailPrefetch?.id).toBe("bp1")
 
     host.listSettings.mockRejectedValueOnce("safe-str")
-    studioRefs.detailPrefetch = null
+    blueprintSession.detailPrefetch = null
     useStudioStore.setState({
       selectedId: null,
       blueprints: [{ id: "bp1", category: "image" } as never],
@@ -464,14 +465,14 @@ describe("startup-hydrate", () => {
     expect(useStudioStore.getState().gpuVendorDialogOpen).toBe(false)
 
     host.listSettings.mockRejectedValueOnce(new Error("safe-null-id"))
-    studioRefs.detailPrefetch = null
+    blueprintSession.detailPrefetch = null
     useStudioStore.setState({
       selectedId: null,
       blueprints: [{ id: "bp-video", category: "video" } as never],
     })
     await runStartupLoadSafe(router)
 
-    studioRefs.detailPrefetch = {
+    blueprintSession.detailPrefetch = {
       id: "bp1",
       promise: Promise.resolve({ id: "bp1" } as never),
     }
@@ -513,7 +514,7 @@ describe("startup-hydrate", () => {
     })
     host.comfyuiStatus.mockResolvedValue({ healthy: false })
     studioRefs.startupCatalogReady = false
-    studioRefs.suppressSessionPersist = true
+    blueprintSession.suppressImagePersist = true
     useStudioStore.setState({
       startupHydrated: false,
       blueprintsLoaded: false,
@@ -551,7 +552,7 @@ describe("startup-hydrate", () => {
     })
     host.comfyuiStatus.mockResolvedValue({ healthy: false })
     studioRefs.startupCatalogReady = false
-    studioRefs.suppressSessionPersist = true
+    blueprintSession.suppressImagePersist = true
     useStudioStore.setState({
       startupHydrated: false,
       blueprintsLoaded: false,
@@ -578,7 +579,7 @@ describe("startup-hydrate", () => {
       { id: "bp-video", category: "video" },
     ])
     host.listGallery.mockResolvedValueOnce([])
-    studioRefs.detailPrefetch = null
+    blueprintSession.detailPrefetch = null
     useStudioStore.setState({
       selectedId: null,
       blueprints: [{ id: "bp-video", category: "video" } as never],
@@ -586,7 +587,7 @@ describe("startup-hydrate", () => {
     })
     await runStartupLoadSafe(router)
 
-    studioRefs.detailPrefetch = {
+    blueprintSession.detailPrefetch = {
       id: "bp1",
       promise: Promise.resolve({ id: "bp1" } as never),
     }
@@ -599,9 +600,9 @@ describe("startup-hydrate", () => {
       selectedId: null,
       blueprints: [{ id: "bp1", category: "image" } as never],
     })
-    const before = studioRefs.detailPrefetch
+    const before = blueprintSession.detailPrefetch
     await runStartupLoadSafe(router)
-    expect(studioRefs.detailPrefetch).toBe(before)
+    expect(blueprintSession.detailPrefetch).toBe(before)
 
     vi.mocked(notifyInfo).mockClear()
     const snap = {

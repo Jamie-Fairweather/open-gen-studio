@@ -13,6 +13,7 @@ import {
   upscaleFromRecipe,
 } from "@/lib/blueprint-helpers"
 import { syncSizeControls } from "@/lib/image-size"
+import { blueprintSession } from "@/lib/blueprint-session/state"
 import { notifyError, notifyInfo, notifySuccess } from "@/lib/notify"
 import type { StudioStore } from "../studio-store-types"
 import { studioRefs } from "../studio-refs"
@@ -22,7 +23,7 @@ import {
   computeActiveSelectedId,
   computeTabBlueprints,
 } from "./helpers"
-import { flushPersistSession } from "./session-persist"
+import { flushPersistImageSession } from "./session-persist"
 
 export type GallerySlice = {
   gallery: GalleryItem[]
@@ -65,7 +66,7 @@ export const createGallerySlice: StateCreator<
 
   selectGalleryItem: (id) => {
     set({ selectedGalleryId: id, followLive: false })
-    flushPersistSession()
+    flushPersistImageSession()
   },
 
   ingestGalleryItem: (item) => {
@@ -83,7 +84,7 @@ export const createGallerySlice: StateCreator<
         genStep: null,
       }
     })
-    if (get().followLive) flushPersistSession()
+    if (get().followLive) flushPersistImageSession()
   },
 
   patchGalleryItem: (item) => {
@@ -102,7 +103,7 @@ export const createGallerySlice: StateCreator<
       gallery: prev.filter((item) => item.id !== id),
       selectedGalleryId: selectedWas === id ? null : selectedWas,
     })
-    if (selectedWas === id) flushPersistSession()
+    if (selectedWas === id) flushPersistImageSession()
     try {
       await deleteGalleryItem(id)
       notifySuccess("Image deleted")
@@ -111,7 +112,7 @@ export const createGallerySlice: StateCreator<
         gallery: prev,
         selectedGalleryId: selectedWas,
       })
-      if (selectedWas === id) flushPersistSession()
+      if (selectedWas === id) flushPersistImageSession()
       notifyError(e instanceof Error ? e.message : String(e), "Delete failed")
       throw e
     }
@@ -206,7 +207,7 @@ export const createGallerySlice: StateCreator<
         state.setLoraStack(lorasFromRecipe(recipe, state.loraPacks))
         applyUpscale(activeDetail.arch)
       } else {
-        studioRefs.pendingRecipe = recipe
+        blueprintSession.pendingRecipe = recipe
         state.selectBlueprint(recipe.blueprintId)
       }
     } else {

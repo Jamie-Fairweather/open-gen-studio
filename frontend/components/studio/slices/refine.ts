@@ -19,7 +19,7 @@ import type { RecipeArch } from "@/lib/arch"
 import { notifyError, notifySuccess } from "@/lib/notify"
 import type { StudioStore } from "../studio-store-types"
 import { applySet, DEFAULT_UPSCALE_MODEL_ID } from "./helpers"
-import { flushPersistSession } from "./session-persist"
+import { flushPersistImageSession } from "./session-persist"
 
 const catalogHost = {
   ensureDownload,
@@ -67,31 +67,31 @@ export const createRefineSlice: StateCreator<
 
   setLoraStack: (next) => {
     set((s) => ({ loraStack: applySet(s.loraStack, next) }))
-    flushPersistSession()
+    flushPersistImageSession()
   },
   setUpscaleEnabled: (next) => {
     set((s) => ({ upscaleEnabled: applySet(s.upscaleEnabled, next) }))
-    flushPersistSession()
+    flushPersistImageSession()
   },
   setUpscaleModelId: (next) => {
     set((s) => ({ upscaleModelId: applySet(s.upscaleModelId, next) }))
-    flushPersistSession()
+    flushPersistImageSession()
   },
   setUsduEnabled: (next) => {
     set((s) => ({ usduEnabled: applySet(s.usduEnabled, next) }))
-    flushPersistSession()
+    flushPersistImageSession()
   },
   setUsduScale: (next) => {
     set((s) => ({ usduScale: applySet(s.usduScale, next) }))
-    flushPersistSession()
+    flushPersistImageSession()
   },
   setUsduSteps: (next) => {
     set((s) => ({ usduSteps: applySet(s.usduSteps, next) }))
-    flushPersistSession()
+    flushPersistImageSession()
   },
   setUsduDenoise: (next) => {
     set((s) => ({ usduDenoise: applySet(s.usduDenoise, next) }))
-    flushPersistSession()
+    flushPersistImageSession()
   },
 
   beginLoraInstall: async (id, arch) => {

@@ -105,12 +105,12 @@ import {
 } from "@/lib/notify"
 import { createTestStudioStore } from "@/test/create-test-store"
 import { cleanupHostListeners, registerHostListeners } from "./host-listeners"
-import { studioRefs } from "../studio-refs"
+import { blueprintSession } from "@/lib/blueprint-session/state"
 import { useStudioStore } from "@/components/studio/store"
 
 beforeEach(() => {
   vi.clearAllMocks()
-  studioRefs.preferredBlueprintId = null
+  blueprintSession.preferredBlueprintId = null
 })
 
 describe("registerHostListeners", () => {

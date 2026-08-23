@@ -25,7 +25,10 @@ import {
   computeActiveSelectedId,
   computeTabBlueprints,
 } from "./helpers"
-import { flushPersistSession, schedulePersistSession } from "./session-persist"
+import {
+  flushPersistToolsSession,
+  schedulePersistToolsSession,
+} from "./session-persist"
 
 export type ImageToPromptToolState = {
   imagePath: string | null
@@ -147,21 +150,21 @@ export const createToolsSlice: StateCreator<StudioStore, [], [], ToolsSlice> = (
 
   patchImageToPrompt: (patch) => {
     set((s) => ({ imageToPrompt: { ...s.imageToPrompt, ...patch } }))
-    schedulePersistSession()
+    schedulePersistToolsSession()
   },
 
   patchPromptEnhance: (patch) => {
     set((s) => ({ promptEnhance: { ...s.promptEnhance, ...patch } }))
-    schedulePersistSession()
+    schedulePersistToolsSession()
   },
 
   setImageToPrompt: (next) => {
     set((s) => ({ imageToPrompt: applySet(s.imageToPrompt, next) }))
-    schedulePersistSession()
+    schedulePersistToolsSession()
   },
   setPromptEnhance: (next) => {
     set((s) => ({ promptEnhance: applySet(s.promptEnhance, next) }))
-    schedulePersistSession()
+    schedulePersistToolsSession()
   },
 
   seedPromptEnhance: (prompt) => {
@@ -178,7 +181,7 @@ export const createToolsSlice: StateCreator<StudioStore, [], [], ToolsSlice> = (
         target: arch ? targetFromArch(arch) : "auto",
       },
     })
-    flushPersistSession()
+    flushPersistToolsSession()
   },
 
   handlePromptToolsStatus: (message) => {
@@ -226,7 +229,7 @@ export const createToolsSlice: StateCreator<StudioStore, [], [], ToolsSlice> = (
             error: null,
           },
         })
-        flushPersistSession()
+        flushPersistToolsSession()
         notifySuccess("Prompt ready")
       } else if (p.stage === "error") {
         const msg = p.message || "Prompt tool failed"
@@ -284,7 +287,7 @@ export const createToolsSlice: StateCreator<StudioStore, [], [], ToolsSlice> = (
             error: null,
           },
         })
-        flushPersistSession()
+        flushPersistToolsSession()
         notifySuccess("Enhanced prompt ready")
       } else if (p.stage === "error") {
         const msg = p.message || "Enhance failed"

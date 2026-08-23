@@ -13,7 +13,10 @@ import {
   computeActiveDetail,
   computeTabBlueprints,
 } from "./helpers"
-import { flushPersistSession, schedulePersistSession } from "./session-persist"
+import {
+  flushPersistImageSession,
+  schedulePersistImageSession,
+} from "./session-persist"
 
 export type GenerationSlice = {
   prompt: string
@@ -78,7 +81,7 @@ export const createGenerationSlice: StateCreator<
         sideLength: nextSideLength,
         controlValues: { ...s.controlValues, width, height },
       }))
-      flushPersistSession()
+      flushPersistImageSession()
     },
 
     clearLivePreview: () => {
@@ -112,7 +115,7 @@ export const createGenerationSlice: StateCreator<
 
     enterFollowLive: () => {
       set({ followLive: true })
-      flushPersistSession()
+      flushPersistImageSession()
     },
 
     handleGenerate: async () => {
@@ -217,12 +220,12 @@ export const createGenerationSlice: StateCreator<
 
     setPrompt: (next) => {
       set((s) => ({ prompt: applySet(s.prompt, next) }))
-      schedulePersistSession()
+      schedulePersistImageSession()
     },
 
     setControlValues: (next) => {
       set((s) => ({ controlValues: applySet(s.controlValues, next) }))
-      schedulePersistSession()
+      schedulePersistImageSession()
     },
 
     setGenerating: (next) =>
@@ -239,7 +242,7 @@ export const createGenerationSlice: StateCreator<
         studioRefs.aspectId = aspectId
         return { aspectId }
       })
-      schedulePersistSession()
+      schedulePersistImageSession()
     },
 
     setSideLength: (next) => {
@@ -248,7 +251,7 @@ export const createGenerationSlice: StateCreator<
         studioRefs.sideLength = sideLength
         return { sideLength }
       })
-      schedulePersistSession()
+      schedulePersistImageSession()
     },
   }
 }

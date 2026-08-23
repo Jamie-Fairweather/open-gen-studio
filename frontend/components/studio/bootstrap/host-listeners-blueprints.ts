@@ -7,7 +7,7 @@ import {
 } from "@/lib/host"
 import { notifyDismiss, notifyError, notifySuccess } from "@/lib/notify"
 import { pickDefaultBlueprintId } from "@/lib/blueprint-helpers"
-import { studioRefs } from "@/components/studio/studio-refs"
+import { blueprintSession } from "@/lib/blueprint-session/state"
 import type {
   GetStore,
   HostListenerHandles,
@@ -27,7 +27,7 @@ export function registerBlueprintListeners(
     getStore().setBlueprints(bps)
     getStore().setSizesProbing(false)
     getStore().setSelectedId((prev) =>
-      pickDefaultBlueprintId(bps, prev ?? studioRefs.preferredBlueprintId)
+      pickDefaultBlueprintId(bps, prev ?? blueprintSession.preferredBlueprintId)
     )
   }).then((u) => {
     handles.unlistenBlueprintSizes = u

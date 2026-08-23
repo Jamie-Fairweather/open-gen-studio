@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { blueprintSession } from "@/lib/blueprint-session/state"
 import { studioRefs } from "../studio-refs"
 
 const host = vi.hoisted(() => ({
@@ -23,10 +24,10 @@ import { createTestStudioStore } from "@/test/create-test-store"
 
 beforeEach(() => {
   vi.clearAllMocks()
-  studioRefs.preferredBlueprintId = null
-  studioRefs.forceBlueprintDefaults = false
-  studioRefs.controlValuesByBlueprintId = {}
-  studioRefs.pendingSession = null
+  blueprintSession.preferredBlueprintId = null
+  blueprintSession.forceBlueprintDefaults = false
+  blueprintSession.controlValuesByBlueprintId = {}
+  blueprintSession.pendingSession = null
   studioRefs.pushPath = vi.fn()
 })
 
@@ -35,15 +36,15 @@ describe("createCatalogSlice", () => {
     const store = createTestStudioStore()
     const s = store.getState()
 
-    studioRefs.controlValuesByBlueprintId.bp1 = { steps: 40 }
-    studioRefs.pendingSession = { v: 1 } as never
+    blueprintSession.controlValuesByBlueprintId.bp1 = { steps: 40 }
+    blueprintSession.pendingSession = { v: 1 } as never
     s.selectBlueprint("bp1")
     expect(store.getState().selectedId).toBe("bp1")
     expect(store.getState().detailReloadToken).toBe(1)
-    expect(studioRefs.preferredBlueprintId).toBe("bp1")
-    expect(studioRefs.forceBlueprintDefaults).toBe(true)
-    expect(studioRefs.pendingSession).toBeNull()
-    expect(studioRefs.controlValuesByBlueprintId.bp1).toBeUndefined()
+    expect(blueprintSession.preferredBlueprintId).toBe("bp1")
+    expect(blueprintSession.forceBlueprintDefaults).toBe(true)
+    expect(blueprintSession.pendingSession).toBeNull()
+    expect(blueprintSession.controlValuesByBlueprintId.bp1).toBeUndefined()
     expect(host.setSetting).toHaveBeenCalled()
     host.setSetting.mockRejectedValueOnce(new Error("x"))
     s.selectBlueprint("bp2")

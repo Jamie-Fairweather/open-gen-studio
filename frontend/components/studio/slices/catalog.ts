@@ -4,17 +4,20 @@ import {
   deleteUserLora as hostDeleteUserLora,
   listBlueprints as hostListBlueprints,
   listLoras as hostListLoras,
-  setSetting,
   type Blueprint,
   type BlueprintDetail,
   type LoraPack,
   type UpscaleModelInfo,
 } from "@/lib/host"
 import { isInstalled } from "@/lib/blueprint-helpers"
+import {
+  persistPreferredBlueprint,
+  pickBlueprint,
+} from "@/lib/blueprint-session/pick"
 import { notifyError } from "@/lib/notify"
 import type { StudioStore } from "../studio-store-types"
 import { studioRefs } from "../studio-refs"
-import { applySet, SETTING_SELECTED_BLUEPRINT } from "./helpers"
+import { applySet } from "./helpers"
 
 export type CatalogSlice = {
   blueprints: Blueprint[]
@@ -65,18 +68,13 @@ export const createCatalogSlice: StateCreator<
   sizesProbing: false,
 
   selectBlueprint: (id) => {
-    // Picker / onboarding picks should load that pack's defaults (steps, CFG),
-    // not a stale session/stash from bootstrap's first catalog entry (e.g. Chroma).
-    delete studioRefs.controlValuesByBlueprintId[id]
-    studioRefs.forceBlueprintDefaults = true
-    studioRefs.pendingSession = null
+    pickBlueprint(id)
+    persistPreferredBlueprint(id)
     set((s) => ({
       selectedId: id,
       // Bump so the detail-load effect re-runs even when id is unchanged.
       detailReloadToken: s.detailReloadToken + 1,
     }))
-    studioRefs.preferredBlueprintId = id
-    void setSetting(SETTING_SELECTED_BLUEPRINT, id).catch(() => {})
   },
 
   refreshBlueprints: () => {

@@ -32,6 +32,7 @@ import {
 } from "@/components/studio/slices/session-persist"
 import { useStudioStore } from "@/components/studio/store"
 import { studioRefs } from "@/components/studio/studio-refs"
+import { blueprintSession } from "@/lib/blueprint-session/state"
 
 /** Dismiss-gate for the splash: session + catalog must be applied first. */
 export function tryMarkStartupHydrated() {
@@ -39,7 +40,7 @@ export function tryMarkStartupHydrated() {
   if (s.startupHydrated) return
   if (!s.blueprintsLoaded || !s.galleryLoaded) return
   if (!studioRefs.startupCatalogReady) return
-  if (studioRefs.suppressSessionPersist) return
+  if (blueprintSession.suppressImagePersist) return
   s.setStartupHydrated(true)
 }
 
@@ -52,8 +53,8 @@ export async function runStartupLoad(
 ) {
   const ensureDetailPrefetch = (id: string | null) => {
     if (!id) return
-    if (studioRefs.detailPrefetch?.id === id) return
-    studioRefs.detailPrefetch = {
+    if (blueprintSession.detailPrefetch?.id === id) return
+    blueprintSession.detailPrefetch = {
       id,
       promise: getOfficialBlueprint(id),
     }
@@ -66,14 +67,14 @@ export async function runStartupLoad(
 
   const releaseSuppressIfReady = (selected: string | null) => {
     if (!session) {
-      studioRefs.suppressSessionPersist = false
+      blueprintSession.suppressImagePersist = false
       tryMarkStartupHydrated()
       return
     }
     if (!selected) {
       // No blueprint to load detail for — release suppress so later edits persist.
-      studioRefs.pendingSession = null
-      studioRefs.suppressSessionPersist = false
+      blueprintSession.pendingSession = null
+      blueprintSession.suppressImagePersist = false
       tryMarkStartupHydrated()
     }
     // else: keep suppress until blueprint-detail effect merges controlValues
@@ -102,7 +103,7 @@ export async function runStartupLoad(
 
   const settingsP = listSettings().then(async (settings) => {
     const preferred = settings[SETTING_SELECTED_BLUEPRINT]?.trim() || null
-    studioRefs.preferredBlueprintId = preferred
+    blueprintSession.preferredBlueprintId = preferred
     session = parseStudioSession(settings[SETTING_STUDIO_SESSION])
     settingsReady = true
 
@@ -118,8 +119,8 @@ export async function runStartupLoad(
     if (preferred) ensureDetailPrefetch(preferred)
 
     if (session) {
-      studioRefs.suppressSessionPersist = true
-      studioRefs.pendingSession = session
+      blueprintSession.suppressImagePersist = true
+      blueprintSession.pendingSession = session
 
       s.setPrompt(session.prompt)
       studioRefs.aspectId = session.aspectId
@@ -187,10 +188,13 @@ export async function runStartupLoad(
     if (settingsReady) {
       const nextBlueprintId = pickDefaultBlueprintId(
         bps,
-        studioRefs.preferredBlueprintId
+        blueprintSession.preferredBlueprintId
       )
       s.setSelectedId((prev) =>
-        pickDefaultBlueprintId(bps, prev ?? studioRefs.preferredBlueprintId)
+        pickDefaultBlueprintId(
+          bps,
+          prev ?? blueprintSession.preferredBlueprintId
+        )
       )
       ensureDetailPrefetch(nextBlueprintId)
       releaseSuppressIfReady(nextBlueprintId)
@@ -316,8 +320,8 @@ export async function runStartupLoadSafe(
 ) {
   const ensureDetailPrefetch = (id: string | null) => {
     if (!id) return
-    if (studioRefs.detailPrefetch?.id === id) return
-    studioRefs.detailPrefetch = {
+    if (blueprintSession.detailPrefetch?.id === id) return
+    blueprintSession.detailPrefetch = {
       id,
       promise: getOfficialBlueprint(id),
     }
@@ -330,14 +334,14 @@ export async function runStartupLoadSafe(
     s.setSizesProbing(false)
     s.setBlueprintsLoaded(true)
     s.setGalleryLoaded(true)
-    studioRefs.pendingSession = null
-    studioRefs.suppressSessionPersist = false
+    blueprintSession.pendingSession = null
+    blueprintSession.suppressImagePersist = false
     studioRefs.startupCatalogReady = true
     // Settings may have failed before selection — still pick a default.
     if (!s.selectedId && s.blueprints.length > 0) {
       const nextId = pickDefaultBlueprintId(
         s.blueprints,
-        studioRefs.preferredBlueprintId
+        blueprintSession.preferredBlueprintId
       )
       s.setSelectedId(nextId)
       ensureDetailPrefetch(nextId)

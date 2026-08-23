@@ -30,6 +30,7 @@ function asBool(v: unknown, fallback = false): boolean {
   return typeof v === "boolean" ? v : fallback
 }
 
+/** True for the three Prompt Tools routes we persist. */
 export function isKnownToolsPath(
   path: string | null | undefined
 ): path is string {
@@ -100,6 +101,7 @@ function parsePromptEnhance(raw: unknown): PersistedPromptEnhance {
   }
 }
 
+/** Snapshot Prompt Tools controls for SQLite. */
 export function serializeToolsSession(
   state: ToolsSessionSource
 ): ToolsSessionV1 {
@@ -127,6 +129,7 @@ export function serializeToolsSession(
   }
 }
 
+/** Coerce persisted tools-session JSON; unknown paths / formats fall back. */
 export function parseToolsSessionFields(
   data: Record<string, unknown>
 ): ToolsSessionV1 {

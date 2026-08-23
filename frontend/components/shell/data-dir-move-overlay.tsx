@@ -13,6 +13,7 @@ import { isTauri, onDataDirCloseBlocked, onDataDirProgress } from "@/lib/host"
 import { notifyError } from "@/lib/notify"
 import { cn } from "@/lib/utils"
 
+/** Full-screen blocker during data-dir relocate. Subscribes to the move store and host progress; do not dismiss until inactive. */
 export function DataDirMoveOverlay() {
   const active = useSyncExternalStore(
     subscribeDataDirMove,

@@ -25,6 +25,7 @@ const fieldLabel = "text-[11px] font-medium text-muted-foreground"
 const sectionTitle =
   "text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase"
 
+/** Blueprint name, id, architecture, description, and thumbnail — id is locked while editing. */
 export type RecipeIdentitySectionProps = {
   editing: boolean
   editBlueprintId?: string | null
@@ -45,6 +46,7 @@ export type RecipeIdentitySectionProps = {
   setDescription: (description: string) => void
 }
 
+/** Blueprint name, id, architecture, and thumbnail — id is locked while editing. */
 export function RecipeIdentitySection({
   editing,
   editBlueprintId = null,

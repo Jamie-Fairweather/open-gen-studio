@@ -10,6 +10,7 @@ import { cancelJob, pauseJob, resumeJob, type JobQueueItem } from "@/lib/host"
 import { notifyError } from "@/lib/notify"
 import { cn } from "@/lib/utils"
 
+/** Expand-dialog row: drag queued jobs; pause/resume/cancel stay on the side. */
 export function SortableActiveRow({
   item,
   index,

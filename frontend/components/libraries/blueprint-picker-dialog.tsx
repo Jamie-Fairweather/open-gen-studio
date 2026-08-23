@@ -45,6 +45,7 @@ function archLabel(arch: string): string {
   return ARCHES.find((a) => a.id === arch)?.label ?? arch
 }
 
+/** Live install progress for one blueprint: stage, current file, and byte counts. */
 export type BlueprintInstallProgress = {
   blueprintId: string
   stage: string
@@ -80,6 +81,7 @@ type BlueprintPickerDialogProps = {
   onUninstall: (id: string) => void
 }
 
+/** Catalog picker: search, select, install, or uninstall user/official blueprints. */
 export function BlueprintPickerDialog({
   open,
   onOpenChange,

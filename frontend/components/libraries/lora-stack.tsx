@@ -35,6 +35,7 @@ function formatStrength(n: number): string {
   return String(rounded)
 }
 
+/** Generate-panel stack: strength sliders and install for the current arch. */
 export function LoraStack({
   arch,
   packs,

@@ -4,6 +4,7 @@ import type {
   StructuredFields,
 } from "@/lib/prompt-tools"
 
+/** Image-to-prompt fields written to the tools session file. */
 export type PersistedImageToPrompt = {
   imagePath: string | null
   previewUrl: string | null
@@ -15,6 +16,7 @@ export type PersistedImageToPrompt = {
   galleryOpen: boolean
 }
 
+/** Prompt-enhance fields written to the tools session file. */
 export type PersistedPromptEnhance = {
   input: string
   result: string
@@ -25,12 +27,14 @@ export type PersistedPromptEnhance = {
   seeded: boolean
 }
 
+/** On-disk tools session (v1). `toolsPath` is the last Tools route. */
 export type ToolsSessionV1 = {
   toolsPath: string | null
   imageToPrompt: PersistedImageToPrompt
   promptEnhance: PersistedPromptEnhance
 }
 
+/** Live store slice `serializeToolsSession` reads (same fields, not versioned). */
 export type ToolsSessionSource = {
   imageToPrompt: {
     imagePath: string | null

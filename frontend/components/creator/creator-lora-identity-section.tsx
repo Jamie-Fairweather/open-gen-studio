@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { clearUserLoraThumbnail, setUserLoraThumbnail } from "@/lib/host"
 import { notifySuccess } from "@/lib/notify"
 
+/** Props for the Creator LoRA identity fields (name, id, thumbnail). */
 export type CreatorLoraIdentitySectionProps = {
   editing: boolean
   editLoraId?: string | null
@@ -25,6 +26,7 @@ export type CreatorLoraIdentitySectionProps = {
   setIdManual: (id: string) => void
 }
 
+/** Pack name, id, and thumbnail — id is locked while editing. */
 export function CreatorLoraIdentitySection({
   editing,
   editLoraId = null,

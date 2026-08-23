@@ -29,6 +29,7 @@ function LegalLink({ label, href }: { label: string; href: string }) {
   )
 }
 
+/** Owns About: live Tauri version (fallback if IPC fails) and legal/external links. */
 export function SettingsAboutCard() {
   const [version, setVersion] = useState<string | null>(null)
 

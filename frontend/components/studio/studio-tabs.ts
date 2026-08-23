@@ -35,6 +35,7 @@ export const STUDIO_TABS: { id: StudioTab; label: string }[] = [
   SETTINGS_TAB,
 ]
 
+/** First path segment to a StudioTab; unknown or empty routes land on Image. */
 export function tabFromPath(pathname: string): StudioTab {
   const seg = pathname.split("/").filter(Boolean)[0]
   if (

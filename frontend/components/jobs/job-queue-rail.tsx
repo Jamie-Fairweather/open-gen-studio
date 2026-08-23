@@ -31,6 +31,7 @@ import { useStudioStore } from "@/components/studio/store"
 import { cancelJob, pauseJob, resumeJob } from "@/lib/host"
 import { notifyError } from "@/lib/notify"
 
+/** Bottom strip of overflow-capped job chips with pause/cancel and expand. */
 export function JobQueueRail() {
   const { jobQueue, waitingIds, clearQueue, reorderWaiting } =
     useJobQueueActions()

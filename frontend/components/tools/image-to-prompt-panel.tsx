@@ -52,6 +52,7 @@ async function bytesFromFile(
   return { bytes: new Uint8Array(buf), ext }
 }
 
+/** Image-to-Prompt tool: ingest a reference, run caption, edit output. Writes to studio only via the bridge. */
 export function ImageToPromptPanel() {
   const gallery = useStudioStore((s) => s.gallery)
   const consumeToolsHandoff = useStudioStore((s) => s.consumeToolsHandoff)

@@ -19,6 +19,7 @@ import type { StudioStore } from "../studio-store-types"
 import { studioRefs } from "../studio-refs"
 import { applySet } from "./helpers"
 
+/** Catalog + selection state for the studio store. */
 export type CatalogSlice = {
   blueprints: Blueprint[]
   blueprintsLoaded: boolean
@@ -51,6 +52,7 @@ export type CatalogSlice = {
   isInstalled: typeof isInstalled
 }
 
+/** Zustand slice: blueprint catalog, LoRA packs, upscalers, and Creator edit navigation. */
 export const createCatalogSlice: StateCreator<
   StudioStore,
   [],

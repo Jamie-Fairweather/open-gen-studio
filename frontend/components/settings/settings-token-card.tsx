@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { openExternalUrl } from "@/lib/host"
 import { notifyError } from "@/lib/notify"
 
+/** Settings card props: one provider token, plus persist/clear callbacks. */
 export type SettingsTokenCardProps = {
   title: string
   description: ReactNode
@@ -26,6 +27,7 @@ export type SettingsTokenCardProps = {
   externalUrl: string
 }
 
+/** Credential card for one provider token. Persist and clear stay with the parent. */
 export function SettingsTokenCard({
   title,
   description,

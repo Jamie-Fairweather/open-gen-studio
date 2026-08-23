@@ -13,6 +13,13 @@ default-run = "app"
 name = "app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[lints.rust]
+missing_docs = "deny"
+
+[lints.clippy]
+missing_errors_doc = "deny"
+missing_safety_doc = "deny"
+
 [[bin]]
 # Dev-only: regenerate frontend/lib/generated/bindings.ts (`npm run ipc:types`).
 # Package default-run is `app` (main.rs) so `tauri dev` / `cargo run` stay unambiguous.

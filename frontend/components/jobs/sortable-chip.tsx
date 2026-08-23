@@ -13,6 +13,7 @@ import { statusLabel } from "@/components/jobs/queue-labels"
 /** Approx px for icon + gaps + two action buttons + chip padding. */
 export const CHIP_CHROME_PX = 12 + 8 + 48 + 12
 
+/** Shared status column width in ch so chips don't jump as steps change. */
 export function statusSlotCh(maxSteps: number): number {
   const stepSample = maxSteps > 0 ? `${maxSteps}/${maxSteps}` : "0/0"
   return Math.max(
@@ -23,6 +24,7 @@ export function statusSlotCh(maxSteps: number): number {
   )
 }
 
+/** Shared label column width in ch, capped so one long name doesn't dominate. */
 export function labelSlotCh(labels: string[]): number {
   let longest = 10
   for (const label of labels) {
@@ -32,11 +34,13 @@ export function labelSlotCh(labels: string[]): number {
   return Math.min(18, longest)
 }
 
+/** Chip pixel width from chrome plus label/status character slots. */
 export function chipWidthPx(labelCh: number, statusCh: number): number {
   // text-xs ≈ 7px/ch for Outfit; mono status is similar with tabular-nums.
   return Math.round(CHIP_CHROME_PX + labelCh * 7 + statusCh * 7)
 }
 
+/** Compact rail chip; queued items drag, action slots stay two-wide. */
 export function SortableChip({
   item,
   stepLabel,

@@ -22,6 +22,7 @@ import {
   schedulePersistImageSession,
 } from "./session-persist"
 
+/** Prompt, size, live preview, and Generate/Cancel for the studio store. */
 export type GenerationSlice = {
   prompt: string
   aspectId: string
@@ -52,6 +53,7 @@ export type GenerationSlice = {
   setSideLength: Dispatch<SetStateAction<number>>
 }
 
+/** Zustand slice: prompt, size, live preview, and Generate / Cancel. */
 export const createGenerationSlice: StateCreator<
   StudioStore,
   [],

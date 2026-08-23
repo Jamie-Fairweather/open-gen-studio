@@ -68,14 +68,17 @@ export function parseGalleryRecipe(item: GalleryItem): GalleryRecipe | null {
   }
 }
 
+/** Convert a filesystem path to a webview-loadable asset URL (`convertFileSrc`). */
 export function gallerySrc(path: string): string {
   return convertFileSrc(path)
 }
 
+/** Catalog of saved generations via `list_gallery`. */
 export async function listGallery(): Promise<GalleryItem[]> {
   return commands.listGallery()
 }
 
+/** Register a file in the gallery via `add_gallery_item`. */
 export async function addGalleryItem(input: {
   path: string
   jobId?: string | null
@@ -90,6 +93,7 @@ export async function addGalleryItem(input: {
   )
 }
 
+/** Remove a gallery item and its files via `delete_gallery_item`. */
 export async function deleteGalleryItem(id: string): Promise<void> {
   await commands.deleteGalleryItem(id)
 }
@@ -99,6 +103,7 @@ export async function revealGalleryItem(id?: string | null): Promise<string> {
   return commands.revealGalleryItem(id ?? null)
 }
 
+/** Copy a gallery image onto the system clipboard via `copy_gallery_image_to_clipboard`. */
 export async function copyGalleryImageToClipboard(id: string): Promise<void> {
   await commands.copyGalleryImageToClipboard(id)
 }

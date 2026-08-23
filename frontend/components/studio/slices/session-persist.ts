@@ -35,6 +35,7 @@ const DEBOUNCE_MS = 400
 
 export type { PersistedImageToPrompt, PersistedPromptEnhance }
 
+/** Persisted v1 studio session: image fields plus tools path and prompt-tool drafts. */
 export type StudioSessionV1 = ImageSessionV1 & {
   toolsPath: string | null
   imageToPrompt: PersistedImageToPrompt
@@ -48,10 +49,12 @@ let debounceImage: ReturnType<typeof setTimeout> | null = null
 let debounceTools: ReturnType<typeof setTimeout> | null = null
 let getSource: (() => StudioSessionSource) | null = null
 
+/** Wire the persist writer to the live store getter. */
 export function bindSessionPersist(get: () => StudioSessionSource) {
   getSource = get
 }
 
+/** Compose image + tools fields into the v1 session blob. */
 export function serializeStudioSession(
   state: StudioSessionSource
 ): StudioSessionV1 {
@@ -66,6 +69,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v)
 }
 
+/** Parse a stored session JSON; null on empty, wrong version, or corrupt payload. */
 export function parseStudioSession(
   raw: string | undefined | null
 ): StudioSessionV1 | null {
@@ -117,6 +121,7 @@ function clearTimer(which: "image" | "tools") {
   }
 }
 
+/** Debounced image-session write; no-ops while the hydrate persist gate is on. */
 export function schedulePersistImageSession() {
   if (!isTauri() || blueprintSession.suppressImagePersist || !getSource) return
   clearTimer("image")
@@ -126,12 +131,14 @@ export function schedulePersistImageSession() {
   }, DEBOUNCE_MS)
 }
 
+/** Immediate image-session write; no-ops while the hydrate persist gate is on. */
 export function flushPersistImageSession() {
   if (!isTauri() || blueprintSession.suppressImagePersist || !getSource) return
   clearTimer("image")
   persistNow("image")
 }
 
+/** Debounced tools-session write (path + prompt-tool drafts). */
 export function schedulePersistToolsSession() {
   if (!isTauri() || !getSource) return
   clearTimer("tools")
@@ -141,6 +148,7 @@ export function schedulePersistToolsSession() {
   }, DEBOUNCE_MS)
 }
 
+/** Immediate tools-session write (path + prompt-tool drafts). */
 export function flushPersistToolsSession() {
   if (!isTauri() || !getSource) return
   clearTimer("tools")
@@ -153,6 +161,7 @@ export function schedulePersistSession() {
   schedulePersistToolsSession()
 }
 
+/** Flush image + tools now. Image writes no-op while the persist gate is on. */
 export function flushPersistSession() {
   flushPersistImageSession()
   flushPersistToolsSession()

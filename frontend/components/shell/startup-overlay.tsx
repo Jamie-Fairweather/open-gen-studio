@@ -32,6 +32,7 @@ export function canDismissStartupOverlay(opts: {
   return true
 }
 
+/** Splash cover until session/catalog hydrate — and until onboarding is opaque if first-run is required. */
 export function StartupOverlay() {
   const [phase, setPhase] = useState<Phase>("enter")
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)")

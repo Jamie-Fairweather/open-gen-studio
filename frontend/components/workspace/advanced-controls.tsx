@@ -68,6 +68,7 @@ type AdvancedControlsProps = {
   refineHeight?: number
 }
 
+/** Advanced rail body: sampling/seed, leftover blueprint controls, Refine, and LoRA stack. */
 export function AdvancedControls({
   controls,
   controlValues,

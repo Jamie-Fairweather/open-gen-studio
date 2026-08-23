@@ -8,9 +8,11 @@ import type {
 
 export const SETTING_ONBOARDING = "ui_onboarding_v1"
 
+/** First-run wizard page; `resolveOnboardingStep` may skip GPU/Specs when they don't apply. */
 export type OnboardingStep =
   "specs" | "storage" | "gpu" | "hf" | "blueprint" | "install"
 
+/** Persisted first-run snapshot (`ui_onboarding_v1`); invalid/unknown `step` parses as null. */
 export type OnboardingState = {
   step: OnboardingStep
   blueprintId: string | null
@@ -59,6 +61,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
   "install",
 ]
 
+/** Parse persisted onboarding JSON; invalid / unknown step → null. */
 export function parseOnboardingState(
   raw: string | null | undefined
 ): OnboardingState | null {
@@ -85,10 +88,12 @@ export function parseOnboardingState(
   }
 }
 
+/** Persist onboarding wizard state as a settings string. */
 export function serializeOnboardingState(state: OnboardingState): string {
   return JSON.stringify(state)
 }
 
+/** ComfyUI runtime is install-complete and usable (ready / running / starting). */
 export function isComfyReady(
   runtimes: RuntimeInstall[] | null | undefined
 ): boolean {
@@ -101,6 +106,7 @@ export function isComfyReady(
   )
 }
 
+/** ComfyUI runtime row is mid-install (not ready yet). */
 export function isComfyInstalling(
   runtimes: RuntimeInstall[] | null | undefined
 ): boolean {
@@ -108,6 +114,7 @@ export function isComfyInstalling(
   return comfy?.status === "installing"
 }
 
+/** At least one Official Blueprint has all model files on disk. */
 export function hasInstalledOfficialBlueprint(
   blueprints: Blueprint[] | null | undefined
 ): boolean {
@@ -128,6 +135,7 @@ export function needsOnboarding(
 /** Product name for the studio gate. Same check as `needsOnboarding`. */
 export const needsFirstRun = needsOnboarding
 
+/** GPU vendor picker is required and nothing is saved yet. */
 export function needsGpuStep(
   gpu: GpuInfo | null,
   savedVendor: string | null | undefined
@@ -136,6 +144,7 @@ export function needsGpuStep(
   return !savedVendor?.trim()
 }
 
+/** Bytes → GiB (1024³); null/non-finite/≤0 stay unknown. */
 export function bytesToGb(bytes: number | null | undefined): number | null {
   if (bytes == null || !Number.isFinite(bytes) || bytes <= 0) return null
   return bytes / (1024 * 1024 * 1024)
@@ -198,6 +207,7 @@ export function meetsMinimumSpecs(
   return ramGb >= MIN_RAM_GB && vramGb >= MIN_VRAM_GB
 }
 
+/** Show Hardware step unless the user already bypassed (or force-flag). */
 export function needsSpecsStep(opts: {
   specs: SystemSpecs | null | undefined
   specsBypassed: boolean
@@ -207,6 +217,7 @@ export function needsSpecsStep(opts: {
   return !meetsMinimumSpecs(opts.specs)
 }
 
+/** After Storage: GPU picker if needed, otherwise Blueprint. */
 export function stepAfterStorage(
   gpu: GpuInfo | null,
   savedVendor: string | null | undefined
@@ -266,6 +277,7 @@ export function officialBlueprintsForOnboarding(
   })
 }
 
+/** Split first-run packs into featured ids vs the rest (name-sorted). */
 export function partitionRecommended(blueprints: Blueprint[]): {
   recommended: Blueprint[]
   rest: Blueprint[]
@@ -283,10 +295,12 @@ export function partitionRecommended(blueprints: Blueprint[]): {
   return { recommended, rest }
 }
 
+/** Marketing blurb for a featured first-run Blueprint id. */
 export function recommendedBlurb(id: string): string | null {
   return ONBOARDING_RECOMMENDED.find((r) => r.id === id)?.blurb ?? null
 }
 
+/** Display GB for Hardware copy; floors so 15.6GB cannot look like 16. */
 export function formatSpecGb(gb: number | null | undefined): string {
   if (gb == null || !Number.isFinite(gb)) return "Unknown"
   // Floor to one decimal so 15.6GB doesn't round up past a 16GB minimum.

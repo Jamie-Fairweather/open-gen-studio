@@ -18,12 +18,14 @@ import {
 } from "@/lib/host"
 import { notifyError, notifySuccess } from "@/lib/notify"
 
+/** Edit target and save/clear callbacks for the user LoRA pack form. */
 export type UseCreatorLoraFormArgs = {
   editLoraId?: string | null
   onSaved: (pack: LoraPack) => void
   onEditCleared?: () => void
 }
 
+/** Load, CivitAI-expand, and save a user LoRA pack (create or edit). */
 export function useCreatorLoraForm({
   editLoraId = null,
   onSaved,

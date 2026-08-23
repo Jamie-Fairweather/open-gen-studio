@@ -69,6 +69,7 @@ type PromptBarProps = {
   onOpenPromptEnhancer?: () => void
 }
 
+/** Presentational generate bar. Does not subscribe to the store — pair with StudioPromptBar. */
 export function PromptBar({
   prompt,
   onPromptChange,

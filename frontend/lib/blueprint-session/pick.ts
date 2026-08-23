@@ -10,6 +10,7 @@ export function pickBlueprint(id: string) {
   blueprintSession.preferredBlueprintId = id
 }
 
+/** Persist Catalog pick to settings; fire-and-forget (errors swallowed). */
 export function persistPreferredBlueprint(id: string) {
   void setSetting(SETTING_SELECTED_BLUEPRINT, id).catch(() => {})
 }

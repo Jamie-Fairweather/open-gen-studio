@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
 
+/** Thick progress track; idle hides the indicator. */
 export function TransferRail({
   value,
   idle,

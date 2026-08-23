@@ -16,6 +16,7 @@ export const EMPTY_DOWNLOAD_SNAPSHOT: DownloadSnapshot = {
   history: [],
 }
 
+/** Download queue snapshot and transfer-speed state for the studio store. */
 export type DownloadsSlice = {
   downloadSnapshot: DownloadSnapshot
   /** Smoothed transfer rate (bytes/sec) for the active download. */
@@ -27,6 +28,7 @@ export type DownloadsSlice = {
   cancelDownload: (jobId: string) => Promise<void>
 }
 
+/** Zustand slice: download snapshot, speed, and pause/resume/cancel. */
 export const createDownloadsSlice: StateCreator<
   StudioStore,
   [],

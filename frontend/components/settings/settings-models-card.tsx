@@ -15,6 +15,7 @@ import {
 } from "@/lib/host"
 import { notifyError, notifySuccess } from "@/lib/notify"
 
+/** Models & data card: browse weights, open the library folder, and relocate the data dir. Move overlay stays until relaunch. */
 export function SettingsModelsCard({
   onBrowseModels,
 }: {

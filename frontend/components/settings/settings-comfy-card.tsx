@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button"
 import type { RuntimeInstall, RuntimePinsStatus } from "@/lib/host"
 
+/** Settings card props: Comfy install / start / stop. */
 export type SettingsComfyCardProps = {
   comfy: RuntimeInstall | null | undefined
   comfyHealthy: boolean
@@ -14,6 +15,7 @@ export type SettingsComfyCardProps = {
   onStopComfy: () => void
 }
 
+/** ComfyUI pin/status card. Start, stop, and reinstall are callbacks — not owned here. */
 export function SettingsComfyCard({
   comfy,
   comfyHealthy,

@@ -63,6 +63,7 @@ bun run ipc:check   # after IPC/DTO changes - fail if generated bindings drift
 - Prefer existing `lib/host.ts` wrappers over raw `invoke` in components.
 - Match neighboring file style (imports, naming, coss UI primitives).
 - Do not add `useMemo` / `useCallback` by default; follow React Compiler guidance in the project skills.
+- Exported functions and types (`type` / `interface` / `enum`) under `frontend/lib/**` and `frontend/components/**` need a JSDoc description (`jsdoc/require-jsdoc` + `require-description`). Say intent, an invariant, or a trap — not the name. Skip `components/ui` (coss wrappers) and `lib/generated`. Field-level comments only when a field is a trap.
 
 ---
 
@@ -70,6 +71,7 @@ bun run ipc:check   # after IPC/DTO changes - fail if generated bindings drift
 
 - Keep domain modules focused (`recipe/`, `blueprints/`, `prompt_tools/`, …); Specta command collection lives in `commands::specta_builder`, shared DTOs / export helpers in `ipc.rs`.
 - `cargo fmt` via project format scripts / husky.
+- Crate-public items (`pub` from `lib.rs` / `ipc`) need rustdoc. Result-returning public fns need `# Errors`. `unsafe` needs `# Safety`. `bun run lint:rust` / `missing_docs` enforces this.
 
 ---
 

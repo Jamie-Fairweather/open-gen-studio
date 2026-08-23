@@ -47,6 +47,7 @@ function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n))
 }
 
+/** Inspect overlay with pixel-zoom (fit = 1×, cap 800% native). Wheel/drag operate in image pixels, not CSS scale alone. */
 export function ImageLightbox({
   open,
   onOpenChange,

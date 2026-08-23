@@ -8,6 +8,7 @@ import type { SettingsSlice } from "./slices/settings"
 import type { ToolsSlice } from "./slices/tools"
 import type { UiSlice } from "./slices/ui"
 
+/** Full Zustand studio store: catalog, generate, gallery, downloads, settings, tools, UI. */
 export type StudioStore = CatalogSlice &
   GenerationSlice &
   GallerySlice &

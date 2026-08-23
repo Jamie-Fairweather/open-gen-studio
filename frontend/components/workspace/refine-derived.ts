@@ -1,6 +1,7 @@
 import type { UpscaleModelInfo } from "@/lib/host"
 import { isRecipeArch } from "@/lib/arch"
 
+/** Display-ready refine fields: selected model, scale, output size, and install busy flags. */
 export type RefineDerived = {
   selected: UpscaleModelInfo | undefined
   isSupir: boolean
@@ -17,6 +18,7 @@ export type RefineDerived = {
   usduBusy: boolean
 }
 
+/** Collapse model, USDU, and install flags into display-ready refine fields. SUPIR caps scale at 2×; turbo/guider arches change USDU UI. */
 export function deriveRefineState(opts: {
   models: UpscaleModelInfo[]
   modelId: string

@@ -28,6 +28,7 @@ export function registerHostListeners(
   return handles
 }
 
+/** Tear down every host listener stored on the handles object. */
 export function cleanupHostListeners(handles: HostListenerHandles) {
   handles.unlistenRuntimes?.()
   handles.unlistenProgress?.()

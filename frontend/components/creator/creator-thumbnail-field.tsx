@@ -24,6 +24,7 @@ async function bytesFromFile(
   return { bytes, ext }
 }
 
+/** Unsaved thumbnail bytes plus a blob URL for preview before the pack is written. */
 export type PendingThumbnail = {
   bytes: number[]
   ext: string
@@ -39,6 +40,7 @@ type CreatorThumbnailFieldProps = {
   onClear: () => void | Promise<void>
 }
 
+/** Pick or clear a PNG/JPEG/WebP thumbnail; desktop-only file bytes. */
 export function CreatorThumbnailField({
   savedPath = null,
   pending = null,

@@ -3,6 +3,7 @@ export const SPEED_MIN_MS = 5_000
 
 type SpeedSample = { t: number; bytes: number; url: string }
 
+/** Host download progress event; `total` is null/undefined until the remote reports a size. */
 export type DownloadProgressPayload = {
   done: boolean
   downloaded: number

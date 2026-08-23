@@ -4,6 +4,7 @@ import type {
   HostListenerHandles,
 } from "@/components/studio/bootstrap/host-listeners-shared"
 
+/** Bind gallery-updated and gallery-deleted host events; writes items and selection into the store. */
 export function registerGalleryListeners(
   handles: HostListenerHandles,
   getStore: GetStore

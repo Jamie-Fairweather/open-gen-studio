@@ -1,6 +1,7 @@
 import type { JobQueueItem } from "@/lib/host"
 import type { FinishGenerateLaneInput, FinishGenerateLaneResult } from "./types"
 
+/** Store slice `finishGenerateJob` writes (queue, generating, live preview). */
 export type GenerateLaneHost = {
   jobQueue: readonly JobQueueItem[]
   activeJobId: string | null
@@ -28,6 +29,7 @@ export function finishGenerateLane(
   }
 }
 
+/** Apply finishGenerateLane to the studio store (queue, generating, preview). */
 export function finishGenerateJob(
   getStore: () => GenerateLaneHost,
   jobId: string

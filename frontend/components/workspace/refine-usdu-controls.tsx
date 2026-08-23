@@ -11,6 +11,7 @@ import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { RefineInstallButton } from "./refine-install-button"
 
+/** USDU toggle/scale/steps props; install kicks when enabling a missing node. */
 export type RefineUsduControlsProps = {
   usduEnabled: boolean
   onUsduEnabledChange: (enabled: boolean) => void
@@ -30,6 +31,7 @@ export type RefineUsduControlsProps = {
   onEnsureUsdu: () => void
 }
 
+/** USDU toggle and scale. Enabling a missing node kicks install. Guider arches hide steps/denoise (reuse Blueprint sampler). */
 export function RefineUsduControls({
   usduEnabled,
   onUsduEnabledChange,

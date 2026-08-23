@@ -23,6 +23,7 @@ function persistBool(key: string, value: boolean) {
 const FRESH_CHIP_MS = 2000
 let freshChipTimer: ReturnType<typeof setTimeout> | null = null
 
+/** Chrome, rails, job-queue pulse, and Tools handoff for the studio store. */
 export type UiSlice = {
   desktop: boolean
   studioTab: StudioTab
@@ -75,6 +76,7 @@ export type UiSlice = {
   SIDE_RAIL_WIDTH: typeof SIDE_RAIL_WIDTH
 }
 
+/** Zustand slice: chrome, rails, job-queue pulse, and Tools handoff navigation. */
 export const createUiSlice: StateCreator<StudioStore, [], [], UiSlice> = (
   set,
   get

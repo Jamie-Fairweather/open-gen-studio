@@ -59,6 +59,7 @@ type CreatorPanelProps = {
   onEditCleared?: () => void
 }
 
+/** Creator home: user blueprints and LoRA packs, list or editor. */
 export function CreatorPanel({
   onBlueprintsChanged,
   editBlueprintId = null,

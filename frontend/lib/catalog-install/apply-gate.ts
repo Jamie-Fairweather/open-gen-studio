@@ -1,5 +1,6 @@
 import type { CatalogGatePatch, CatalogRow, GateNeed } from "./types"
 
+/** Map a gate need + pending row onto Catalog dialog / pending-id state. */
 export function catalogGatePatch(
   need: GateNeed,
   pending: CatalogRow

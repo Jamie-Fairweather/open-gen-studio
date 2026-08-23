@@ -1,6 +1,7 @@
 import { defineConfig, globalIgnores } from "eslint/config"
 import nextVitals from "eslint-config-next/core-web-vitals"
 import nextTs from "eslint-config-next/typescript"
+import jsdoc from "eslint-plugin-jsdoc"
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -10,6 +11,36 @@ const eslintConfig = defineConfig([
       next: {
         rootDir: "frontend/",
       },
+    },
+  },
+  {
+    files: ["frontend/lib/**/*.{ts,tsx}", "frontend/components/**/*.{ts,tsx}"],
+    ignores: ["frontend/lib/generated/**", "frontend/components/ui/**"],
+    plugins: { jsdoc },
+    settings: {
+      jsdoc: { mode: "typescript" },
+    },
+    rules: {
+      "jsdoc/require-jsdoc": [
+        "error",
+        {
+          publicOnly: true,
+          enableFixer: false,
+          require: {
+            ArrowFunctionExpression: true,
+            ClassDeclaration: true,
+            FunctionDeclaration: true,
+            FunctionExpression: true,
+            MethodDefinition: false,
+          },
+          contexts: [
+            "TSTypeAliasDeclaration",
+            "TSInterfaceDeclaration",
+            "TSEnumDeclaration",
+          ],
+        },
+      ],
+      "jsdoc/require-description": "error",
     },
   },
   // Override default ignores of eslint-config-next.

@@ -11,6 +11,7 @@ import {
 import type { UpscaleModelInfo } from "@/lib/host"
 import { RefineInstallButton } from "./refine-install-button"
 
+/** Upscale-model picker props: catalog, install status, and output-size readout. */
 export type RefineModelSelectProps = {
   models: UpscaleModelInfo[]
   selected: UpscaleModelInfo | undefined
@@ -32,6 +33,7 @@ export type RefineModelSelectProps = {
   effectiveScale: number
 }
 
+/** Upscale-model picker; install status lives in the option label. Shows output size when dimensions are known. */
 export function RefineModelSelect({
   models,
   selected,

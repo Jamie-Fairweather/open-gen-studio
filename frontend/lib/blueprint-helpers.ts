@@ -9,10 +9,12 @@ import { defaultUsduDenoise, defaultUsduSteps } from "@/lib/host"
 
 const DEFAULT_UPSCALE_MODEL_ID = "4x-nomos2-hq-dat2"
 
+/** True when every required model file is already on disk (or the pack has none). */
 export function isInstalled(bp: Blueprint): boolean {
   return bp.modelCount === 0 || bp.modelsReady >= bp.modelCount
 }
 
+/** Catalog card origin pill — Mine is user-authored; Official until Registry ships. */
 export type CatalogOriginLabel = "Official" | "Mine" | "Registry"
 
 /** Origin pill. `user` is Mine; anything else Official until Registry ships. */
@@ -22,12 +24,14 @@ export function catalogOriginLabel(source: string): CatalogOriginLabel {
   return "Official"
 }
 
+/** Catalog card badge: Installed vs Not installed. */
 export function catalogInstallLabel(
   installed: boolean
 ): "Installed" | "Not installed" {
   return installed ? "Installed" : "Not installed"
 }
 
+/** Prefer saved id, else first installed pack for the media tab, else first in list. */
 export function pickDefaultBlueprintId(
   bps: Blueprint[],
   preferred: string | null | undefined,
@@ -62,6 +66,7 @@ export type ReusedUpscaleSettings = {
   usduDenoise: number
 }
 
+/** Hydrate Refine / USDU from gallery `values.upscale`; missing/invalid → defaults. */
 export function upscaleFromRecipe(
   recipe: GalleryRecipe,
   arch?: string | null
@@ -106,6 +111,7 @@ export function upscaleFromRecipe(
   }
 }
 
+/** Rebuild LoRA stack from gallery `values.loras`; older items map filename → pack id. */
 export function lorasFromRecipe(
   recipe: GalleryRecipe,
   packs: LoraPack[]

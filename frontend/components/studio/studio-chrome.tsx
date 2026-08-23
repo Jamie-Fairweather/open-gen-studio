@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import { WithTooltip } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
+/** Desktop shell: titlebar tabs, job-queue rail, and store-wired dialogs. Browser visitors get a desktop-only notice. */
 export function StudioChrome({ children }: { children: ReactNode }) {
   const desktop = useStudioStore((s) => s.desktop)
   const studioTab = useStudioStore((s) => s.studioTab)

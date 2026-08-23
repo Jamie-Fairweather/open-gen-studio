@@ -63,6 +63,7 @@ function PromptBlock({
   )
 }
 
+/** Compact history list row: thumb, status, and Shift-click delete. */
 export function HistoryRow({
   item,
   selected,
@@ -145,6 +146,7 @@ export function HistoryRow({
   )
 }
 
+/** Selected history item: preview, copy/reuse, and prompt or enhance I/O. */
 export function HistoryDetail({ item }: { item: JobHistoryItem }) {
   const {
     thumb,

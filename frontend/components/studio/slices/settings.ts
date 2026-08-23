@@ -27,6 +27,7 @@ const catalogHost = {
   installRuntime: installComfyui,
 }
 
+/** Provider tokens, gated-terms dialogs, and blueprint install/uninstall for the studio store. */
 export type SettingsSlice = {
   /** True when a token is stored in the OS credential store. */
   hasHfToken: boolean
@@ -72,6 +73,7 @@ export type SettingsSlice = {
   handleUninstallBlueprint: (id: string) => Promise<void>
 }
 
+/** Zustand slice: provider tokens, gated-terms dialogs, and blueprint install/uninstall. */
 export const createSettingsSlice: StateCreator<
   StudioStore,
   [],

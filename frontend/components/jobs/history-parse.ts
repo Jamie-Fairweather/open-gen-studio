@@ -1,5 +1,6 @@
 import type { JobHistoryItem } from "@/lib/host"
 
+/** Display fields derived from a history row: thumbnail, prompts, and size/seed labels. */
 export type HistoryParsed = {
   thumb: JobHistoryItem["galleryItems"][number] | undefined
   /** Generate prompt, or single tool output when there is no separate input. */
@@ -18,6 +19,7 @@ export type HistoryParsed = {
 
 const historyParseCache = new Map<string, HistoryParsed>()
 
+/** Cache-keyed parse of a history row: prompt, size/seed, or prompt-tool I/O. */
 export function parseHistoryItem(item: JobHistoryItem): HistoryParsed {
   const thumb = item.galleryItems[0]
   const key = `${item.jobId}:${item.updatedAt}:${thumb?.id ?? ""}`

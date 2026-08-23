@@ -12,6 +12,7 @@ import {
 } from "@/components/studio/selectors"
 import { useStudioSelector, useStudioStore } from "@/components/studio/store"
 
+/** Stage store bindings: insets, live vs still src, lightbox, and follow-live. */
 export function useMediaStageProps() {
   const showAdvancedRail = useStudioSelector(selectShowAdvancedRail)
   const showGalleryRail = useStudioSelector(selectShowGalleryRail)

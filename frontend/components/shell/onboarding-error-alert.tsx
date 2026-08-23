@@ -1,6 +1,7 @@
 import { CircleAlertIcon } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
+/** First-run error alert (title + description). Shared by overlay steps. */
 export function OnboardingErrorAlert({
   title,
   description,

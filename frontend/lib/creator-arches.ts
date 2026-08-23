@@ -3,8 +3,10 @@
 import type { RecipeCapabilities } from "@/lib/generated/bindings"
 import { isRecipeArch, type RecipeArch } from "@/lib/arch"
 
+/** Creator/recipe architecture id — same closed set as IPC `RecipeArch`. */
 type ArchId = RecipeArch
 
+/** One downloadable weight slot for an arch; `defaultUrl` prefills the stock companion. */
 type ModelSlotDef = {
   role: string
   path: string
@@ -14,6 +16,7 @@ type ModelSlotDef = {
   defaultUrl?: string
 }
 
+/** Creator UI arch registry row — product metadata (slots/defaults), not an IPC DTO. */
 type ArchDef = {
   id: ArchId
   label: string
@@ -570,9 +573,11 @@ const ARCHES: ArchDef[] = [
 
 const ARCH_ITEMS = ARCHES.map((a) => ({ label: a.label, value: a.id }))
 
+/** Creator arch registry types — product metadata (slots/defaults), not IPC DTOs. */
 export type { ArchId, ModelSlotDef, ArchDef }
 export { ARCHES, ARCH_ITEMS }
 
+/** Type guard: string is a Creator/RecipeArch id (same closed set as IPC). */
 export function isArchId(value: string): value is ArchId {
   return isRecipeArch(value)
 }

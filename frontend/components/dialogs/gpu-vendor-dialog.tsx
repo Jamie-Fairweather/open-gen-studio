@@ -21,6 +21,7 @@ const VENDOR_LABEL: Record<GpuVendor, string> = {
   intel: "Intel",
 }
 
+/** One GPU vendor choice: the vendor id and a representative adapter. */
 export type GpuVendorOption = {
   vendor: GpuVendor
   adapter: GpuAdapter
@@ -49,6 +50,7 @@ export function parseMemoryMib(memoryTotal: string | null | undefined): number {
   return n
 }
 
+/** First-run (or Settings) pick among GPU vendors on a multi-vendor PC. */
 export function GpuVendorDialog({
   open,
   dismissible = false,

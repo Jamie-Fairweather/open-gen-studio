@@ -13,6 +13,7 @@ import type {
   HostListenerHandles,
 } from "@/components/studio/bootstrap/host-listeners-shared"
 
+/** Bind blueprint probe, sizes, progress, and catalog-updated host events; writes into the store. */
 export function registerBlueprintListeners(
   handles: HostListenerHandles,
   getStore: GetStore

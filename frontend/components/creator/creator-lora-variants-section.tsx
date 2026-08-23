@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { RECIPE_ARCHES, isRecipeArch } from "@/lib/arch"
 import { PlusIcon, Trash2Icon } from "lucide-react"
 
+/** Per-arch download URLs and the CivitAI expand action for a LoRA pack. */
 export type CreatorLoraVariantsSectionProps = {
   variants: VariantRow[]
   setVariants: Dispatch<SetStateAction<VariantRow[]>>
@@ -22,6 +23,7 @@ export type CreatorLoraVariantsSectionProps = {
   tryExpandFromUrl: (raw: string) => Promise<void>
 }
 
+/** Per-arch download URLs; first-row CivitAI paste expands the pack. */
 export function CreatorLoraVariantsSection({
   variants,
   setVariants,

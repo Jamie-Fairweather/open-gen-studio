@@ -22,6 +22,7 @@ const fieldLabel = "text-[11px] font-medium text-muted-foreground"
 const sectionTitle =
   "text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase"
 
+/** Sampler, scheduler, steps, and CFG or guidance defaults for the chosen architecture. */
 export type RecipeDefaultsSectionProps = {
   archId: ArchId
   arch: ArchDef
@@ -39,6 +40,7 @@ export type RecipeDefaultsSectionProps = {
   setAllowNegative: (allow: boolean) => void
 }
 
+/** Sampler/scheduler plus steps and CFG or guidance for the chosen arch. */
 export function RecipeDefaultsSection({
   archId,
   arch,

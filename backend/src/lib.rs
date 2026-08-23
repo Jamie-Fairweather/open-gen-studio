@@ -1,3 +1,5 @@
+//! Open Gen Studio Tauri backend: ComfyUI host, jobs, catalog, and IPC.
+
 mod app_paths;
 mod archive_zip;
 mod blueprints;
@@ -50,6 +52,7 @@ fn shutdown_comfy(app: &tauri::AppHandle) {
     }
 }
 
+/// Start the desktop app: window, DB, ComfyUI worker, and command handlers.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Avoid Windows "python313.dll was not found" message boxes hanging install.

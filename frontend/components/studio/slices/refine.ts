@@ -26,6 +26,7 @@ const catalogHost = {
   installRuntime: installComfyui,
 }
 
+/** LoRA stack, Refine/USDU, and catalog-install starts for the studio store. */
 export type RefineSlice = {
   loraStack: LoraStackEntry[]
   upscaleEnabled: boolean
@@ -50,6 +51,7 @@ export type RefineSlice = {
   beginPromptToolsInstall: (provider?: string) => Promise<void>
 }
 
+/** Zustand slice: LoRA stack, Refine/USDU, and catalog install starts. */
 export const createRefineSlice: StateCreator<
   StudioStore,
   [],

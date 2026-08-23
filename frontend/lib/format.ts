@@ -1,3 +1,4 @@
+/** Human size for catalog / download rows (1024-based). */
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
   if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`
@@ -5,6 +6,7 @@ export function formatBytes(n: number): string {
   return `${(n / 1024 ** 3).toFixed(2)} GB`
 }
 
+/** Elapsed/remaining as `45s` / `3m 12s` / `1h 5m`; invalid → `-`. */
 export function formatDuration(secs: number): string {
   if (!Number.isFinite(secs) || secs < 0) return "-"
   if (secs < 60) return `${Math.max(1, Math.ceil(secs))}s`

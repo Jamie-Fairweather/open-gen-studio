@@ -1,6 +1,7 @@
 import type { DownloadSpec, EnsureResult } from "@/lib/host"
 import type { CatalogInstallHost, CatalogRow } from "./types"
 
+/** Build a DownloadSpec from a Catalog row (runtime is handled separately). */
 export function downloadSpecFor(
   row: Exclude<CatalogRow, { kind: "runtime" }>
 ): DownloadSpec {
@@ -16,6 +17,7 @@ export function downloadSpecFor(
   }
 }
 
+/** Kick off Catalog install: runtime path vs ensureDownload(wait:false). */
 export async function startCatalogInstall(
   row: CatalogRow,
   host: CatalogInstallHost

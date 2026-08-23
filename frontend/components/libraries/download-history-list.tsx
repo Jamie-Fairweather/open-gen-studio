@@ -5,6 +5,7 @@ import { WithTooltip } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { statusLabel } from "./download-progress"
 
+/** Recent finished download jobs (empty list renders nothing). */
 export function DownloadHistoryList({
   history,
 }: {

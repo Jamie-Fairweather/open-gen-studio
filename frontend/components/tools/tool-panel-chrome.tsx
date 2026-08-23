@@ -10,6 +10,7 @@ import {
 } from "@/components/shell"
 import { Button } from "@/components/ui/button"
 
+/** Studio-panel chrome for one tool, with a back link to the Tools index. */
 export function ToolPanelChrome({
   title,
   description,

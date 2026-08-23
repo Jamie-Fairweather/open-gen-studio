@@ -49,6 +49,7 @@ import {
 } from "@/lib/host"
 import { notifyError, notifySuccess } from "@/lib/notify"
 
+/** Full-size queue: sortable active lane plus finished-job history. */
 export function JobQueueExpandDialog() {
   const open = useStudioStore((s) => s.queueExpandOpen)
   const setOpen = useStudioStore((s) => s.setQueueExpandOpen)

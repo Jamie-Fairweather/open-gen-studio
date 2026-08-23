@@ -22,6 +22,7 @@ import {
   targetFromArch,
 } from "@/lib/prompt-tools"
 
+/** Prompt Enhancer: seed once from handoff or studio prompt, then enhance/edit. Does not write studio until confirm. */
 export function PromptEnhancerPanel() {
   const studioPrompt = useStudioStore((s) => s.prompt)
   const consumeToolsHandoff = useStudioStore((s) => s.consumeToolsHandoff)

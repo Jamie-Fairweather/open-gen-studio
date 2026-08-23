@@ -25,6 +25,7 @@ type DownloadsPanelProps = {
   onCancel: (jobId: string) => void
 }
 
+/** Downloads tab: active transfer, queue, and recent history. */
 export function DownloadsPanel({
   snapshot,
   speedBps = 0,

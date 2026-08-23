@@ -9,6 +9,7 @@ type BlueprintModels = {
   models?: GatedModel[] | null
 }
 
+/** Deduped HF repos from a blueprint's gated models; empty on detail-load failure. */
 export async function collectGatedRepos(
   id: string,
   getBlueprint: (id: string) => Promise<BlueprintModels>

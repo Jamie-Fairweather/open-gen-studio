@@ -30,6 +30,7 @@ import {
   schedulePersistToolsSession,
 } from "./session-persist"
 
+/** Draft + job state for Image-to-Prompt; `fields` is set only for structured formats. */
 export type ImageToPromptToolState = {
   imagePath: string | null
   previewUrl: string | null
@@ -45,6 +46,7 @@ export type ImageToPromptToolState = {
   galleryOpen: boolean
 }
 
+/** Draft + job state for Prompt Enhance; `seeded` marks a studio Enhance handoff. */
 export type PromptEnhanceToolState = {
   input: string
   result: string
@@ -59,6 +61,7 @@ export type PromptEnhanceToolState = {
   seeded: boolean
 }
 
+/** Image-to-Prompt and Prompt Enhance job state for the studio store. */
 export type ToolsSlice = {
   imageToPrompt: ImageToPromptToolState
   promptEnhance: PromptEnhanceToolState
@@ -119,6 +122,7 @@ function applyResultText(
   return { result: text, fields: null }
 }
 
+/** Flatten structured Image-to-Prompt fields for display; otherwise the raw result text. */
 export function displayImageToPrompt(state: ImageToPromptToolState): string {
   if (
     state.fields &&
@@ -141,6 +145,7 @@ function activeArchOf(get: () => StudioStore): string | undefined {
   return computeActiveDetail(state.detail, activeSelectedId)?.arch
 }
 
+/** Zustand slice: Image-to-Prompt and Prompt Enhance jobs, plus their progress routing. */
 export const createToolsSlice: StateCreator<StudioStore, [], [], ToolsSlice> = (
   set,
   get

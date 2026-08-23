@@ -16,6 +16,7 @@ type SideRailProps = {
   className?: string
 }
 
+/** Slide-in rail that stays mounted when closed (translate + pointer-events-none). */
 export function SideRail({
   open,
   side,
@@ -46,6 +47,7 @@ export function SideRail({
   )
 }
 
+/** Centered rail title with optional count and trailing action. */
 export function SideRailHeader({
   title,
   count,
@@ -82,6 +84,7 @@ export function SideRailHeader({
   )
 }
 
+/** Scrollable padded column for rail content. */
 export function SideRailBody({
   children,
   className,
@@ -107,6 +110,7 @@ type SideRailHandleProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   tooltip?: string
 }
 
+/** Edge tab whose transform tracks the rail so it rides the same 300ms open/close. */
 export function SideRailHandle({
   side,
   open,

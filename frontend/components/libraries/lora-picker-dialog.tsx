@@ -64,6 +64,7 @@ function isReadyForArch(pack: LoraPack, arch: string | null | undefined) {
   return v?.ready ?? false
 }
 
+/** Catalog picker scoped to an arch: add to stack or install/uninstall files. */
 export function LoraPickerDialog({
   open,
   onOpenChange,

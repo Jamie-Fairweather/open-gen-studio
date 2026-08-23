@@ -1,5 +1,6 @@
 /** Aspect ratio + side-length → pixel size (area-preserving). */
 
+/** Preset aspect for the size slider; `id` is the ratio string, `w`/`h` are the integer parts used to preserve area. */
 export type AspectRatio = {
   id: string
   /** Short id shown in the toolbar, e.g. "16:9". */
@@ -44,11 +45,13 @@ export const SIDE_LENGTH_DEFAULT = 1024
 /** Quick picks shown above the fine slider. */
 export const SIDE_LENGTH_PRESETS = [512, 768, 1024, 1536, 2048] as const
 
+/** Snap n to the nearest multiple (or Math.round if multiple ≤ 0). */
 export function roundTo(n: number, multiple: number): number {
   if (multiple <= 0) return Math.round(n)
   return Math.max(multiple, Math.round(n / multiple) * multiple)
 }
 
+/** Clamp side length to slider range and snap to SIDE_LENGTH_STEP. */
 export function clampSideLength(side: number): number {
   const clamped = Math.min(SIDE_LENGTH_MAX, Math.max(SIDE_LENGTH_MIN, side))
   return roundTo(clamped, SIDE_LENGTH_STEP)
@@ -90,6 +93,7 @@ export function sideLengthFromSize(width: number, height: number): number {
   return clampSideLength(Math.sqrt(width * height))
 }
 
+/** Derive aspect + side slider from a width×height pair (gallery reuse). */
 export function syncSizeControls(
   width: number,
   height: number

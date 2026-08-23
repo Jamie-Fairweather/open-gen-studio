@@ -39,6 +39,7 @@ export const blueprintSession = {
   suppressImagePersist: true,
 }
 
+/** Clear hydrate flags so the next Catalog load starts from pack defaults. */
 export function resetBlueprintSession() {
   blueprintSession.preferredBlueprintId = null
   blueprintSession.pendingRecipe = null

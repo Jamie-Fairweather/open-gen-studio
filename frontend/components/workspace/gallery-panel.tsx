@@ -252,6 +252,7 @@ const LiveGalleryTile = memo(function LiveGalleryTile({
   )
 })
 
+/** Right-rail gallery: select, reuse, copy, delete, and optional Live follow tile. */
 export function GalleryPanel({
   open,
   title = "Gallery",

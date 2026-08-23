@@ -59,6 +59,7 @@ type SettingsPanelProps = {
   onGpuVendorChanged?: () => void
 }
 
+/** Settings page: hydrates GPU pins/vendor, persists NVIDIA override, and reinstalls Comfy when the vendor changes. */
 export function SettingsPanel({
   onBrowseModels,
   comfy,

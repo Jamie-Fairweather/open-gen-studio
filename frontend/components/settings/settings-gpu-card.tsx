@@ -34,6 +34,7 @@ function nvidiaOverrideItem(value: "" | NvidiaVariant): NvidiaOverrideItem {
   )
 }
 
+/** Settings card props: GPU readout and NVIDIA portable override. */
 export type SettingsGpuCardProps = {
   gpu: GpuInfo | null
   activeVendor: GpuVendor | null
@@ -46,6 +47,7 @@ export type SettingsGpuCardProps = {
   onSaveNvidiaOverride: (next: "" | NvidiaVariant) => void
 }
 
+/** GPU readout and NVIDIA portable override. Vendor change is a callback and may require Comfy reinstall. */
 export function SettingsGpuCard({
   gpu,
   activeVendor,

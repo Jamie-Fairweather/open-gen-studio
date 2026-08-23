@@ -1,3 +1,4 @@
+/** IPC DTOs from Rust (`bun run ipc:types`). Prefer these over importing bindings. */
 export type {
   BindableInput,
   Blueprint,
@@ -55,11 +56,16 @@ import type {
   UpscaleKind,
 } from "@/lib/generated/bindings"
 
+/** Official catalog row — same shape as `Blueprint`, source is always official. */
 export type OfficialBlueprint = Blueprint
+/** One model slot on a Blueprint (checkpoint / VAE / …). */
 export type BlueprintModelEntry = BlueprintModelInfo
+/** Download host (`huggingface` | `civitai` | …). */
 export type ModelProvider = ProviderKind
 
+/** Studio media tab — maps to recipe category. */
 export type MediaCategory = "image" | "video" | "audio"
+/** Top-level studio route, including non-media panels. */
 export type StudioTab =
   MediaCategory | "creator" | "downloads" | "tools" | "settings"
 
@@ -70,6 +76,7 @@ export type ToolsHandoff = {
   negative?: string
 }
 
+/** Recipe snapshot stored on a gallery item (replay / send-to-generate). */
 export type GalleryRecipe = {
   blueprintId: string | null
   blueprintName: string | null

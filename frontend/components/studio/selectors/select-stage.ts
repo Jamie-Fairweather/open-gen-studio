@@ -5,6 +5,7 @@ import type { StudioStore } from "../studio-store-types"
 import { selectPreviewItem } from "./select-catalog"
 import { selectShowAdvancedRail, selectShowGalleryRail } from "./select-tabs"
 
+/** Pixel size from the current aspect + side-length pair. */
 export function selectResolvedSize(s: StudioStore): {
   width: number
   height: number
@@ -12,6 +13,7 @@ export function selectResolvedSize(s: StudioStore): {
   return sizeFromAspectAndSide(s.aspectId, s.sideLength)
 }
 
+/** WxH label from control values when valid; otherwise the resolved aspect size. */
 export function selectSizeLabel(s: StudioStore): string {
   const width = Number(s.controlValues.width)
   const height = Number(s.controlValues.height)
@@ -27,6 +29,7 @@ export function selectSizeLabel(s: StudioStore): string {
   return `${resolved.width}×${resolved.height}`
 }
 
+/** Stage pixel size: live controls while following a preview, else the selected item's recipe, else controls. */
 export function selectStageDims(s: StudioStore): {
   width: number
   height: number
@@ -62,12 +65,14 @@ export function selectStageDims(s: StudioStore): {
   )
 }
 
+/** Left inset when the advanced rail is open; undefined when that rail is hidden. */
 export function selectStageInsetLeft(s: StudioStore): string | undefined {
   return selectShowAdvancedRail(s) && s.advancedOpen
     ? SIDE_RAIL_WIDTH
     : undefined
 }
 
+/** Right inset when the gallery rail is open; undefined when that rail is hidden. */
 export function selectStageInsetRight(s: StudioStore): string | undefined {
   return selectShowGalleryRail(s) && s.galleryOpen ? SIDE_RAIL_WIDTH : undefined
 }

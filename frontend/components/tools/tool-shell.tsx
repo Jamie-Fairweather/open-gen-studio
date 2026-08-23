@@ -23,6 +23,7 @@ export function ToolSurface({
   )
 }
 
+/** Surface title row with optional trailing actions. */
 export function ToolSurfaceHeader({
   title,
   actions,
@@ -44,6 +45,7 @@ export function ToolSurfaceHeader({
   )
 }
 
+/** Quiet muted label for tool fields and chip rows. */
 export function ToolFieldLabel({ children }: { children: ReactNode }) {
   return (
     <span className="text-xs font-medium text-muted-foreground">

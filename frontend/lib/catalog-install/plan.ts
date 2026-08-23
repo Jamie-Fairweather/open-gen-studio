@@ -1,6 +1,7 @@
 import { isCivitaiUrl } from "./job-keys"
 import type { PlanCatalogInstallInput, PlanCatalogInstallResult } from "./types"
 
+/** Decide proceed vs token/terms gate before starting a Catalog download. */
 export async function planCatalogInstall(
   input: PlanCatalogInstallInput
 ): Promise<PlanCatalogInstallResult> {

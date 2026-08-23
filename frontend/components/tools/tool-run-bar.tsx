@@ -3,6 +3,7 @@
 import { Loader2Icon, SparklesIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
+/** Run/cancel strip plus status/error for a tool job. */
 export function ToolRunBar({
   label,
   busy,

@@ -37,7 +37,7 @@ function setSharedFullscreen(next: boolean) {
   for (const listener of fullscreenListeners) listener()
 }
 
-/** @internal vitest */
+/** Reset shared fullscreen flag between tests. @internal vitest */
 export function resetTitlebarFullscreenForTests() {
   setSharedFullscreen(false)
 }

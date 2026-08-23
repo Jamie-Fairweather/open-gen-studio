@@ -112,6 +112,7 @@ export function previewBlueprintSteps(
   ]
 }
 
+/** First-run install rail props: download snapshot, blueprint, and retry ownership. */
 export type OnboardingInstallProgressProps = {
   snapshot: DownloadSnapshot
   blueprintId: string | null
@@ -124,6 +125,7 @@ export type OnboardingInstallProgressProps = {
   hideRetry?: boolean
 }
 
+/** First-run install rail: merges runtime + blueprint jobs, using preview steps until the blueprint job exists. */
 export function OnboardingInstallProgress({
   snapshot,
   blueprintId,

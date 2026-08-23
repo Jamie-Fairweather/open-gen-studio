@@ -13,6 +13,7 @@ type AdvancedPanelProps = {
   children: ReactNode
 }
 
+/** Left rail that hosts Advanced controls. */
 export function AdvancedPanel({ open, children }: AdvancedPanelProps) {
   return (
     <SideRail open={open} side="left" width={SIDE_RAIL_WIDTH}>

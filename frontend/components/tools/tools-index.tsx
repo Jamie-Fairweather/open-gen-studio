@@ -26,6 +26,7 @@ const TOOLS = [
   },
 ] as const
 
+/** Tools catalog — utility workflows that feed Image Studio. */
 export function ToolsIndex() {
   return (
     <StudioPanel className="min-h-0 flex-1">

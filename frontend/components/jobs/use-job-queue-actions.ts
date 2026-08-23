@@ -48,6 +48,7 @@ export function useJobQueueActions() {
   }
 }
 
+/** Live sampler progress for the running generate job only. */
 export function runningStepLabel(
   jobQueue: JobQueueItem[],
   genStep: { jobId: string; step: number; max: number } | null

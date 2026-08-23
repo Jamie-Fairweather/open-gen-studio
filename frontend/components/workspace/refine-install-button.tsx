@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { WithTooltip } from "@/components/ui/tooltip"
 
+/** Icon-button props for refine download / queued / installing states. */
 export type RefineInstallButtonProps = {
   installing: boolean
   queued: boolean

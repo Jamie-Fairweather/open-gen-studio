@@ -314,6 +314,7 @@ export async function runStartupLoad(
   void runtimesP.catch(() => {})
 }
 
+/** Run the tiered startup load; on failure still dismiss the splash and pick a default blueprint. */
 export async function runStartupLoadSafe(
   router: AppRouterInstance,
   getStore: () => Store = () => useStudioStore.getState()

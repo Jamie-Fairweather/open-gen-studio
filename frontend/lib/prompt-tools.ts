@@ -3,7 +3,9 @@
 import type { PromptFormat, PromptTarget } from "@/lib/generated/bindings"
 import { isRecipeArch } from "@/lib/arch"
 
+/** Prompt Tools format id — same closed set as the IPC `PromptFormat` enum. */
 export type PromptFormatId = PromptFormat
+/** Prompt Tools model-family target; `auto` lets the host pick from the recipe arch. */
 export type PromptTargetId = PromptTarget
 
 export const PROMPT_FORMATS: {
@@ -47,6 +49,7 @@ export const STYLE_LOOKS: { id: string; label: string }[] = [
   { id: "portrait", label: "Portrait" },
 ]
 
+/** Encode enhance mode for IPC; Style becomes `style:<look>`. */
 export function enhanceModePayload(
   mode: string,
   styleLook: string = "cinematic"
@@ -66,11 +69,13 @@ export const STRUCTURED_FIELDS = [
   "Details",
 ] as const
 
+/** Labeled-section editors for Structured format; keys are display labels, not snake_case. */
 export type StructuredFields = Record<
   (typeof STRUCTURED_FIELDS)[number],
   string
 >
 
+/** Empty labeled-section editors for Structured format. */
 export function emptyStructuredFields(): StructuredFields {
   return {
     Subject: "",
@@ -135,12 +140,14 @@ export function parseStructuredPrompt(text: string): StructuredFields | null {
   return hit ? fields : null
 }
 
+/** Join filled structured fields back to labeled prompt text. */
 export function flattenStructuredFields(fields: StructuredFields): string {
   return STRUCTURED_FIELDS.filter((k) => fields[k].trim())
     .map((k) => `${k}: ${fields[k].trim()}`)
     .join("\n")
 }
 
+/** Map a recipe arch (or loose alias) onto a Prompt Tools target. */
 export function targetFromArch(arch?: string | null): PromptTargetId {
   if (!arch || !isRecipeArch(arch)) {
     const a = (arch ?? "").toLowerCase()

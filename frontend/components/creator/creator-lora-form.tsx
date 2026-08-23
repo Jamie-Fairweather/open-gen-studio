@@ -20,6 +20,7 @@ type CreatorLoraFormProps = {
   onEditCleared?: () => void
 }
 
+/** Creator LoRA pack editor: identity + per-arch variants. */
 export function CreatorLoraForm({
   editLoraId = null,
   onSaved,

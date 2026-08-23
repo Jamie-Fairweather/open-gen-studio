@@ -3,6 +3,7 @@
 import { ImageIcon } from "lucide-react"
 import { StageImage } from "@/components/workspace"
 
+/** Center canvas: live generation (with pending crossfade), selected still, or empty hero. */
 export function MediaStage({
   showLiveStage,
   livePreviewSrc,

@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input"
 import { openExternalUrl } from "@/lib/host"
 import { notifyError } from "@/lib/notify"
 
+/** Copy, external-link, and save handler for a provider token prompt. */
 export type TokenDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -30,6 +31,7 @@ export type TokenDialogProps = {
   footerHint: ReactNode
 }
 
+/** Shared token prompt: open provider settings, paste, save, then continue. */
 export function TokenDialog({
   open,
   onOpenChange,

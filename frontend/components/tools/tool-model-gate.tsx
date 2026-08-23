@@ -26,6 +26,7 @@ import { formatBytes, formatEta } from "@/lib/format"
 import { notifyError } from "@/lib/notify"
 import { cn } from "@/lib/utils"
 
+/** Prompt-tool weight readiness: checking, missing, installing, queued, ready, or failed. */
 export type ToolModelPhase =
   "checking" | "missing" | "installing" | "queued" | "ready" | "failed"
 
@@ -55,6 +56,7 @@ function findPromptToolsJob(
   return null
 }
 
+/** Track prompt-tool weight readiness and the shared install job. Tool UI stays locked until ready. */
 export function useToolModelGate(providerId: string) {
   const downloadSnapshot = useStudioStore((s) => s.downloadSnapshot)
   const downloadSpeedBps = useStudioStore((s) => s.downloadSpeedBps)

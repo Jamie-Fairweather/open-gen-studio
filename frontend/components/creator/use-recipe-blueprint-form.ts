@@ -18,12 +18,14 @@ import {
 import { notifyError, notifySuccess } from "@/lib/notify"
 import { ARCHES, isArchId, type ArchId } from "@/lib/creator-arches"
 
+/** Edit target and save/clear callbacks for the user blueprint form. */
 export type UseRecipeBlueprintFormArgs = {
   onSaved: (id: string) => void
   editBlueprintId?: string | null
   onEditCleared?: () => void
 }
 
+/** Load and save a user blueprint, resolving provider page URLs to filenames. */
 export function useRecipeBlueprintForm({
   onSaved,
   editBlueprintId = null,

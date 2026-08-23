@@ -49,6 +49,7 @@ export function canAutoStartComfy(
   return true
 }
 
+/** ComfyUI install/start/stop and GPU status for the studio store. */
 export type RuntimeSlice = {
   runtimes: RuntimeInstall[]
   gpu: GpuInfo | null
@@ -67,6 +68,7 @@ export type RuntimeSlice = {
   maybeAutoStartComfy: () => void
 }
 
+/** Zustand slice: ComfyUI install/start/stop and GPU vendor gate. */
 export const createRuntimeSlice: StateCreator<
   StudioStore,
   [],

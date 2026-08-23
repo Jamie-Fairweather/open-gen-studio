@@ -31,6 +31,7 @@ function parseLoraStack(raw: unknown): LoraStackEntry[] {
   return out
 }
 
+/** Snapshot image-page controls for SQLite (omits schema `v`). */
 export function serializeImageSession(
   state: ImageSessionSource
 ): Omit<ImageSessionV1, "v"> {
@@ -54,6 +55,7 @@ export function serializeImageSession(
   }
 }
 
+/** Coerce persisted image-session JSON; missing fields fall back to studio defaults. */
 export function parseImageSessionFields(
   data: Record<string, unknown>
 ): Omit<ImageSessionV1, "v"> {
@@ -82,6 +84,7 @@ export function parseImageSessionFields(
   }
 }
 
+/** Merge parsed image fields onto a session source without dropping other keys. */
 export function applyImageFieldsToSource<T extends ImageSessionSource>(
   target: T,
   image: Omit<ImageSessionV1, "v">

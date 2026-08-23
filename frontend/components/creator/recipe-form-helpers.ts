@@ -1,5 +1,6 @@
 import type { ArchDef } from "@/lib/creator-arches"
 
+/** One model-slot draft: role, Comfy folder, filename, and download URL. */
 export type ModelDraft = {
   role: string
   path: string
@@ -7,6 +8,7 @@ export type ModelDraft = {
   url: string
 }
 
+/** Lowercase kebab-id, trimmed and capped at 64 characters. */
 export function slugify(name: string): string {
   return name
     .trim()
@@ -47,6 +49,7 @@ export function needsProviderResolve(url: string): boolean {
   return !guessed.includes(".")
 }
 
+/** One model-slot draft per arch slot, filename guessed from the default URL. */
 export function draftsForArch(arch: ArchDef): ModelDraft[] {
   return arch.slots.map((s) => {
     const url = s.defaultUrl ?? ""

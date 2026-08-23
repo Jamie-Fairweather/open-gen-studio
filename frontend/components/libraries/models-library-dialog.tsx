@@ -362,6 +362,7 @@ function ModelsLibraryBody({
   )
 }
 
+/** Shared weights browser: LoRA variants, upscalers, and on-disk files. */
 export function ModelsLibraryDialog({
   open,
   onOpenChange,

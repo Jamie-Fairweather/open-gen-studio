@@ -7,6 +7,7 @@ export {
   defaultsFromBlueprintDetail,
 } from "@/lib/blueprint-session"
 
+/** Apply a loaded blueprint detail, then release the startup splash if catalogs are ready. */
 export function applyLoadedBlueprintDetail(detail: BlueprintDetail): void {
   applyBlueprintDetail(detail)
   tryMarkStartupHydrated()

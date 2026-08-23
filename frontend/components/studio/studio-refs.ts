@@ -1,7 +1,8 @@
 import type { LoraPack, StudioTab, ToolsHandoff } from "@/lib/host"
 
-/** Default noops replaced by bootstrap once navigation is wired. */
+/** Default tab-navigation noop; bootstrap replaces this once the router is wired. */
 export const defaultNavigateTab: (tab: StudioTab) => void = () => {}
+/** Default path-push noop; bootstrap replaces this once the router is wired. */
 export const defaultPushPath: (path: string) => void = () => {}
 
 /** Non-reactive refs used by store actions + bootstrap (module-scoped). */

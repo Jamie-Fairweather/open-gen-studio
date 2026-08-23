@@ -8,6 +8,7 @@ import type { ArchDef } from "@/lib/creator-arches"
 const sectionTitle =
   "text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase"
 
+/** Per-slot download URLs and filename resolve for the chosen architecture. */
 export type RecipeModelsSectionProps = {
   arch: ArchDef
   models: ModelDraft[]
@@ -15,6 +16,7 @@ export type RecipeModelsSectionProps = {
   resolveModelRow: (index: number, url: string) => Promise<void>
 }
 
+/** Per-slot download URLs; filename is derived (or resolved) from the URL. */
 export function RecipeModelsSection({
   arch,
   models,

@@ -25,6 +25,7 @@ type MediaWorkspaceProps = {
   category: MediaCategory
 }
 
+/** Stage, prompt bar, and side rails for a media-category route. Category is route-only; tab comes from the store. */
 export function MediaWorkspace({ category }: MediaWorkspaceProps) {
   // Category is encoded in the route; store derives studioTab from pathname.
   void category

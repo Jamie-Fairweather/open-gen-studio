@@ -26,6 +26,7 @@ type GatedModelDialogProps = {
   onConfirm: () => Promise<void>
 }
 
+/** Ask the user to accept Hugging Face gated-model licenses, then continue. */
 export function GatedModelDialog({
   open,
   onOpenChange,

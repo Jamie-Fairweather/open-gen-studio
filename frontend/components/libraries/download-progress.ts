@@ -50,6 +50,7 @@ export function friendlyInstallStatus(
   return m
 }
 
+/** UI label for a download job status (`done` → Ready). */
 export function statusLabel(status: string): string {
   if (status === "done") return "Ready"
   if (status === "error") return "Failed"
@@ -59,6 +60,7 @@ export function statusLabel(status: string): string {
   return "Waiting"
 }
 
+/** Transfer percent from job totals; null while a non-http step is active. */
 export function jobPct(job: DownloadJobView): number | null {
   const active = job.steps.find(
     (s) => s.status === "running" || s.status === "paused"
@@ -75,6 +77,7 @@ export function jobPct(job: DownloadJobView): number | null {
   return null
 }
 
+/** Two-decimal percent string, clamped at 100. */
 export function formatPct(pct: number): string {
   return `${Math.min(100, pct).toFixed(2)}%`
 }
@@ -88,6 +91,7 @@ export function detailPct(detail: string | null | undefined): number | null {
   return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : null
 }
 
+/** Glyph for a download step: done, error, live, or pending. */
 export function stepStatusIcon(status: string) {
   if (status === "done") return "✓"
   if (status === "error") return "!"

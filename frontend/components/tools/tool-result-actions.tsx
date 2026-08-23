@@ -4,6 +4,7 @@ import { CopyIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { notifySuccess } from "@/lib/notify"
 
+/** Copy and Use-in-Studio actions for tool output. */
 export function ToolResultActions({
   copyText,
   copyDisabled,

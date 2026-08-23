@@ -14,6 +14,7 @@ type StudioPanelProps = {
   className?: string
 }
 
+/** Full-height column shell for Creator/Downloads-style pages. */
 export function StudioPanel({ children, className }: StudioPanelProps) {
   return (
     <div className={cn("flex h-full min-h-0 flex-1 flex-col", className)}>
@@ -28,6 +29,7 @@ type StudioPanelHeaderProps = {
   action?: ReactNode
 }
 
+/** Title/description row locked to the shared panel gutters and max-width. */
 export function StudioPanelHeader({
   title,
   description,
@@ -67,6 +69,7 @@ type StudioPanelColumnProps = {
   className?: string
 }
 
+/** Centers children at STUDIO_PANEL_MAX. */
 export function StudioPanelColumn({
   children,
   className,
@@ -111,6 +114,7 @@ type StudioPanelFooterProps = {
   className?: string
 }
 
+/** Sticky footer that reuses the shared gutters and max-width column. */
 export function StudioPanelFooter({
   children,
   className,

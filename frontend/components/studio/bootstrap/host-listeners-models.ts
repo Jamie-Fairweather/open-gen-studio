@@ -13,6 +13,7 @@ import {
   type HostListenerHandles,
 } from "@/components/studio/bootstrap/host-listeners-shared"
 
+/** Bind LoRA, upscaler, and prompt-tools host events; writes catalog state into the store. */
 export function registerModelListeners(
   handles: HostListenerHandles,
   getStore: GetStore

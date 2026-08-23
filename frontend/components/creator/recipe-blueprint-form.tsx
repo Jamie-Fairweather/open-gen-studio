@@ -21,6 +21,7 @@ type RecipeBlueprintFormProps = {
   onDelete?: () => void
 }
 
+/** User blueprint editor: identity, model slots, and generate defaults. */
 export function RecipeBlueprintForm({
   onSaved,
   editBlueprintId = null,

@@ -16,6 +16,7 @@ import {
 } from "@/components/studio/selectors"
 import { useStudioSelector, useStudioStore } from "@/components/studio/store"
 
+/** Advanced-rail store bindings: controls, LoRA stack, Refine, and install chips. */
 export function useAdvancedRailProps() {
   const studioTab = useStudioStore((s) => s.studioTab)
   const selected = useStudioSelector(selectSelected)

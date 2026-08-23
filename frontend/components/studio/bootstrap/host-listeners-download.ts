@@ -10,6 +10,7 @@ import type {
   HostListenerHandles,
 } from "@/components/studio/bootstrap/host-listeners-shared"
 
+/** Bind download-manager and download-progress host events; writes snapshot, speed, and runtime message into the store. */
 export function registerDownloadListeners(
   handles: HostListenerHandles,
   getStore: GetStore

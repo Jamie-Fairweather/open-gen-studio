@@ -4,6 +4,7 @@ import { useShallow } from "zustand/react/shallow"
 import { selectTabGallery } from "@/components/studio/selectors"
 import { useStudioSelector, useStudioStore } from "@/components/studio/store"
 
+/** Gallery-rail store bindings plus the tab-filtered item list. */
 export function useGalleryRailProps() {
   const gallery = useStudioStore(
     useShallow((s) => ({

@@ -21,6 +21,7 @@ import type {
   HostListenerHandles,
 } from "@/components/studio/bootstrap/host-listeners-shared"
 
+/** Bind job-updated, job-progress, and job-queue host events; writes generate-lane state into the store. */
 export function registerJobListeners(
   handles: HostListenerHandles,
   getStore: GetStore

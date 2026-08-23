@@ -16,6 +16,7 @@ import {
 } from "./download-progress"
 import { TransferRail } from "./transfer-rail"
 
+/** In-progress download job plus pause/resume/cancel handlers and queue count. */
 export type DownloadActiveJobProps = {
   active: DownloadJobView
   pendingCount: number
@@ -26,6 +27,7 @@ export type DownloadActiveJobProps = {
   onCancel: (jobId: string) => void
 }
 
+/** In-progress download card: transfer rail, ETA, and per-step status. */
 export function DownloadActiveJob({
   active,
   pendingCount,

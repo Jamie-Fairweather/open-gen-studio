@@ -5,6 +5,7 @@ import type {
   HostListenerHandles,
 } from "@/components/studio/bootstrap/host-listeners-shared"
 
+/** Bind runtimes-updated and runtime-progress host events; writes runtime status and Comfy health into the store. */
 export function registerRuntimeListeners(
   handles: HostListenerHandles,
   getStore: GetStore

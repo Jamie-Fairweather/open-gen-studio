@@ -12,22 +12,31 @@ use specta::Type;
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct JobProgress {
+    /// Host job id this event belongs to.
     pub job_id: String,
+    /// Stage id (`start`, `step`, `preview`, `done`, `error`, …).
     pub stage: String,
+    /// Human-readable status line for the toast / runtime strip.
     pub message: String,
+    /// Current sampler step when `stage` is `step`.
     #[serde(default)]
     pub step: Option<u32>,
+    /// Sampler step count when `stage` is `step`.
     #[serde(default)]
     pub max: Option<u32>,
+    /// Live-preview file under the gallery previews dir.
     #[serde(default)]
     pub preview_path: Option<String>,
+    /// Prompt-tools text result when the job produced a string.
     #[serde(default)]
     pub text: Option<String>,
+    /// Structured prompt-tools result (enhance / image-to-prompt).
     #[serde(default)]
     pub result: Option<PromptToolResult>,
 }
 
 impl JobProgress {
+    /// Progress event with no step / preview / result yet.
     pub fn new(
         job_id: impl Into<String>,
         stage: impl Into<String>,
@@ -50,10 +59,15 @@ impl JobProgress {
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LoraProgress {
+    /// Official or user LoRA pack id.
     pub lora_id: String,
+    /// Recipe arch this variant is installing for.
     pub arch: crate::recipe::RecipeArch,
+    /// Install stage (`download`, `done`, `error`, …).
     pub stage: String,
+    /// Status line for the catalog toast.
     pub message: String,
+    /// Weight filename when a specific file is in flight.
     #[serde(default)]
     pub filename: Option<String>,
 }
@@ -62,11 +76,16 @@ pub struct LoraProgress {
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptToolsProgress {
+    /// Ensure / run stage (`download`, `python`, `done`, `error`, …).
     pub stage: String,
+    /// Status line for the tools toast.
     pub message: String,
+    /// Weight id being installed or used.
     pub model_id: String,
+    /// Provider that owns the weight (`qwenvl`, …).
     #[serde(default)]
     pub provider_id: Option<String>,
+    /// Weight filename when a specific file is in flight.
     #[serde(default)]
     pub filename: Option<String>,
 }
@@ -75,9 +94,13 @@ pub struct PromptToolsProgress {
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ComfyStatus {
+    /// OS process is running (may still be booting).
     pub process_alive: bool,
+    /// HTTP `/system_stats` succeeded on `port`.
     pub healthy: bool,
+    /// Port the portable listen on (default 8188).
     pub port: u16,
+    /// DB row for this install, when one exists.
     pub runtime: Option<crate::db::RuntimeInstall>,
 }
 
@@ -85,9 +108,13 @@ pub struct ComfyStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct JobQueueItem {
+    /// Host job id.
     pub job_id: String,
+    /// Queue kind (`generate`, `prompt-tools`, …).
     pub kind: String,
+    /// Short chip label.
     pub label: String,
+    /// Queue status (`waiting`, `running`, `paused`, …).
     pub status: String,
     /// Truncated positive prompt (generate / enhance), when known.
     pub prompt: Option<String>,
@@ -99,6 +126,7 @@ pub struct JobQueueItem {
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct JobQueueSnapshot {
+    /// Queue in display order (running first, then waiting).
     pub items: Vec<JobQueueItem>,
 }
 
@@ -106,18 +134,31 @@ pub struct JobQueueSnapshot {
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct JobHistoryItem {
+    /// Host job id.
     pub job_id: String,
+    /// Job kind (`generate`, `prompt-tools`, …).
     pub kind: String,
+    /// Short history-row label.
     pub label: String,
+    /// Terminal status (`completed`, `failed`, `cancelled`).
     pub status: String,
+    /// Failure text when `status` is `failed`.
     pub error: Option<String>,
+    /// Original submit params (JSON object as a string).
     pub params_json: String,
+    /// Unix seconds when the job was created.
     pub created_at: i64,
+    /// Unix seconds of the last status write.
     pub updated_at: i64,
+    /// Gallery rows produced by this job (empty if none / deleted).
     pub gallery_items: Vec<crate::db::GalleryItem>,
 }
 
 /// Append `RECIPE_ARCHES` const to a Specta-generated TypeScript file.
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be read or rewritten.
 pub fn append_recipe_arches_const(ts_path: &std::path::Path) -> Result<(), String> {
     use crate::recipe::RecipeArch;
     use std::fs;
@@ -156,6 +197,10 @@ pub fn append_recipe_arches_const(ts_path: &std::path::Path) -> Result<(), Strin
 }
 
 /// Export TypeScript bindings (commands + types + RECIPE_ARCHES).
+///
+/// # Errors
+///
+/// Returns an error if Specta export fails or the generated files cannot be written.
 pub fn export_typescript_bindings() -> Result<(), String> {
     use specta_typescript::Typescript;
     use std::path::PathBuf;

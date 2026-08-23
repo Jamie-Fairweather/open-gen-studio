@@ -25,6 +25,7 @@ import {
 } from "./helpers"
 import { flushPersistImageSession } from "./session-persist"
 
+/** Gallery list, selection, and reuse-from-result actions for the studio store. */
 export type GallerySlice = {
   gallery: GalleryItem[]
   /** True after the initial host gallery list has been applied (may be empty). */
@@ -46,6 +47,7 @@ export type GallerySlice = {
   handleReuseGallerySettings: (item: GalleryItem) => void
 }
 
+/** Zustand slice: gallery list, selection, ingest, and reuse from a result. */
 export const createGallerySlice: StateCreator<
   StudioStore,
   [],

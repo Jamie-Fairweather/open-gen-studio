@@ -13,6 +13,7 @@ type HfTokenDialogProps = {
   onConfirm: (token: string) => Promise<void>
 }
 
+/** Prompt for a Hugging Face token when a gated-model download needs one. */
 export function HfTokenDialog({
   open,
   onOpenChange,

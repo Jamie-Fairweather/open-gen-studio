@@ -82,6 +82,7 @@ const STEP_LABEL: Record<OnboardingStep, string> = {
 type Phase = "hidden" | "enter" | "run" | "exit"
 type StageAnim = "shown" | "exit" | "enter"
 
+/** First-run wizard: persist/resume, GPU/storage/HF/blueprint, and install kick. Covers studio until Comfy and the first blueprint are ready. */
 export function OnboardingOverlay() {
   const startupHydrated = useStudioStore((s) => s.startupHydrated)
   const blueprintsLoaded = useStudioStore((s) => s.blueprintsLoaded)

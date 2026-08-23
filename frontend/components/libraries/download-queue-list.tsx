@@ -5,6 +5,7 @@ import type { DownloadJobView } from "@/lib/host"
 import { Button } from "@/components/ui/button"
 import { WithTooltip } from "@/components/ui/tooltip"
 
+/** Waiting/paused download jobs; resume and remove without a progress rail. */
 export function DownloadQueueList({
   queued,
   onResume,

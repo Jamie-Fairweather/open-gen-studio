@@ -17,6 +17,7 @@ export function stageFrameStyle(width: number, height: number): CSSProperties {
   }
 }
 
+/** Stage photo that prefers decoded natural size over recipe size so object-contain does not letterbox. Overlay mode is a hidden preload. */
 export function StageImage({
   src,
   width,

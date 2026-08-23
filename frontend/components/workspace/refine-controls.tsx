@@ -40,6 +40,7 @@ type RefineControlsProps = {
   arch?: string | null
 }
 
+/** Refine frame: upscale toggle plus model/USDU controls driven by deriveRefineState. */
 export function RefineControls({
   enabled,
   onEnabledChange,

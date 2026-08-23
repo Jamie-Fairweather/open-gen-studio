@@ -15,6 +15,7 @@ export function overlayControlValues(
   return next
 }
 
+/** Overlay session controlValues onto blueprint defaults; only known control ids. */
 export function overlaySessionControls(
   defaults: Record<string, unknown>,
   session: { controlValues: Record<string, unknown> },
@@ -23,6 +24,7 @@ export function overlaySessionControls(
   return overlayControlValues(defaults, session.controlValues, controlIds)
 }
 
+/** Drop LoRAs whose pack id is no longer in the catalog. */
 export function filterSessionLoras(
   stack: LoraStackEntry[],
   knownIds: Set<string>
@@ -30,6 +32,7 @@ export function filterSessionLoras(
   return stack.filter((e) => knownIds.has(e.id))
 }
 
+/** Keep a known upscale model; else official default if present; else the stored id. */
 export function resolveSessionUpscaleModelId(
   modelId: string,
   knownIds: Set<string>

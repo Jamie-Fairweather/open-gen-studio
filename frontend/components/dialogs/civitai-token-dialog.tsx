@@ -13,6 +13,7 @@ type CivitaiTokenDialogProps = {
   onConfirm: (token: string) => Promise<void>
 }
 
+/** Prompt for a CivitAI API key when a blueprint download needs one. */
 export function CivitaiTokenDialog({
   open,
   onOpenChange,

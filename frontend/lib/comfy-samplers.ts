@@ -67,9 +67,12 @@ export const COMFY_SCHEDULERS = [
   "kl_optimal",
 ] as const
 
+/** Snake_case KSampler id Comfy stores/sends — UI labels come from `comfyChoiceLabel`. */
 export type ComfySampler = (typeof COMFY_SAMPLERS)[number]
+/** Snake_case scheduler id from Comfy `SCHEDULER_HANDLERS` — same label mapping as samplers. */
 export type ComfyScheduler = (typeof COMFY_SCHEDULERS)[number]
 
+/** Select option: `value` is the Comfy id, `label` is the friendly display string. */
 export type ComfyChoice = { label: string; value: string }
 
 /** Override map for names that don't title-case cleanly. */
@@ -129,6 +132,7 @@ const LABEL_OVERRIDES: Record<string, string> = {
   kl_optimal: "KL Optimal",
 }
 
+/** Friendly sampler/scheduler label; override map first, else title-cased snake_case. */
 export function comfyChoiceLabel(id: string): string {
   return (
     LABEL_OVERRIDES[id] ??

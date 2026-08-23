@@ -4,9 +4,13 @@ import { cancelJob, gallerySrc, generateImage } from "@/lib/host"
 import { SIDE_LENGTH_DEFAULT, sizeFromAspectAndSide } from "@/lib/image-size"
 import { notifyError, notifyInfo } from "@/lib/notify"
 import { isInstalled } from "@/lib/blueprint-helpers"
+import {
+  buildGenerateValues,
+  planGenerateLane,
+  planGenerateSubmit,
+} from "@/lib/generate-lane"
 import type { StudioStore } from "../studio-store-types"
 import { studioRefs } from "../studio-refs"
-import { buildGenerateValues } from "./generate-values"
 import {
   applySet,
   computeActiveSelectedId,
@@ -120,15 +124,6 @@ export const createGenerationSlice: StateCreator<
 
     handleGenerate: async () => {
       const state = get()
-      if (!state.blueprintsLoaded) {
-        notifyInfo(
-          "Loading blueprints",
-          "Almost ready - try Generate again in a moment.",
-          "generate"
-        )
-        return
-      }
-
       const tabBlueprints = computeTabBlueprints(
         state.blueprints,
         state.studioTab
@@ -139,15 +134,27 @@ export const createGenerationSlice: StateCreator<
       )
       const selected =
         tabBlueprints.find((bp) => bp.id === activeSelectedId) ?? null
-
-      if (!selected) {
+      const submit = planGenerateSubmit({
+        catalogReady: state.blueprintsLoaded,
+        blueprintId: selected?.id ?? null,
+        installed: selected ? isInstalled(selected) : false,
+        modelsReady: selected?.modelsReady,
+        modelCount: selected?.modelCount,
+        prompt: state.prompt,
+      })
+      if (submit.action === "wait-catalog") {
+        notifyInfo(
+          "Loading blueprints",
+          "Almost ready - try Generate again in a moment.",
+          "generate"
+        )
+        return
+      }
+      if (submit.action === "pick-blueprint") {
         state.setPickerOpen(true)
         return
       }
-      if (
-        !isInstalled(selected) &&
-        (selected.modelsReady ?? 0) < (selected.modelCount ?? 1)
-      ) {
+      if (submit.action === "install-first") {
         state.setPickerOpen(true)
         notifyInfo(
           "Install models first",
@@ -156,21 +163,25 @@ export const createGenerationSlice: StateCreator<
         )
         return
       }
-      if (!state.prompt.trim()) {
+      if (submit.action === "need-prompt") {
         notifyInfo("Prompt required", "Enter a prompt first.", "generate")
         return
       }
 
       const runningId =
         state.jobQueue.find((i) => i.status === "running")?.jobId ?? null
+      const lane = planGenerateLane({
+        generating: state.generating,
+        runningJobId: runningId,
+      })
       // Generate re-enters follow-live; Add to queue leaves browse alone.
-      if (!state.generating) {
+      if (lane.followLive) {
         set({ followLive: true })
       }
       state.setGenerating(true)
       // Only reset stage preview/step when starting a fresh lane — queueing
       // while something is already running must not blank the live preview.
-      if (!runningId) {
+      if (lane.action === "start-lane") {
         state.clearLivePreview()
       }
       try {
@@ -191,13 +202,15 @@ export const createGenerationSlice: StateCreator<
           usduDenoise: state.usduDenoise,
         })
 
-        const job = await generateImage(selected.id, values)
+        const job = await generateImage(submit.blueprintId, values)
         // Cancel / step UI track the GPU lane holder, not the newest enqueue.
-        state.setActiveJobId(runningId ?? job.id)
+        state.setActiveJobId(
+          lane.action === "enqueue" ? lane.runningJobId : job.id
+        )
         get().acknowledgeQueuedJob(job.id)
       } catch (e) {
         state.setGenerating(false)
-        if (!runningId) state.setActiveJobId(null)
+        if (lane.action === "start-lane") state.setActiveJobId(null)
         notifyError(
           e instanceof Error ? e.message : String(e),
           "Generation failed"

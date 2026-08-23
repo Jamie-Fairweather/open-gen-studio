@@ -5,15 +5,20 @@ import {
   onJobsUpdated,
 } from "@/lib/host"
 import {
+  applyGenerateQueue,
+  finishGenerateJob,
+  planGenerateJobUpdate,
+  planGenerateProgress,
+} from "@/lib/generate-lane"
+import {
   notifyError,
   notifyInfo,
   notifyProgress,
   notifyDismiss,
 } from "@/lib/notify"
-import {
-  finishGenerateJob,
-  type GetStore,
-  type HostListenerHandles,
+import type {
+  GetStore,
+  HostListenerHandles,
 } from "@/components/studio/bootstrap/host-listeners-shared"
 
 export function registerJobListeners(
@@ -21,23 +26,18 @@ export function registerJobListeners(
   getStore: GetStore
 ) {
   void onJobsUpdated((job) => {
-    const terminal =
-      job.status === "completed" ||
-      job.status === "failed" ||
-      job.status === "cancelled"
-    if (terminal) {
-      // Defensive: prune even if jobs://queue was missed (ghost "running" chips).
-      if (job.kind === "generate") {
-        finishGenerateJob(getStore, job.id)
-      } else {
-        getStore().setJobQueue((prev) => prev.filter((i) => i.jobId !== job.id))
-      }
+    const plan = planGenerateJobUpdate(job)
+    if (plan.action === "ignore") return
+    if (plan.action === "prune") {
+      // Defensive: prune even if jobs://queue was missed (ghost chips).
+      getStore().setJobQueue((prev) => prev.filter((i) => i.jobId !== job.id))
+      return
     }
-    if (job.kind !== "generate") return
-    if (job.status === "failed" && job.error) {
-      notifyError(job.error, "Generation failed")
+    finishGenerateJob(getStore, job.id)
+    if (plan.notify === "failed") {
+      notifyError(plan.message, "Generation failed")
     }
-    if (job.status === "cancelled") {
+    if (plan.notify === "cancelled") {
       notifyInfo("Cancelled", "Generation was cancelled", "job")
     }
   }).then((u) => {
@@ -47,33 +47,36 @@ export function registerJobListeners(
   void onJobProgress((p) => {
     if (getStore().handleToolJobProgress(p)) return
 
-    if (p.stage !== "start") {
+    const plan = planGenerateProgress(p)
+    if (plan.action === "runtime-start") {
+      notifyProgress("runtime", "Starting runtime", plan.message)
+      return
+    }
+    if (plan.action === "dismiss-runtime") {
       notifyDismiss("runtime")
-    }
-    if (p.stage === "step") {
-      if (p.step != null && p.max != null && p.max > 0) {
-        getStore().setGenStep({
-          jobId: p.jobId,
-          step: p.step,
-          max: p.max,
-        })
-      }
       return
     }
-    if (p.stage === "preview") {
-      if (p.previewPath) getStore().queueLivePreview(p.previewPath)
+    if (plan.action === "step") {
+      notifyDismiss("runtime")
+      getStore().setGenStep({
+        jobId: plan.jobId,
+        step: plan.step,
+        max: plan.max,
+      })
       return
     }
-    if (p.stage === "done") {
-      finishGenerateJob(getStore, p.jobId)
-    } else if (p.stage === "cancelled") {
-      finishGenerateJob(getStore, p.jobId)
-      notifyInfo("Cancelled", p.message, "job")
-    } else if (p.stage === "error") {
-      finishGenerateJob(getStore, p.jobId)
-      notifyError(p.message, "Generation failed")
-    } else if (p.stage === "start") {
-      notifyProgress("runtime", "Starting runtime", p.message)
+    if (plan.action === "preview") {
+      notifyDismiss("runtime")
+      getStore().queueLivePreview(plan.path)
+      return
+    }
+    notifyDismiss("runtime")
+    finishGenerateJob(getStore, p.jobId)
+    if (plan.notify === "cancelled") {
+      notifyInfo("Cancelled", plan.message, "job")
+    }
+    if (plan.notify === "error") {
+      notifyError(plan.message, "Generation failed")
     }
   }).then((u) => {
     handles.unlistenJobProgress = u
@@ -84,14 +87,11 @@ export function registerJobListeners(
     .catch(() => {})
   void onJobQueue((snap) => {
     getStore().setJobQueue(snap.items)
-    const runningGenerate = snap.items.find(
-      (i) => i.kind === "generate" && i.status === "running"
-    )
-    const anyGenerate = snap.items.some((i) => i.kind === "generate")
-    getStore().setGenerating(anyGenerate)
-    if (runningGenerate) {
-      getStore().setActiveJobId(runningGenerate.jobId)
-    } else if (!anyGenerate) {
+    const plan = applyGenerateQueue(snap.items)
+    getStore().setGenerating(plan.action !== "idle")
+    if (plan.action === "running") {
+      getStore().setActiveJobId(plan.jobId)
+    } else if (plan.action === "idle") {
       getStore().setActiveJobId(null)
     }
   }).then((u) => {

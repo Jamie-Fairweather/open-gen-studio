@@ -1,5 +1,8 @@
 import { listUpscalers, usduNodeReady } from "@/lib/host"
+import { finishGenerateJob } from "@/lib/generate-lane"
 import { useStudioStore } from "@/components/studio/store"
+
+export { finishGenerateJob }
 
 export type Store = ReturnType<typeof useStudioStore.getState>
 export type GetStore = () => Store
@@ -23,16 +26,6 @@ export type HostListenerHandles = {
   unlistenUpscalersUpdated?: () => void
   unlistenUpscaleProgress?: () => void
   unlistenPromptToolsProgress?: () => void
-}
-
-export function finishGenerateJob(getStore: GetStore, jobId: string) {
-  getStore().setJobQueue((prev) => prev.filter((i) => i.jobId !== jobId))
-  const stillGenerating = getStore().jobQueue.some(
-    (i) => i.kind === "generate" && i.jobId !== jobId
-  )
-  getStore().setGenerating(stillGenerating)
-  getStore().setActiveJobId((id) => (id === jobId ? null : id))
-  if (!stillGenerating) getStore().clearLivePreview()
 }
 
 export function refreshUpscaleCatalog(getStore: GetStore) {

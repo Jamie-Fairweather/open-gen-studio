@@ -1,6 +1,8 @@
 import type { Dispatch, SetStateAction } from "react"
 import type { StateCreator } from "zustand"
+import { startCatalogInstall } from "@/lib/catalog-install"
 import {
+  ensureDownload,
   installComfyui,
   listDownloads,
   listSettings,
@@ -112,8 +114,11 @@ export const createRuntimeSlice: StateCreator<
     )
     try {
       // Force reinstall so GPU vendor / portable pin changes replace the old build.
-      await installComfyui()
-      // Don't rely only on the event race — pull the snapshot so onboarding
+      await startCatalogInstall(
+        { kind: "runtime", engine: "comfyui" },
+        { ensureDownload, installRuntime: installComfyui }
+      )
+      // Don't rely only on the event race — pull the snapshot so First-run
       // sees the queued runtime job immediately.
       const snap = await listDownloads().catch(() => null)
       if (snap) s.setDownloadSnapshot(snap)

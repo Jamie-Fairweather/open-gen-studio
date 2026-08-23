@@ -1,7 +1,16 @@
 import type { Dispatch, SetStateAction } from "react"
 import type { StateCreator } from "zustand"
 import {
+  addPendingUpscaleId,
+  catalogGatePatch,
+  dropPendingUpscaleId,
+  planCatalogInstall,
+  startCatalogInstall,
+  uninstallToastDescription,
+} from "@/lib/catalog-install"
+import {
   ensureDownload,
+  installComfyui,
   providerTokenStatus,
   uninstallLoraVariant,
   type LoraStackEntry,
@@ -11,6 +20,11 @@ import { notifyError, notifySuccess } from "@/lib/notify"
 import type { StudioStore } from "../studio-store-types"
 import { applySet, DEFAULT_UPSCALE_MODEL_ID } from "./helpers"
 import { flushPersistSession } from "./session-persist"
+
+const catalogHost = {
+  ensureDownload,
+  installRuntime: installComfyui,
+}
 
 export type RefineSlice = {
   loraStack: LoraStackEntry[]
@@ -82,20 +96,24 @@ export const createRefineSlice: StateCreator<
 
   beginLoraInstall: async (id, arch) => {
     try {
-      const loraPacks = get().loraPacks
-      const pack = loraPacks.find((p) => p.id === id)
+      const pack = get().loraPacks.find((p) => p.id === id)
       const variant = pack?.variants.find((v) => v.arch === arch)
-      const url = (variant?.url ?? "").toLowerCase()
-      if (url.includes("civitai.com") || url.includes("civitai.red")) {
-        const status = await providerTokenStatus()
-        get().setHasCivitaiToken(status.civitai)
-        if (!status.civitai) {
-          get().setPendingLoraInstall({ id, arch })
-          get().setCivitaiTokenDialogOpen(true)
-          return
-        }
+      const status = await providerTokenStatus()
+      get().setHasCivitaiToken(status.civitai)
+      const plan = await planCatalogInstall({
+        row: { kind: "lora", id, arch },
+        tokens: {
+          huggingface: get().hasHfToken,
+          civitai: status.civitai,
+        },
+        gatedTermsAcked: true,
+        loraUrl: variant?.url ?? "",
+      })
+      if (plan.action === "gate") {
+        set(catalogGatePatch(plan.need, { kind: "lora", id, arch }))
+        return
       }
-      await ensureDownload({ kind: "lora", id, arch }, { wait: false })
+      await startCatalogInstall({ kind: "lora", id, arch }, catalogHost)
     } catch (e) {
       notifyError(
         e instanceof Error ? e.message : String(e),
@@ -108,11 +126,7 @@ export const createRefineSlice: StateCreator<
     try {
       const summary = await uninstallLoraVariant(id, arch)
       const name = get().loraPacks.find((p) => p.id === id)?.name ?? id
-      const detail =
-        summary.kept > 0
-          ? `Removed ${summary.removed} file(s); kept ${summary.kept} shared`
-          : `Removed ${summary.removed} file(s)`
-      notifySuccess(name, detail)
+      notifySuccess(name, uninstallToastDescription(summary))
     } catch (e) {
       notifyError(
         e instanceof Error ? e.message : String(e),
@@ -123,24 +137,22 @@ export const createRefineSlice: StateCreator<
 
   beginUpscaleInstall: async (id) => {
     set((s) => ({
-      pendingUpscaleIds: s.pendingUpscaleIds.includes(id)
-        ? s.pendingUpscaleIds
-        : [...s.pendingUpscaleIds, id],
+      pendingUpscaleIds: addPendingUpscaleId(s.pendingUpscaleIds, id),
     }))
     try {
-      const result = await ensureDownload(
+      const result = await startCatalogInstall(
         { kind: "upscale", id },
-        { wait: false }
+        catalogHost
       )
       // Already installed / no job → drop optimistic pending (snapshot won't clear it).
       if (result.status === "ready" || !result.jobId) {
         set((s) => ({
-          pendingUpscaleIds: s.pendingUpscaleIds.filter((x) => x !== id),
+          pendingUpscaleIds: dropPendingUpscaleId(s.pendingUpscaleIds, id),
         }))
       }
     } catch (e) {
       set((s) => ({
-        pendingUpscaleIds: s.pendingUpscaleIds.filter((x) => x !== id),
+        pendingUpscaleIds: dropPendingUpscaleId(s.pendingUpscaleIds, id),
       }))
       notifyError(
         e instanceof Error ? e.message : String(e),
@@ -155,7 +167,7 @@ export const createRefineSlice: StateCreator<
 
   beginPromptToolsInstall: async (provider = "qwenvl") => {
     try {
-      await ensureDownload({ kind: "promptTools", provider }, { wait: false })
+      await startCatalogInstall({ kind: "promptTools", provider }, catalogHost)
     } catch (e) {
       notifyError(
         e instanceof Error ? e.message : String(e),

@@ -1,19 +1,31 @@
 import type { Dispatch, SetStateAction } from "react"
 import type { StateCreator } from "zustand"
 import {
+  catalogGatePatch,
+  collectGatedRepos,
+  planCatalogInstall,
+  startCatalogInstall,
+  uninstallToastDescription,
+} from "@/lib/catalog-install"
+import {
   clearProviderToken,
   ensureDownload,
   getBlueprint,
+  installComfyui,
   providerTokenStatus,
   setProviderToken,
   uninstallBlueprint,
-  type UninstallSummary,
 } from "@/lib/host"
-import { hfRepoFromModelUrl, type GatedModelRepo } from "@/lib/hf"
 import { isRecipeArch, type RecipeArch } from "@/lib/arch"
+import type { GatedModelRepo } from "@/lib/hf"
 import { notifyError, notifySuccess } from "@/lib/notify"
 import type { StudioStore } from "../studio-store-types"
 import { applySet } from "./helpers"
+
+const catalogHost = {
+  ensureDownload,
+  installRuntime: installComfyui,
+}
 
 export type SettingsSlice = {
   /** True when a token is stored in the OS credential store. */
@@ -60,34 +72,12 @@ export type SettingsSlice = {
   handleUninstallBlueprint: (id: string) => Promise<void>
 }
 
-function uninstallToastDescription(summary: UninstallSummary): string {
-  if (summary.kept > 0) {
-    return `Removed ${summary.removed} file(s); kept ${summary.kept} shared`
-  }
-  return `Removed ${summary.removed} file(s)`
-}
-
 export const createSettingsSlice: StateCreator<
   StudioStore,
   [],
   [],
   SettingsSlice
 > = (set, get) => {
-  async function collectGatedRepos(id: string): Promise<GatedModelRepo[]> {
-    try {
-      const detail = await getBlueprint(id)
-      const byId = new Map<string, GatedModelRepo>()
-      for (const model of detail.models ?? []) {
-        if (!model.gated) continue
-        const repo = hfRepoFromModelUrl(model.url ?? "")
-        if (repo) byId.set(repo.id, repo)
-      }
-      return [...byId.values()]
-    } catch {
-      return []
-    }
-  }
-
   async function refreshStatus() {
     const status = await providerTokenStatus()
     set({
@@ -98,33 +88,19 @@ export const createSettingsSlice: StateCreator<
 
   /** Blocks blueprint installs behind token / gated-terms dialogs when needed. */
   async function ensureInstallTokens(id: string): Promise<boolean> {
-    const s = get()
-    const bp = s.blueprints.find((b) => b.id === id)
     try {
       await refreshStatus()
-      const { hasHfToken, hasCivitaiToken, gatedTermsAcked } = get()
-      // Token first — gated terms need a signed-in HF account + token.
-      if (bp?.requiresHfToken) {
-        if (!hasHfToken) {
-          s.setPendingInstallId(id)
-          s.setHfTokenDialogOpen(true)
-          return false
-        }
-      }
-      if (bp?.requiresCivitaiToken) {
-        if (!hasCivitaiToken) {
-          s.setPendingInstallId(id)
-          s.setCivitaiTokenDialogOpen(true)
-          return false
-        }
-      }
-      if (bp?.requiresHfToken && !gatedTermsAcked) {
-        const repos = await collectGatedRepos(id)
-        set({
-          pendingInstallId: id,
-          gatedModelRepos: repos,
-          gatedModelDialogOpen: true,
-        })
+      const { hasHfToken, hasCivitaiToken, gatedTermsAcked, blueprints } = get()
+      const plan = await planCatalogInstall({
+        row: { kind: "blueprint", id },
+        tokens: { huggingface: hasHfToken, civitai: hasCivitaiToken },
+        gatedTermsAcked,
+        blueprint: blueprints.find((b) => b.id === id),
+        collectGatedRepos: (blueprintId) =>
+          collectGatedRepos(blueprintId, getBlueprint),
+      })
+      if (plan.action === "gate") {
+        set(catalogGatePatch(plan.need, { kind: "blueprint", id }))
         return false
       }
       return true
@@ -273,7 +249,7 @@ export const createSettingsSlice: StateCreator<
 
     requestBlueprintInstall: async (id) => {
       try {
-        await ensureDownload({ kind: "blueprint", id }, { wait: false })
+        await startCatalogInstall({ kind: "blueprint", id }, catalogHost)
       } catch (e) {
         notifyError(
           e instanceof Error ? e.message : String(e),

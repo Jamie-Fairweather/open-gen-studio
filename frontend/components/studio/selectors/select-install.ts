@@ -1,9 +1,12 @@
-import type { StudioStore } from "../studio-store-types"
 import {
-  blueprintIdFromJobKey,
-  loraKeyFromJobKey,
-  upscaleIdFromJobKey,
-} from "../slices/helpers"
+  installingBlueprintId,
+  installingLoraKey,
+  installingUpscaleId,
+  queuedBlueprintIds,
+  queuedLoraKeys,
+  queuedUpscaleIds,
+} from "@/lib/catalog-install"
+import type { StudioStore } from "../studio-store-types"
 
 export function selectComfy(s: StudioStore) {
   return s.runtimes.find((r) => r.engine === "comfyui")
@@ -14,39 +17,27 @@ export function selectActiveJobKey(s: StudioStore): string | null {
 }
 
 export function selectInstallingId(s: StudioStore): string | null {
-  const key = selectActiveJobKey(s)
-  return key ? (blueprintIdFromJobKey(key) ?? key) : null
+  return installingBlueprintId(s.downloadSnapshot)
 }
 
 export function selectInstallQueue(s: StudioStore): string[] {
-  return s.downloadSnapshot.queued.map((job) => {
-    const bp = blueprintIdFromJobKey(job.jobKey)
-    return bp ?? job.jobKey
-  })
+  return queuedBlueprintIds(s.downloadSnapshot)
 }
 
 export function selectLoraInstallingKey(s: StudioStore): string | null {
-  const key = selectActiveJobKey(s)
-  return key ? loraKeyFromJobKey(key) : null
+  return installingLoraKey(s.downloadSnapshot)
 }
 
 export function selectLoraQueuedKeys(s: StudioStore): string[] {
-  return s.downloadSnapshot.queued.flatMap((job) => {
-    const key = loraKeyFromJobKey(job.jobKey)
-    return key ? [key] : []
-  })
+  return queuedLoraKeys(s.downloadSnapshot)
 }
 
 export function selectUpscaleInstallingId(s: StudioStore): string | null {
-  const key = selectActiveJobKey(s)
-  return key ? upscaleIdFromJobKey(key) : null
+  return installingUpscaleId(s.downloadSnapshot)
 }
 
 export function selectUpscaleQueuedIds(s: StudioStore): string[] {
-  return s.downloadSnapshot.queued.flatMap((job) => {
-    const id = upscaleIdFromJobKey(job.jobKey)
-    return id ? [id] : []
-  })
+  return queuedUpscaleIds(s.downloadSnapshot)
 }
 
 export function selectUpscalePendingIds(s: StudioStore): string[] {

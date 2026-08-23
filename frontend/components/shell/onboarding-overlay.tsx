@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useEffectEvent, useRef, useState } from "react"
 import { ImageIcon } from "lucide-react"
 import { BrandMark } from "@/components/brand/brand-mark"
 import {
@@ -19,6 +19,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { useMediaQuery } from "@/hooks/use-media-query"
 import { isInstalled } from "@/lib/blueprint-helpers"
 import { beginDataDirMove, endDataDirMove } from "@/lib/data-dir-move"
+import { planFirstRunInstall, resumeFirstRun } from "@/lib/first-run"
 import {
   detectGpu,
   gallerySrc,
@@ -54,7 +55,6 @@ import {
   REC_RAM_GB,
   REC_VRAM_GB,
   recommendedBlurb,
-  resolveOnboardingStep,
   serializeOnboardingState,
   SETTING_ONBOARDING,
   stepAfterStorage,
@@ -165,38 +165,25 @@ export function OnboardingOverlay() {
       setSystemSpecs(specs)
       const vendor = settings[SETTING_GPU_VENDOR]?.trim() || ""
       const persisted = parseOnboardingState(settings[SETTING_ONBOARDING])
-      const nextStep = resolveOnboardingStep({
+      await refreshProviderTokenStatus()
+      if (cancelled) return
+      const resume = resumeFirstRun({
         persisted,
         gpu,
         savedVendor: vendor,
         storageChosen: dataDir?.storageChosen ?? true,
         specs,
+        hasHfToken: useStudioStore.getState().hasHfToken,
+        catalog: officialBlueprintsForOnboarding(
+          useStudioStore.getState().blueprints
+        ),
       })
-      await refreshProviderTokenStatus()
-      if (cancelled) return
-      const hasToken = useStudioStore.getState().hasHfToken
-      const catalog = officialBlueprintsForOnboarding(
-        useStudioStore.getState().blueprints
-      )
-      const preferred = persisted?.blueprintId
-      const blueprintIdNext =
-        (preferred && catalog.some((b) => b.id === preferred)
-          ? preferred
-          : null) ??
-        catalog.find((b) => b.id === "krea2-turbo")?.id ??
-        catalog[0]?.id ??
-        null
-      // Already have a token: skip the optional HF step when resuming there.
-      let stepNext = nextStep
-      if (stepNext === "hf" && hasToken) {
-        stepNext = blueprintIdNext ? "install" : "blueprint"
-      }
-      setStep(stepNext)
-      setStageStep(stepNext)
+      setStep(resume.step)
+      setStageStep(resume.step)
       setStageAnim("shown")
-      setBlueprintId(blueprintIdNext)
-      setHfSkipped(Boolean(persisted?.hfSkipped))
-      setSpecsBypassed(Boolean(persisted?.specsBypassed))
+      setBlueprintId(resume.blueprintId)
+      setHfSkipped(resume.hfSkipped)
+      setSpecsBypassed(resume.specsBypassed)
       setBootstrapped(true)
       // First-run GPU pick lives in this overlay — never open the dialog.
       setGpuVendorDialogOpen(false)
@@ -322,6 +309,30 @@ export function OnboardingOverlay() {
             : null
       : null
   const displayInstallError = installError ?? derivedInstallError
+
+  const currentFirstRunPlan = useEffectEvent(() =>
+    planFirstRunInstall({
+      step,
+      blueprintId,
+      hidden: phase === "hidden",
+      runtimeReady: isComfyReady(runtimes),
+      runtimeError: comfy?.status === "error" || Boolean(failedRuntimeJob),
+      runtimeJobPending,
+      runtimeInstalling: isComfyInstalling(runtimes),
+      runtimeStarted: installStartedRef.current.comfy,
+      blueprintFound: Boolean(selectedBp),
+      blueprintInstalled: Boolean(selectedBp && isInstalled(selectedBp)),
+      blueprintJobError: activeBpJob?.status === "error",
+      blueprintJobQueued:
+        activeBpJob != null ||
+        downloadSnapshot.queued.some(
+          (job) =>
+            job.kind === "blueprint" &&
+            blueprintIdFromJobKey(job.jobKey) === blueprintId
+        ),
+      blueprintStarted: installStartedRef.current.blueprint,
+    })
+  )
 
   async function advance(
     next: Partial<OnboardingState> & { step: OnboardingStep }
@@ -472,28 +483,23 @@ export function OnboardingOverlay() {
     await advance({ step: "hf", blueprintId })
   }
 
-  // Finish onboarding once Comfy + blueprint are both ready.
+  // Finish first-run once Runtime + Blueprint are both Installed.
   useEffect(() => {
-    if (step !== "install" || !blueprintId || phase === "hidden") return
-    const bp = blueprints.find((b) => b.id === blueprintId)
-    if (isComfyReady(runtimes) && bp && isInstalled(bp)) {
-      selectBlueprint(blueprintId)
-      void setSetting(SETTING_ONBOARDING, "").catch(() => {})
-    }
+    if (currentFirstRunPlan().action !== "done" || !blueprintId) return
+    selectBlueprint(blueprintId)
+    void setSetting(SETTING_ONBOARDING, "").catch(() => {})
   }, [step, blueprintId, phase, runtimes, blueprints, selectBlueprint])
 
-  // Kick Comfy install. Keep deps narrow — including runtimeBusy/downloadSnapshot
+  // Kick Runtime install. Keep deps narrow — including runtimeBusy/downloadSnapshot
   // re-ran this effect mid-invoke, cancelled the async, and showed a fake
   // "did not start" error while swallowing the real failure.
   useEffect(() => {
-    if (step !== "install" || !blueprintId || phase === "hidden") return
-    if (isComfyReady(runtimes)) return
-    if (comfy?.status === "error" || failedRuntimeJob) {
+    const action = currentFirstRunPlan().action
+    if (action === "reset-runtime-started") {
       installStartedRef.current.comfy = false
       return
     }
-    if (runtimeJobPending || isComfyInstalling(runtimes)) return
-    if (installStartedRef.current.comfy) return
+    if (action !== "start-runtime") return
 
     let showError = true
     installStartedRef.current.comfy = true
@@ -536,28 +542,18 @@ export function OnboardingOverlay() {
     installKick,
   ])
 
-  // Enqueue blueprint only after Comfy is fully done (including extensions).
+  // Enqueue Blueprint only after Runtime is fully done (including extensions).
   useEffect(() => {
-    if (step !== "install" || !blueprintId || phase === "hidden") return
-    if (!isComfyReady(runtimes) || runtimeJobPending) return
-    if (activeBpJob?.status === "error") {
+    const action = currentFirstRunPlan().action
+    if (action === "reset-blueprint-started") {
       installStartedRef.current.blueprint = false
       return
     }
-
-    const bp = blueprints.find((b) => b.id === blueprintId)
-    if (!bp || isInstalled(bp) || installStartedRef.current.blueprint) return
-
-    const bpJobMatch = (job: { kind: string; jobKey: string }) =>
-      job.kind === "blueprint" &&
-      blueprintIdFromJobKey(job.jobKey) === blueprintId
-    const activeBp =
-      downloadSnapshot.active != null && bpJobMatch(downloadSnapshot.active)
-    const queuedBp = downloadSnapshot.queued.some(bpJobMatch)
-    if (activeBp || queuedBp) {
+    if (action === "mark-blueprint-queued") {
       installStartedRef.current.blueprint = true
       return
     }
+    if (action !== "start-blueprint" || !blueprintId) return
 
     let showError = true
     installStartedRef.current.blueprint = true

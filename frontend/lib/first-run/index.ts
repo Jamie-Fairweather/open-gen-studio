@@ -1,4 +1,4 @@
-export type { OnboardingState, OnboardingStep } from "./first-run/helpers"
+export type { OnboardingState, OnboardingStep } from "./helpers"
 export {
   SETTING_ONBOARDING,
   ONBOARDING_RECOMMENDED,
@@ -26,4 +26,12 @@ export {
   serializeOnboardingState,
   stepAfterStorage,
   vramBytesFromGpu,
-} from "./first-run/helpers"
+} from "./helpers"
+export type {
+  PlanFirstRunInstallInput,
+  PlanFirstRunInstallResult,
+  ResumeFirstRunInput,
+  ResumeFirstRunResult,
+} from "./types"
+export { planFirstRunInstall } from "./plan-install"
+export { resumeFirstRun } from "./resume"
